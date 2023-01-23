@@ -9,6 +9,9 @@ import (
 //var NoMoreByteErr = errors.New("NoMoreByteErr: no more byte to read in Data")
 //var NoMoreBytesErr = errors.New("NoMoreBytesErr: no more bytes to read in Data")
 
+const SegmentBits = uint8(0x7F)
+const ContinueBit = uint8(0x80)
+
 func compare(
 	buf0 []uint8,
 	buf1 []uint8,
@@ -211,4 +214,88 @@ func (d *Data) WriteFloat64(
 	buf := make([]uint8, 8)
 	binary.BigEndian.PutUint64(buf, bits)
 	d.buf = concat(d.buf, buf)
+}
+
+//func (d *Data) ReadString() string {
+//
+//}
+//
+//func (d *Data) WriteString(
+//	v string,
+//) {
+//
+//}
+
+func (d *Data) ReadVarInt() int32 {
+	v := int32(0)
+	position := uint8(0)
+
+	for {
+		b, buf := shift(d.buf)
+		d.buf = buf
+		v |= int32(b&SegmentBits) << position
+
+		if (b & ContinueBit) == 0 {
+			break
+		}
+
+		position += 7
+	}
+
+	return v
+}
+
+func (d *Data) WriteVarInt(
+	v int32,
+) {
+	v0 := uint32(v)
+	for {
+		if (v0 & ^uint32(SegmentBits)) == 0 {
+			b := uint8(v0)
+			d.buf = push(d.buf, b)
+			break
+		}
+
+		b := uint8(v0&uint32(SegmentBits)) | ContinueBit
+		d.buf = push(d.buf, b)
+
+		v0 >>= 7
+	}
+}
+
+func (d *Data) ReadVarLong() int64 {
+	v := int64(0)
+	position := uint8(0)
+
+	for {
+		b, buf := shift(d.buf)
+		d.buf = buf
+		v |= int64(b&SegmentBits) << position
+
+		if (b & ContinueBit) == 0 {
+			break
+		}
+
+		position += 7
+	}
+
+	return v
+}
+
+func (d *Data) WriteVarLong(
+	v int64,
+) {
+	v0 := uint64(v)
+	for {
+		if (v0 & ^uint64(SegmentBits)) == 0 {
+			b := uint8(v0)
+			d.buf = push(d.buf, b)
+			break
+		}
+
+		b := uint8(v0&uint64(SegmentBits)) | ContinueBit
+		d.buf = push(d.buf, b)
+
+		v0 >>= 7
+	}
 }
