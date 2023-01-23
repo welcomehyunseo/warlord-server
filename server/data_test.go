@@ -1,6 +1,7 @@
 package server
 
 import (
+	"math"
 	"testing"
 )
 
@@ -63,10 +64,10 @@ func TestReadInt8(
 		{0x80},
 	}
 	yValues := []int8{
-		127,
+		math.MaxInt8,
 		0,
 		-1,
-		-128,
+		math.MinInt8,
 	}
 	for i, x := range xValues {
 		y := yValues[i]
@@ -85,10 +86,10 @@ func TestWriteInt8(
 	t *testing.T,
 ) {
 	xValues := []int8{
-		127,
+		math.MaxInt8,
 		0,
 		-1,
-		-128,
+		math.MinInt8,
 	}
 	yValues := [][]uint8{
 		{0x7F},
@@ -119,7 +120,7 @@ func TestReadUint8(
 	}
 	yValues := []uint8{
 		0,
-		255,
+		math.MaxUint8,
 	}
 	for i, x := range xValues {
 		y := yValues[i]
@@ -139,7 +140,7 @@ func TestWriteUint8(
 ) {
 	xValues := []uint8{
 		0,
-		255,
+		math.MaxUint8,
 	}
 	yValues := [][]uint8{
 		{0x00},
@@ -169,10 +170,10 @@ func TestReadInt16(
 		{0x80, 0x00},
 	}
 	yValues := []int16{
-		32767,
+		math.MaxInt16,
 		0,
 		-1,
-		-32768,
+		math.MinInt16,
 	}
 	for i, x := range xValues {
 		y := yValues[i]
@@ -191,10 +192,10 @@ func TestWriteInt16(
 	t *testing.T,
 ) {
 	xValues := []int16{
-		32767,
+		math.MaxInt16,
 		0,
 		-1,
-		-32768,
+		math.MinInt16,
 	}
 	yValues := [][]uint8{
 		{0x7F, 0xFF},
@@ -225,7 +226,7 @@ func TestReadUint16(
 	}
 	yValues := []uint16{
 		0,
-		65535,
+		math.MaxUint16,
 	}
 	for i, x := range xValues {
 		y := yValues[i]
@@ -245,7 +246,7 @@ func TestWriteUit16(
 ) {
 	xValues := []uint16{
 		0,
-		65535,
+		math.MaxUint16,
 	}
 	yValues := [][]uint8{
 		{0x00, 0x00},
@@ -275,10 +276,10 @@ func TestReadInt32(
 		{0x80, 0x00, 0x00, 0x00},
 	}
 	yValues := []int32{
-		2147483647,
+		math.MaxInt32,
 		0,
 		-1,
-		-2147483648,
+		math.MinInt32,
 	}
 	for i, x := range xValues {
 		y := yValues[i]
@@ -297,10 +298,10 @@ func TestWriteInt32(
 	t *testing.T,
 ) {
 	xValues := []int32{
-		2147483647,
+		math.MaxInt32,
 		0,
 		-1,
-		-2147483648,
+		math.MinInt32,
 	}
 	yValues := [][]uint8{
 		{0x7F, 0xFF, 0xFF, 0xFF},
@@ -332,10 +333,10 @@ func TestReadInt64(
 		{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
 	}
 	yValues := []int64{
-		9223372036854775807,
+		math.MaxInt64,
 		0,
 		-1,
-		-9223372036854775808,
+		math.MinInt64,
 	}
 	for i, x := range xValues {
 		y := yValues[i]
@@ -354,10 +355,10 @@ func TestWriteInt64(
 	t *testing.T,
 ) {
 	xValues := []int64{
-		9223372036854775807,
+		math.MaxInt64,
 		0,
 		-1,
-		-9223372036854775808,
+		math.MinInt64,
 	}
 	yValues := [][]uint8{
 		{0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
@@ -370,6 +371,104 @@ func TestWriteInt64(
 
 		data := NewData()
 		data.WriteInt64(x)
+		yPrime := data.buf
+
+		if compare(y, yPrime) == true {
+			continue
+		}
+		t.Errorf("function value of x %+v is different than expect %+v", yPrime, y)
+	}
+}
+
+func TestReadFloat32(
+	t *testing.T,
+) {
+	xValues := [][]uint8{
+		{0x7F, 0x7F, 0xFF, 0xFF},
+		{0xFF, 0x7F, 0xFF, 0xFF},
+	}
+	yValues := []float32{
+		math.MaxFloat32,
+		-math.MaxFloat32,
+	}
+	for i, x := range xValues {
+		y := yValues[i]
+
+		data := NewData(x...)
+		yPrime := data.ReadFloat32()
+
+		if y == yPrime {
+			continue
+		}
+		t.Errorf("function value of x %+v is different than expect %+v", yPrime, y)
+	}
+}
+
+func TestWriteFloat32(
+	t *testing.T,
+) {
+	xValues := []float32{
+		math.MaxFloat32,
+		-math.MaxFloat32,
+	}
+	yValues := [][]uint8{
+		{0x7F, 0x7F, 0xFF, 0xFF},
+		{0xFF, 0x7F, 0xFF, 0xFF},
+	}
+	for i, x := range xValues {
+		y := yValues[i]
+
+		data := NewData()
+		data.WriteFloat32(x)
+		yPrime := data.buf
+
+		if compare(y, yPrime) == true {
+			continue
+		}
+		t.Errorf("function value of x %+v is different than expect %+v", yPrime, y)
+	}
+}
+
+func TestReadFloat64(
+	t *testing.T,
+) {
+	xValues := [][]uint8{
+		{0x7F, 0xEF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+		{0xFF, 0xEF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+	}
+	yValues := []float64{
+		math.MaxFloat64,
+		-math.MaxFloat64,
+	}
+	for i, x := range xValues {
+		y := yValues[i]
+
+		data := NewData(x...)
+		yPrime := data.ReadFloat64()
+
+		if y == yPrime {
+			continue
+		}
+		t.Errorf("function value of x %+v is different than expect %+v", yPrime, y)
+	}
+}
+
+func TestWriteFloat64(
+	t *testing.T,
+) {
+	xValues := []float64{
+		math.MaxFloat64,
+		-math.MaxFloat64,
+	}
+	yValues := [][]uint8{
+		{0x7F, 0xEF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+		{0xFF, 0xEF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+	}
+	for i, x := range xValues {
+		y := yValues[i]
+
+		data := NewData()
+		data.WriteFloat64(x)
 		yPrime := data.buf
 
 		if compare(y, yPrime) == true {

@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/binary"
+	"math"
 )
 
 //var NegativeValueErr = errors.New("NegativeErr: negative value is not allowed")
@@ -175,5 +176,39 @@ func (d *Data) WriteInt64(
 ) {
 	buf := make([]uint8, 8)
 	binary.BigEndian.PutUint64(buf, uint64(v))
+	d.buf = concat(d.buf, buf)
+}
+
+func (d *Data) ReadFloat32() float32 {
+	buf0, buf1 := split(d.buf, 4)
+	d.buf = buf1
+	bits := binary.BigEndian.Uint32(buf0)
+	v := math.Float32frombits(bits)
+	return v
+}
+
+func (d *Data) WriteFloat32(
+	v float32,
+) {
+	bits := math.Float32bits(v)
+	buf := make([]uint8, 4)
+	binary.BigEndian.PutUint32(buf, bits)
+	d.buf = concat(d.buf, buf)
+}
+
+func (d *Data) ReadFloat64() float64 {
+	buf0, buf1 := split(d.buf, 8)
+	d.buf = buf1
+	bits := binary.BigEndian.Uint64(buf0)
+	v := math.Float64frombits(bits)
+	return v
+}
+
+func (d *Data) WriteFloat64(
+	v float64,
+) {
+	bits := math.Float64bits(v)
+	buf := make([]uint8, 8)
+	binary.BigEndian.PutUint64(buf, bits)
 	d.buf = concat(d.buf, buf)
 }
