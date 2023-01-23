@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/binary"
+	"github.com/google/uuid"
 	"math"
 )
 
@@ -9,8 +10,25 @@ import (
 //var NoMoreByteErr = errors.New("NoMoreByteErr: no more byte to read in Data")
 //var NoMoreBytesErr = errors.New("NoMoreBytesErr: no more bytes to read in Data")
 
-const SegmentBits = uint8(0x7F)
-const ContinueBit = uint8(0x80)
+const (
+	SegmentBits = uint8(0x7F)
+	ContinueBit = uint8(0x80)
+
+	BytesNumOfBool     = 1
+	BytesNumOfInt8     = 1
+	BytesNumOfUint8    = 1
+	BytesNumOfInt16    = 2
+	BytesNumOfUint16   = 2
+	BytesNumOfInt32    = 4
+	BytesNumOfInt64    = 8
+	BytesNumOfFloat32  = 4
+	BytesNumOfFloat64  = 8
+	BytesNumOfVarInt   = 4
+	BytesNumOfVarLong  = 8
+	BytesNumOfPosition = 8
+	BytesNumOfAngle    = 1
+	BytesNumOfUUID     = 16
+)
 
 func compare(
 	buf0 []uint8,
@@ -75,6 +93,10 @@ type Data struct {
 }
 
 func NewData(bytes ...uint8) *Data {
+	if bytes == nil {
+		bytes = make([]uint8, 0)
+	}
+
 	return &Data{
 		buf: bytes,
 	}
@@ -123,7 +145,7 @@ func (d *Data) WriteUint8(
 }
 
 func (d *Data) ReadInt16() int16 {
-	buf0, buf1 := split(d.buf, 2)
+	buf0, buf1 := split(d.buf, BytesNumOfInt16)
 	d.buf = buf1
 	v := binary.BigEndian.Uint16(buf0)
 	return int16(v)
@@ -132,13 +154,13 @@ func (d *Data) ReadInt16() int16 {
 func (d *Data) WriteInt16(
 	v int16,
 ) {
-	buf := make([]uint8, 2)
+	buf := make([]uint8, BytesNumOfInt16)
 	binary.BigEndian.PutUint16(buf, uint16(v))
 	d.buf = concat(d.buf, buf)
 }
 
 func (d *Data) ReadUint16() uint16 {
-	buf0, buf1 := split(d.buf, 2)
+	buf0, buf1 := split(d.buf, BytesNumOfUint16)
 	d.buf = buf1
 	v := binary.BigEndian.Uint16(buf0)
 	return v
@@ -147,13 +169,13 @@ func (d *Data) ReadUint16() uint16 {
 func (d *Data) WriteUint16(
 	v uint16,
 ) {
-	buf := make([]uint8, 2)
+	buf := make([]uint8, BytesNumOfUint16)
 	binary.BigEndian.PutUint16(buf, v)
 	d.buf = concat(d.buf, buf)
 }
 
 func (d *Data) ReadInt32() int32 {
-	buf0, buf1 := split(d.buf, 4)
+	buf0, buf1 := split(d.buf, BytesNumOfInt32)
 	d.buf = buf1
 	v := binary.BigEndian.Uint32(buf0)
 	return int32(v)
@@ -162,13 +184,13 @@ func (d *Data) ReadInt32() int32 {
 func (d *Data) WriteInt32(
 	v int32,
 ) {
-	buf := make([]uint8, 4)
+	buf := make([]uint8, BytesNumOfInt32)
 	binary.BigEndian.PutUint32(buf, uint32(v))
 	d.buf = concat(d.buf, buf)
 }
 
 func (d *Data) ReadInt64() int64 {
-	buf0, buf1 := split(d.buf, 8)
+	buf0, buf1 := split(d.buf, BytesNumOfInt64)
 	d.buf = buf1
 	v := binary.BigEndian.Uint64(buf0)
 	return int64(v)
@@ -177,13 +199,13 @@ func (d *Data) ReadInt64() int64 {
 func (d *Data) WriteInt64(
 	v int64,
 ) {
-	buf := make([]uint8, 8)
+	buf := make([]uint8, BytesNumOfInt64)
 	binary.BigEndian.PutUint64(buf, uint64(v))
 	d.buf = concat(d.buf, buf)
 }
 
 func (d *Data) ReadFloat32() float32 {
-	buf0, buf1 := split(d.buf, 4)
+	buf0, buf1 := split(d.buf, BytesNumOfFloat32)
 	d.buf = buf1
 	bits := binary.BigEndian.Uint32(buf0)
 	v := math.Float32frombits(bits)
@@ -194,13 +216,13 @@ func (d *Data) WriteFloat32(
 	v float32,
 ) {
 	bits := math.Float32bits(v)
-	buf := make([]uint8, 4)
+	buf := make([]uint8, BytesNumOfFloat32)
 	binary.BigEndian.PutUint32(buf, bits)
 	d.buf = concat(d.buf, buf)
 }
 
 func (d *Data) ReadFloat64() float64 {
-	buf0, buf1 := split(d.buf, 8)
+	buf0, buf1 := split(d.buf, BytesNumOfFloat64)
 	d.buf = buf1
 	bits := binary.BigEndian.Uint64(buf0)
 	v := math.Float64frombits(bits)
@@ -211,20 +233,27 @@ func (d *Data) WriteFloat64(
 	v float64,
 ) {
 	bits := math.Float64bits(v)
-	buf := make([]uint8, 8)
+	buf := make([]uint8, BytesNumOfFloat64)
 	binary.BigEndian.PutUint64(buf, bits)
 	d.buf = concat(d.buf, buf)
 }
 
-//func (d *Data) ReadString() string {
-//
-//}
-//
-//func (d *Data) WriteString(
-//	v string,
-//) {
-//
-//}
+func (d *Data) ReadString() string {
+	l := d.ReadVarInt()
+	buf0, buf1 := split(d.buf, int(l))
+	d.buf = buf1
+	s := string(buf0)
+	return s
+}
+
+func (d *Data) WriteString(
+	v string,
+) {
+	buf := []uint8(v)
+	l := len(buf)
+	d.WriteVarInt(int32(l))
+	d.buf = concat(d.buf, buf)
+}
 
 func (d *Data) ReadVarInt() int32 {
 	v := int32(0)
@@ -298,4 +327,74 @@ func (d *Data) WriteVarLong(
 
 		v0 >>= 7
 	}
+}
+
+func (d *Data) ReadPosition() (int, int, int) {
+	v := d.ReadInt64()
+
+	x := int(v >> 38)
+	y := int(v & 0xFFF)
+	z := int(v << 26 >> 38)
+
+	if x >= 1<<25 {
+		x -= 1 << 26
+	}
+	if y >= 1<<11 {
+		y -= 1 << 12
+	}
+	if z >= 1<<25 {
+		z -= 1 << 26
+	}
+
+	return x, y, z
+}
+
+func (d *Data) WritePosition(
+	x, y, z int,
+) {
+	buf := make([]uint8, BytesNumOfPosition)
+	v := uint64(x&0x3FFFFFF)<<38 | uint64((z&0x3FFFFFF)<<12) | uint64(y&0xFFF)
+	for i := 7; i >= 0; i-- {
+		buf[i] = uint8(v)
+		v >>= 8
+	}
+	d.buf = concat(d.buf, buf)
+}
+
+func frem(x, y float64) float64 {
+	return x - y*math.Floor(x/y)
+}
+
+func (d *Data) ReadAngle() float64 {
+	v, buf := shift(d.buf)
+	d.buf = buf
+	v0 := (360 * float64(v)) / math.MaxUint8
+	v1 := frem(v0, 360)
+	return v1
+}
+
+func (d *Data) WriteAngle(
+	v float64,
+) {
+	v0 := frem(v, 360)
+	b := uint8((math.MaxUint8 * v0) / 360)
+	d.buf = push(d.buf, b)
+}
+
+func (d *Data) ReadUUID() uuid.UUID {
+	buf0, buf1 := split(d.buf, BytesNumOfUUID)
+	d.buf = buf1
+	v, _ := uuid.FromBytes(buf0)
+
+	return v
+}
+
+func (d *Data) WriteUUID(
+	v uuid.UUID,
+) {
+	buf := make([]uint8, BytesNumOfUUID)
+	for i := 0; i < BytesNumOfUUID; i++ {
+		buf[i] = v[i]
+	}
+	d.buf = concat(d.buf, buf)
 }

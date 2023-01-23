@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/google/uuid"
 	"math"
 	"testing"
 )
@@ -478,6 +479,51 @@ func TestWriteFloat64(
 	}
 }
 
+func TestReadString(
+	t *testing.T,
+) {
+	xValues := [][]uint8{
+		{0x0D, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x2c, 0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64, 0x21},
+	}
+	yValues := []string{
+		"Hello, World!",
+	}
+	for i, x := range xValues {
+		y := yValues[i]
+
+		data := NewData(x...)
+		yPrime := data.ReadString()
+
+		if y == yPrime {
+			continue
+		}
+		t.Errorf("function value of x %+v is different than expect %+v", yPrime, y)
+	}
+}
+
+func TestWriteString(
+	t *testing.T,
+) {
+	xValues := []string{
+		"Hello, World!",
+	}
+	yValues := [][]uint8{
+		{0x0D, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x2c, 0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64, 0x21},
+	}
+	for i, x := range xValues {
+		y := yValues[i]
+
+		data := NewData()
+		data.WriteString(x)
+		yPrime := data.buf
+
+		if compare(y, yPrime) == true {
+			continue
+		}
+		t.Errorf("function value of x %+v is different than expect %+v", yPrime, y)
+	}
+}
+
 func TestReadVarInt(
 	t *testing.T,
 ) {
@@ -639,6 +685,189 @@ func TestWriteVarLong(
 
 		data := NewData()
 		data.WriteVarLong(x)
+		yPrime := data.buf
+
+		if compare(y, yPrime) == true {
+			continue
+		}
+		t.Errorf("function value of x %+v is different than expect %+v", yPrime, y)
+	}
+
+}
+
+func TestReadPosition(
+	t *testing.T,
+) {
+	xValues := [][]uint8{
+		{0x7F, 0xFF, 0xFF, 0xDF, 0xFF, 0xFF, 0xF7, 0xFF},
+		{0x46, 0x07, 0x63, 0x13, 0xEA, 0x4B, 0x83, 0x3F},
+		{0x80, 0x00, 0x00, 0x20, 0x00, 0x00, 0x08, 0x00},
+	}
+	y0Values := []int{
+		33554431,
+		18357644,
+		-33554432,
+	}
+	y1Values := []int{
+		2047,
+		831,
+		-2048,
+	}
+	y2Values := []int{
+		33554431,
+		20882616,
+		-33554432,
+	}
+	for i, x := range xValues {
+		y0 := y0Values[i]
+		y1 := y1Values[i]
+		y2 := y2Values[i]
+
+		data := NewData(x...)
+		y0Prime, y1Prime, y2Prime := data.ReadPosition()
+
+		if y0 == y0Prime &&
+			y1 == y1Prime &&
+			y2 == y2Prime {
+			continue
+		}
+		t.Errorf(
+			"function value of x (%+v, %+v, %+v) is different than expect (%+v, %+v, %+v)",
+			y0Prime, y1Prime, y2Prime,
+			y0, y1, y2,
+		)
+	}
+}
+
+func TestWritePosition(
+	t *testing.T,
+) {
+	x0Values := []int{
+		33554431,
+		18357644,
+		-33554432,
+	}
+	x1Values := []int{
+		2047,
+		831,
+		-2048,
+	}
+	x2Values := []int{
+		33554431,
+		20882616,
+		-33554432,
+	}
+	yValues := [][]uint8{
+		{0x7F, 0xFF, 0xFF, 0xDF, 0xFF, 0xFF, 0xF7, 0xFF},
+		{0x46, 0x07, 0x63, 0x13, 0xEA, 0x4B, 0x83, 0x3F},
+		{0x80, 0x00, 0x00, 0x20, 0x00, 0x00, 0x08, 0x00},
+	}
+	for i, y := range yValues {
+		x0 := x0Values[i]
+		x1 := x1Values[i]
+		x2 := x2Values[i]
+
+		data := NewData()
+		data.WritePosition(x0, x1, x2)
+		yPrime := data.buf
+
+		if compare(y, yPrime) == true {
+			continue
+		}
+		t.Errorf("function value of x %+v is different than expect %+v", yPrime, y)
+	}
+
+}
+
+func TestReadAngle(
+	t *testing.T,
+) {
+	xValues := [][]uint8{
+		{0x00},
+		{0xFE},
+	}
+	yValues := []float64{
+		0,
+		358.5882352941176,
+	}
+	for i, x := range xValues {
+		y := yValues[i]
+
+		data := NewData(x...)
+		yPrime := data.ReadAngle()
+
+		if y == yPrime {
+			continue
+		}
+		t.Errorf("function value of x %+v is different than expect %+v", yPrime, y)
+	}
+}
+
+func TestWriteAngle(
+	t *testing.T,
+) {
+	xValues := []float64{
+		0,
+		358.5882352941176,
+	}
+	yValues := [][]uint8{
+		{0x00},
+		{0xFE},
+	}
+	for i, x := range xValues {
+		y := yValues[i]
+
+		data := NewData()
+		data.WriteAngle(x)
+		yPrime := data.buf
+
+		if compare(y, yPrime) == true {
+			continue
+		}
+		t.Errorf("function value of x %+v is different than expect %+v", yPrime, y)
+	}
+}
+
+func TestReadUUID(
+	t *testing.T,
+) {
+	xValues := [][]uint8{
+		{0x37, 0x0C, 0xae, 0x47, 0x04, 0xd0, 0x48, 0xa8, 0xbb, 0x99, 0xbf, 0xc5, 0xf7, 0x0f, 0x5f, 0x3b},
+		{0x3a, 0x51, 0x49, 0xdc, 0x55, 0xc7, 0x45, 0xf5, 0x9a, 0xa8, 0x5f, 0x90, 0x9e, 0x1c, 0x55, 0x62},
+	}
+	yValues := []uuid.UUID{
+		uuid.MustParse("370cae47-04d0-48a8-bb99-bfc5f70f5f3b"),
+		uuid.MustParse("3a5149dc-55c7-45f5-9aa8-5f909e1c5562"),
+	}
+	for i, x := range xValues {
+		y := yValues[i]
+
+		data := NewData(x...)
+		yPrime := data.ReadUUID()
+
+		if y == yPrime {
+			continue
+		}
+		t.Errorf("function value of x %+v is different than expect %+v", yPrime, y)
+	}
+}
+
+func TestWriteUUID(
+	t *testing.T,
+) {
+	xValues := []uuid.UUID{
+		uuid.MustParse("370cae47-04d0-48a8-bb99-bfc5f70f5f3b"),
+		uuid.MustParse("3a5149dc-55c7-45f5-9aa8-5f909e1c5562"),
+	}
+	yValues := [][]uint8{
+		{0x37, 0x0C, 0xae, 0x47, 0x04, 0xd0, 0x48, 0xa8, 0xbb, 0x99, 0xbf, 0xc5, 0xf7, 0x0f, 0x5f, 0x3b},
+		{0x3a, 0x51, 0x49, 0xdc, 0x55, 0xc7, 0x45, 0xf5, 0x9a, 0xa8, 0x5f, 0x90, 0x9e, 0x1c, 0x55, 0x62},
+	}
+	for i, x := range xValues {
+		y := yValues[i]
+
+		data := NewData()
+		data.WriteUUID(x)
 		yPrime := data.buf
 
 		if compare(y, yPrime) == true {
