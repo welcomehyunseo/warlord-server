@@ -28,7 +28,7 @@ type Version struct {
 
 type Sample struct {
 	Name string    `json:"name"`
-	Id   uuid.UUID `json:"id"`
+	Id   uuid.UUID `json:"playerID"`
 }
 
 type Players struct {
@@ -115,8 +115,48 @@ func (p *PongPacket) Write() *Data {
 	return d1
 }
 
+func (p *PongPacket) GetPayload() int64 {
+	return p.payload
+}
+
 type CompleteLoginPacket struct {
 	*packet
-	uuid     uuid.UUID
+	playerID uuid.UUID
 	username string
+}
+
+func NewCompleteLoginPacket(
+	playerID uuid.UUID,
+	username string,
+) *CompleteLoginPacket {
+	return &CompleteLoginPacket{
+		packet: newPacket(
+			Outbound,
+			LoginState,
+			CompleteLoginPacketID,
+		),
+		playerID: playerID,
+		username: username,
+	}
+}
+
+func (p *CompleteLoginPacket) Write() *Data {
+	d0 := NewData()
+	d0.WriteVarInt(p.GetID())
+	d0.WriteString(p.playerID.String())
+	d0.WriteString(p.username)
+
+	length := d0.GetLength()
+	d1 := NewData()
+	d1.WriteVarInt(int32(length))
+	d1.Write(d0)
+	return d1
+}
+
+func (p *CompleteLoginPacket) GetPlayerID() uuid.UUID {
+	return p.playerID
+}
+
+func (p *CompleteLoginPacket) GetUsername() string {
+	return p.username
 }

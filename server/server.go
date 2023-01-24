@@ -1,9 +1,14 @@
 package server
 
 import (
+	"fmt"
 	"io"
 	"net"
 )
+
+func NewE0875(err error) error {
+	return fmt.Errorf("[E0875] err: %+v", err)
+}
 
 const (
 	Address         = ":9999"
@@ -69,21 +74,6 @@ func read(r io.Reader) (int32, *Data, error) {
 	return id, data, err
 }
 
-type UnknownPacket struct {
-	id   int32
-	data *Data
-}
-
-func newUnknownPacket(
-	id int32,
-	data *Data,
-) *UnknownPacket {
-	return &UnknownPacket{
-		id:   id,
-		data: data,
-	}
-}
-
 type Server struct {
 	online int
 }
@@ -94,86 +84,160 @@ func NewServer() *Server {
 	}
 }
 
+func h3(
+	lg *Logger,
+	id int32,
+	data *Data,
+) error {
+	switch id {
+	case StartLoginPacketID:
+		startLoginPacket := NewStartLoginPacket()
+		startLoginPacket.Read(data)
+		lg.Info("startLoginPacket: %+v", startLoginPacket)
+		username := startLoginPacket.GetUsername()
+		_, err := UsernameToPlayerID(username)
+		if err != nil {
+			return err
+		}
+		break
+		//case EncryptionResponsePacketID:
+		//	break
+	}
+
+	return nil
+}
+
+func h2(
+	lg *Logger,
+	id int32,
+	data *Data,
+	online int,
+) *Data {
+	switch id {
+	case RequestPacketID:
+		requestPacket := NewRequestPacket()
+		requestPacket.Read(data)
+		lg.Info("requestPacket: %+v", requestPacket)
+
+		jsonResponse := &JsonResponse{
+			Version: &Version{
+				Name:     VersionName,
+				Protocol: VersionProtocol,
+			},
+			Players: &Players{
+				Max:    Max,
+				Online: online,
+				Sample: []*Sample{},
+			},
+			Description: &Description{
+				Text: Text,
+			},
+			Favicon:            Favicon,
+			PreviewsChat:       false,
+			EnforcesSecureChat: false,
+		}
+		responsePacket := NewResponsePacket(jsonResponse)
+		lg.Info("responsePacket: %+v", responsePacket)
+		data := responsePacket.Write()
+		lg.Info("data: %+v", data)
+		return data
+	case PingPacketID:
+		pingPacket := NewPingPacket()
+		pingPacket.Read(data)
+		lg.Info("pingPacket: %+v", pingPacket)
+		payload := pingPacket.GetPayload()
+
+		pongPacket := NewPongPacket(payload)
+		lg.Info("pongPacket: %+v", pongPacket)
+		data := pongPacket.Write()
+		lg.Info("data: %+v", data)
+		return data
+	}
+
+	return nil
+}
+
+func h1(
+	lg *Logger,
+	state int32,
+	id int32,
+	data *Data,
+) int32 {
+	switch id {
+	case HandshakePacketID:
+		handshakePacket := NewHandshakePacket()
+		handshakePacket.Read(data)
+		lg.Info("handshakePacket: %+v", handshakePacket)
+		nextState := handshakePacket.GetNextState()
+		state = nextState
+		break
+	}
+	return state
+}
+
 func h0(
+	lg *Logger,
 	c net.Conn,
 	online int,
-) {
+) error {
 	state := HandshakingState
 	for {
+		lg.Info("state: %d", state)
 		id, data, err := read(c)
-		if err == io.EOF {
-			return
-		} else if err != nil {
-			panic(err)
+		lg.Info("id: %d, data: %+v", id, data)
+		if err != nil {
+			return err
 		}
-		//fmt.Println("id:", id)
+		//fmt.Println("playerID:", playerID)
 		//fmt.Printf("data: %+v\n", data)
 
 		switch state {
 		case HandshakingState:
-			switch id {
-			case HandshakePacketID:
-				handshakePacket := NewHandshakePacket()
-				handshakePacket.Read(data)
-				nextState := handshakePacket.GetNextState()
-				state = nextState
-				break
-			}
+			state = h1(lg, state, id, data)
 			break
 		case StatusState:
-			switch id {
-			case RequestPacketID:
-				requestPacket := NewRequestPacket()
-				requestPacket.Read(data)
-
-				jsonResponse := &JsonResponse{
-					Version: &Version{
-						Name:     VersionName,
-						Protocol: VersionProtocol,
-					},
-					Players: &Players{
-						Max:    Max,
-						Online: online,
-						Sample: []*Sample{},
-					},
-					Description: &Description{
-						Text: Text,
-					},
-					Favicon:            Favicon,
-					PreviewsChat:       false,
-					EnforcesSecureChat: false,
-				}
-				responsePacket := NewResponsePacket(jsonResponse)
-				data := responsePacket.Write()
-				_, _ = c.Write(data.GetBuf())
-
-				break
-			case PingPacketID:
-				pingPacket := NewPingPacket()
-				pingPacket.Read(data)
-				payload := pingPacket.GetPayload()
-
-				pongPacket := NewPongPacket(payload)
-				data := pongPacket.Write()
-				_, _ = c.Write(data.GetBuf())
-				return
+			data := h2(lg, id, data, online)
+			if _, err = c.Write(data.GetBuf()); err != nil {
+				return err
 			}
 			break
 		case LoginState:
+			if err := h3(lg, id, data); err != nil {
+				return err
+			}
 			break
 		}
 	}
 }
 
 func (s *Server) Render() {
-	ln, _ := net.Listen(Type, Address)
+	ln, err := net.Listen(Type, Address)
+	if err != nil {
+		panic(err)
+	}
 	defer func() {
 		_ = ln.Close()
 	}()
 
 	for {
-		c, _ := ln.Accept()
-		go h0(c, s.online)
+		c, err := ln.Accept()
+		if err != nil {
+			panic(err)
+		}
+		go func() {
+			lg := NewLogger("address: %s", c.RemoteAddr())
+			lg.Info("start")
+			defer func() {
+				_ = c.Close()
+				lg.Info("close")
+			}()
+			if err := h0(lg, c, s.online); err == io.EOF {
+				return
+			} else if err != nil {
+				lg.Error(err)
+				return
+			}
+		}()
 	}
 
 }
