@@ -349,6 +349,9 @@ func (d *Data) ReadPosition() (int, int, int) {
 	return x, y, z
 }
 
+// WritePosition encodes an integer position into the current Data.
+// The position is consisted of a value x as a signed 26-bit integer, a value z as a signed 26-bit integer,
+// and a value y as a signed 12-bit integer with two's complement and big-endian.
 func (d *Data) WritePosition(
 	x, y, z int,
 ) {
@@ -397,4 +400,26 @@ func (d *Data) WriteUUID(
 		buf[i] = v[i]
 	}
 	d.buf = concat(d.buf, buf)
+}
+
+func (d *Data) ReadBuf(n int) []uint8 {
+	b0, b1 := split(d.buf, n)
+	d.buf = b1
+	return b0
+}
+
+func (d *Data) WriteBuf(buf []uint8) {
+	d.buf = concat(d.buf, buf)
+}
+
+func (d *Data) Write(v *Data) {
+	d.buf = concat(d.buf, v.buf)
+}
+
+func (d *Data) GetLength() int {
+	return len(d.buf)
+}
+
+func (d *Data) GetBuf() []uint8 {
+	return d.buf
 }
