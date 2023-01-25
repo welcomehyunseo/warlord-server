@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-func UsernameToPlayerID(username string) (uuid.UUID, error) {
+func UsernameToUUID(username string) (uuid.UUID, error) {
 	url := fmt.Sprintf("https://api.mojang.com/users/profiles/minecraft/%s", username)
 	resp, err := http.Get(url)
 	if err != nil {

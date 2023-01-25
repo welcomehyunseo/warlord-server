@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"github.com/google/uuid"
 	"io"
 	"net"
 )
@@ -41,15 +42,21 @@ func readVarInt(r io.Reader) (int, int32, error) {
 	return n0, v, nil
 }
 
-func read(r io.Reader) (int32, *Data, error) {
-	var err error
+func read(
+	lg *Logger,
+	r io.Reader,
+) (
+	int32,
+	*Data,
+	error,
+) {
 
 	_, l0, err := readVarInt(r)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	l1, id, err := readVarInt(r)
+	l1, pid, err := readVarInt(r)
 	if err != nil {
 
 		return 0, nil, err
@@ -58,7 +65,7 @@ func read(r io.Reader) (int32, *Data, error) {
 	l2 := int(l0) - l1
 	buf := make([]uint8, l2)
 	if l2 == 0 {
-		return id, nil, nil
+		return pid, nil, nil
 	}
 	_, err = r.Read(buf)
 	if err != nil {
@@ -67,57 +74,167 @@ func read(r io.Reader) (int32, *Data, error) {
 
 	data := NewData(buf...)
 
-	return id, data, err
+	lg.InfoWithVars(
+		"Uninterpreted packet was read.",
+		"id: %d, data: %+v", id, data,
+	)
+
+	return pid, data, nil
 }
 
-type Server struct {
-	online int
-}
+func h4(
+	lg *Logger,
+	c net.Conn,
+) error {
+	defer func() {
+		lg.Info("The loop is ended in the handler h4.")
+	}()
 
-func NewServer() *Server {
-	return &Server{
-		online: 0,
+	for {
+		pid, data, err := read(c)
+		if err != nil {
+			return err
+		}
+		lg.InfoWithVars(
+			"Unknown packet was read.",
+			"eid: %d, data: %+V", pid, data,
+		)
+
 	}
+}
+
+func f0(
+	lg *Logger,
+	p *Player,
+	c net.Conn,
+) error {
+
+	lg.Info("The connection is trying to start the normal sequence after login.")
+
+	joinGamePacket := NewJoinGamePacket(
+		p.GetEid(),
+		1,
+		0,
+		2,
+		"default",
+		false,
+	)
+	lg.InfoWithVars(
+		"JoinGamePacket was created.",
+		"packet: %+V", joinGamePacket,
+	)
+	data := joinGamePacket.Write()
+	if _, err := c.Write(data.GetBuf()); err != nil {
+		return err
+	}
+
+	if err := func() error {
+		id, _, err := read(lg, c)
+		if err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return err
+	}
+
+	if err := func() error {
+		id, data, err := read(c)
+		if err != nil {
+			return err
+		}
+		lg.InfoWithVars(
+			"Uninterpreted packet was read.",
+			"id: %d", id,
+		)
+		if id != ChangeClientSettingsPacketID {
+			return errors.New("packet must be ChangeClientSettingsPacket, but is not")
+		}
+		changeClientSettingsPacket := NewChangeClientSettingsPacket()
+		changeClientSettingsPacket.Read(data)
+		lg.InfoWithVars(
+			"ChangeClientSettingsPacket was read.",
+			"packet: %+V", changeClientSettingsPacket,
+		)
+		return nil
+	}(); err != nil {
+		return err
+	}
+
+	if err := func() error {
+		id, data, err := read(c)
+		if err != nil {
+			return err
+		}
+		lg.InfoWithVars(
+			"Uninterpreted packet was read.",
+			"id: %d", id,
+		)
+		if id != TakeActionPacketID {
+			return errors.New("packet must be TakeActionPacket, but is not")
+		}
+		takeActionPacket := NewTakeActionPacket()
+		takeActionPacket.Read(data)
+		lg.InfoWithVars(
+			"TakeActionPacket was read.",
+			"packet: %+V", takeActionPacket,
+		)
+		return nil
+	}(); err != nil {
+		return err
+	}
+
+	lg.Info("The normal sequence was finished.")
+	return nil
 }
 
 func h3(
 	lg *Logger,
-	id int32,
+	pid int32,
 	data *Data,
-) (*Data, bool, error) {
-	switch id {
+) (uuid.UUID, string, *Data, bool, error) {
+	switch pid {
 	case StartLoginPacketID:
 		startLoginPacket := NewStartLoginPacket()
 		startLoginPacket.Read(data)
-		lg.InfoWithVars("StartLoginPacket is read.", "packet: %+V", startLoginPacket)
+		lg.InfoWithVars(
+			"StartLoginPacket is read.",
+			"packet: %+V", startLoginPacket,
+		)
 		username := startLoginPacket.GetUsername()
-		playerID, err := UsernameToPlayerID(username)
+		uid, err := UsernameToUUID(username)
 		if err != nil {
-			return nil, false, err
+			return uuid.Nil, "", nil, false, err
 		}
-		completeLoginPacket := NewCompleteLoginPacket(playerID, username)
-		lg.InfoWithVars("CompleteLoginPacket was created.", "packet: %+V", completeLoginPacket)
+		completeLoginPacket := NewCompleteLoginPacket(uid, username)
+		lg.InfoWithVars(
+			"CompleteLoginPacket was created.",
+			"packet: %+V", completeLoginPacket,
+		)
 		data := completeLoginPacket.Write()
 		lg.InfoWithVars("Data was wrote.", "data: %+V", data)
-		return data, true, nil
+		return uid, username, data, true, nil
 		//case EncryptionResponsePacketID:
 		//	break
 	}
 
-	return nil, false, errors.New("no Data")
+	return uuid.Nil, "", nil, false, errors.New("no Data")
 }
 
 func h2(
 	lg *Logger,
-	id int32,
+	pid int32,
 	data *Data,
 	online int,
 ) (*Data, bool) {
-	switch id {
+	switch pid {
 	case RequestPacketID:
 		requestPacket := NewRequestPacket()
 		requestPacket.Read(data)
-		lg.InfoWithVars("RequestPacket was read.", "packet: %+V", requestPacket)
+		lg.InfoWithVars(
+			"RequestPacket was read.",
+			"packet: %+V", requestPacket,
+		)
 
 		jsonResponse := &JsonResponse{
 			Version: &Version{
@@ -137,18 +254,27 @@ func h2(
 			EnforcesSecureChat: false,
 		}
 		responsePacket := NewResponsePacket(jsonResponse)
-		lg.InfoWithVars("ResponsePacket was created.", "packet: %+V", responsePacket)
+		lg.InfoWithVars(
+			"ResponsePacket was created.",
+			"packet: %+V", responsePacket,
+		)
 		data := responsePacket.Write()
 		lg.InfoWithVars("Data was wrote.", "data: %+V", data)
 		return data, false
 	case PingPacketID:
 		pingPacket := NewPingPacket()
 		pingPacket.Read(data)
-		lg.InfoWithVars("PingPacket was read.", "packet: %+V", pingPacket)
+		lg.InfoWithVars(
+			"PingPacket was read.",
+			"packet: %+V", pingPacket,
+		)
 		payload := pingPacket.GetPayload()
 
 		pongPacket := NewPongPacket(payload)
-		lg.InfoWithVars("PongPacket was created.", "packet: %+V", pongPacket)
+		lg.InfoWithVars(
+			"PongPacket was created.",
+			"packet: %+V", pongPacket,
+		)
 		data := pongPacket.Write()
 		lg.InfoWithVars("Data was wrote.", "data: %+V", data)
 		return data, true
@@ -160,14 +286,17 @@ func h2(
 func h1(
 	lg *Logger,
 	state int32,
-	id int32,
+	pid int32,
 	data *Data,
 ) int32 {
-	switch id {
+	switch pid {
 	case HandshakePacketID:
 		handshakePacket := NewHandshakePacket()
 		handshakePacket.Read(data)
-		lg.InfoWithVars("HandshakePacket was read.", "packet: %+V", handshakePacket)
+		lg.InfoWithVars(
+			"HandshakePacket was read.",
+			"packet: %+V", handshakePacket,
+		)
 		nextState := handshakePacket.GetNextState()
 		state = nextState
 		break
@@ -179,49 +308,71 @@ func h0(
 	lg *Logger,
 	c net.Conn,
 	online int,
-) (bool, error) {
+) (uuid.UUID, string, bool, error) {
 	defer func() {
-		lg.Info("The loop is ended.")
+		lg.Info("The loop is ended in the handler h0.")
 	}()
 	state := HandshakingState
 	for {
-		lg.InfoWithVars("The loop is started with that state.", "state: %d, ", state)
-		id, data, err := read(c)
+		lg.InfoWithVars(
+			"The loop is started with that state in the handler h0.",
+			"state: %d, ", state,
+		)
+		pid, data, err := read(c)
 		if err != nil {
-			return false, err
+			return uuid.Nil, "", false, err
 		}
-		lg.InfoWithVars("Unknown packet was read.", "id: %d, data: %+V", id, data)
+		lg.InfoWithVars(
+			"Unknown packet was read.",
+			"eid: %d, data: %+V", pid, data,
+		)
 
 		switch state {
 		case HandshakingState:
-			lg.Info("The HandshakingState handler is started.")
-			state = h1(lg, state, id, data)
+			lg.Info("The HandshakingState handler h1 is started.")
+			state = h1(lg, state, pid, data)
 			break
 		case StatusState:
-			lg.Info("The StatusState handler is started.")
-			data, finish := h2(lg, id, data, online)
+			lg.Info("The StatusState handler h2 is started.")
+			data, finish := h2(lg, pid, data, online)
 
 			if _, err = c.Write(data.GetBuf()); err != nil {
-				return false, err
+				return uuid.Nil, "", false, err
 			}
 			if finish == true {
-				return false, nil
+				return uuid.Nil, "", false, nil
 			}
 			break
 		case LoginState:
-			lg.Info("The LoginState handler is started.")
-			data, success, err := h3(lg, id, data)
+			lg.Info("The LoginState handler h3 is started.")
+			uid, username, data, success, err := h3(lg, pid, data)
 			if err != nil {
-				return false, err
+				return uuid.Nil, "", false, err
 			}
 			if _, err = c.Write(data.GetBuf()); err != nil {
-				return false, err
+				return uuid.Nil, "", false, err
 			}
 			if success == true {
-				return true, nil
+				return uid, username, true, nil
 			}
 			break
 		}
+	}
+}
+
+type Server struct {
+	online int
+	last   int32
+	m0     map[uuid.UUID]net.Conn
+	m1     map[uuid.UUID]*Player
+}
+
+func NewServer() *Server {
+	return &Server{
+		online: 0,
+		last:   0,
+		m0:     make(map[uuid.UUID]net.Conn),
+		m1:     make(map[uuid.UUID]*Player),
 	}
 }
 
@@ -245,10 +396,11 @@ func (s *Server) Render() {
 
 			defer func() {
 				_ = c.Close()
+
 				lg.Info("The connection is closed with logging.")
 			}()
 
-			success, err := h0(lg, c, s.online)
+			uid, username, success, err := h0(lg, c, s.online)
 			if err == io.EOF {
 				return
 			} else if err != nil {
@@ -260,6 +412,29 @@ func (s *Server) Render() {
 				return
 			}
 
+			s.online++
+			defer func() {
+				s.online--
+			}()
+			eid := s.last
+			s.last++
+			p := NewPlayer(eid, uid, username, 0, 0, 0, 0, 0)
+			s.m0[uid] = c
+			s.m1[uid] = p
+
+			if err := f0(lg, p, c); err == io.EOF {
+				return
+			} else if err != nil {
+				lg.Error(err)
+				return
+			}
+
+			if err := h4(lg, c); err == io.EOF {
+				return
+			} else if err != nil {
+				lg.Error(err)
+				return
+			}
 		}()
 	}
 
