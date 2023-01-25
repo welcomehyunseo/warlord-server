@@ -2,7 +2,6 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"github.com/google/uuid"
 	"io"
 	"math/rand"
@@ -172,34 +171,13 @@ func f1(
 		return err
 	}
 
-	fmt.Println("sdf")
-
-	//if err := func() error {
-	//	id, data, err := read(lg, c)
-	//	if err != nil {
-	//		return err
-	//	}
-	//	if id != TakeActionPacketID {
-	//		return errors.New("packet must be TakeActionPacket, but is not")
-	//	}
-	//	takeActionPacket := NewTakeActionPacket()
-	//	takeActionPacket.Read(data)
-	//	lg.InfoWithVars(
-	//		"TakeActionPacket was read.",
-	//		"packet: %+V", takeActionPacket,
-	//	)
-	//	return nil
-	//}(); err != nil {
-	//	return err
-	//}
-
 	if err := func() error {
 		packet := NewSetPlayerAbilitiesPacket(
 			true,
 			true,
 			true,
 			true,
-			0,
+			0.1,
 			0.2,
 		)
 		lg.InfoWithVars(
@@ -257,6 +235,21 @@ func f1(
 			return errors.New(
 				"the Payload value that read is not same the given",
 			)
+		}
+		return nil
+	}(); err != nil {
+		return err
+	}
+
+	if err := func() error {
+		packet := NewSendChunkDataPacket()
+		lg.InfoWithVars(
+			"SendChunkDataPacket was created.",
+			"packet: %+V", packet,
+		)
+		data := packet.Write()
+		if err := send(lg, c, data); err != nil {
+			return err
 		}
 		return nil
 	}(); err != nil {
@@ -491,8 +484,7 @@ func (s *Server) Render() {
 			} else if err != nil {
 				lg.Error(err)
 				return
-			}
-			if login == false {
+			} else if login == false {
 				return
 			}
 
@@ -520,6 +512,7 @@ func (s *Server) Render() {
 				lg.Error(err)
 				return
 			}
+
 			if err := h4(lg, c); err == io.EOF {
 				return
 			} else if err != nil {

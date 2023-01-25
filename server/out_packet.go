@@ -11,6 +11,7 @@ const PongPacketID = 0x01
 const DisconnectLoginPacketID = 0x00
 const CompleteLoginPacketID = 0x02
 
+const SendChunkDataPacketID = 0x20
 const JoinGamePacketID = 0x23
 const SetPlayerAbilitiesPacketID = 0x2C
 const SetPlayerPosAndLookPacketID = 0x2F
@@ -162,6 +163,93 @@ func (p *CompleteLoginPacket) GetPlayerID() uuid.UUID {
 
 func (p *CompleteLoginPacket) GetUsername() string {
 	return p.username
+}
+
+type SendChunkDataPacket struct {
+	*packet
+}
+
+func NewSendChunkDataPacket() *SendChunkDataPacket {
+	return &SendChunkDataPacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			SendChunkDataPacketID,
+		),
+	}
+}
+
+func (p *SendChunkDataPacket) Write() *Data {
+	d0 := NewData()
+	d0.WriteVarInt(p.GetID())
+	d0.WriteInt32(0)
+	d0.WriteInt32(0)
+	d0.WriteBool(true)
+	d0.WriteVarInt(1)
+
+	d1 := NewData()
+	n := 8
+	d1.WriteUint8(uint8(n)) // bits
+	d1.WriteVarInt(1)       // insert palette l2
+	d1.WriteVarInt(16)      // stone
+
+	l0 := (16 * 16 * 16 * int(n)) / 64
+	d1.WriteVarInt(int32(l0))
+	longs := make([]uint64, l0)
+	for i := 0; i < 16*16*16; i++ {
+		start := (i * n) / 64
+		offset := (i * n) % 64
+		end := ((i+1)*n - 1) / 64
+
+		v := uint64(0)
+
+		longs[start] |= v << offset
+
+		if start == end {
+			continue
+		}
+
+		longs[end] = v >> (64 - offset)
+	}
+	for i := 0; i < l0; i++ {
+		d1.WriteInt64(int64(longs[i]))
+	}
+	for y := 0; y < 16; y++ {
+		for z := 0; z < 16; z++ {
+			for x := 0; x < 16; x += 2 {
+				l0 := uint8(0xf) // block light
+				l1 := uint8(0xf) // block light
+				x := l0<<4 | l1
+				d1.WriteUint8(x)
+			}
+		}
+	}
+	for y := 0; y < 16; y++ {
+		for z := 0; z < 16; z++ {
+			for x := 0; x < 16; x += 2 {
+				l0 := uint8(0xf) // sky light
+				l1 := uint8(0xf) // sky light
+				x := l0<<4 | l1
+				d1.WriteUint8(x)
+			}
+		}
+	}
+	for y := 0; y < 16; y++ {
+		for x := 0; x < 16; x++ {
+			d1.WriteUint8(127) // insert void biome
+		}
+	}
+	l1 := d1.GetLength()
+	d0.WriteVarInt(int32(l1))
+	d0.Write(d1)
+
+	d0.WriteVarInt(0) // block entities
+
+	l2 := d0.GetLength()
+	d2 := NewData()
+	d2.WriteVarInt(int32(l2))
+	d2.Write(d0)
+	return d2
 }
 
 type JoinGamePacket struct {
