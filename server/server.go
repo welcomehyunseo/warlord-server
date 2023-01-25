@@ -1,14 +1,10 @@
 package server
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"net"
 )
-
-func NewE0875(err error) error {
-	return fmt.Errorf("[E0875] err: %+V", err)
-}
 
 const (
 	Addr     = ":9999"
@@ -88,23 +84,27 @@ func h3(
 	lg *Logger,
 	id int32,
 	data *Data,
-) error {
+) (*Data, bool, error) {
 	switch id {
 	case StartLoginPacketID:
 		startLoginPacket := NewStartLoginPacket()
 		startLoginPacket.Read(data)
-		lg.Info("startLoginPacket: %+V", startLoginPacket)
+		lg.InfoWithVars("StartLoginPacket is read.", "packet: %+V", startLoginPacket)
 		username := startLoginPacket.GetUsername()
-		_, err := UsernameToPlayerID(username)
+		playerID, err := UsernameToPlayerID(username)
 		if err != nil {
-			return err
+			return nil, false, err
 		}
-		break
+		completeLoginPacket := NewCompleteLoginPacket(playerID, username)
+		lg.InfoWithVars("CompleteLoginPacket was created.", "packet: %+V", completeLoginPacket)
+		data := completeLoginPacket.Write()
+		lg.InfoWithVars("Data was wrote.", "data: %+V", data)
+		return data, true, nil
 		//case EncryptionResponsePacketID:
 		//	break
 	}
 
-	return nil
+	return nil, false, errors.New("no Data")
 }
 
 func h2(
@@ -117,7 +117,7 @@ func h2(
 	case RequestPacketID:
 		requestPacket := NewRequestPacket()
 		requestPacket.Read(data)
-		lg.Info("requestPacket: %+V", requestPacket)
+		lg.InfoWithVars("RequestPacket was read.", "packet: %+V", requestPacket)
 
 		jsonResponse := &JsonResponse{
 			Version: &Version{
@@ -137,17 +137,21 @@ func h2(
 			EnforcesSecureChat: false,
 		}
 		responsePacket := NewResponsePacket(jsonResponse)
-		lg.Info("responsePacket: %+V", responsePacket)
-		return responsePacket.Write(), false
+		lg.InfoWithVars("ResponsePacket was created.", "packet: %+V", responsePacket)
+		data := responsePacket.Write()
+		lg.InfoWithVars("Data was wrote.", "data: %+V", data)
+		return data, false
 	case PingPacketID:
 		pingPacket := NewPingPacket()
 		pingPacket.Read(data)
-		lg.Info("pingPacket: %+V", pingPacket)
+		lg.InfoWithVars("PingPacket was read.", "packet: %+V", pingPacket)
 		payload := pingPacket.GetPayload()
 
 		pongPacket := NewPongPacket(payload)
-		lg.Info("pongPacket: %+V", pongPacket)
-		return pongPacket.Write(), true
+		lg.InfoWithVars("PongPacket was created.", "packet: %+V", pongPacket)
+		data := pongPacket.Write()
+		lg.InfoWithVars("Data was wrote.", "data: %+V", data)
+		return data, true
 	}
 
 	return nil, true
@@ -163,7 +167,7 @@ func h1(
 	case HandshakePacketID:
 		handshakePacket := NewHandshakePacket()
 		handshakePacket.Read(data)
-		lg.Info("handshakePacket: %+V", handshakePacket)
+		lg.InfoWithVars("HandshakePacket was read.", "packet: %+V", handshakePacket)
 		nextState := handshakePacket.GetNextState()
 		state = nextState
 		break
@@ -175,33 +179,46 @@ func h0(
 	lg *Logger,
 	c net.Conn,
 	online int,
-) error {
+) (bool, error) {
+	defer func() {
+		lg.Info("The loop is ended.")
+	}()
 	state := HandshakingState
 	for {
-		lg.Info("initial state: %d", state)
+		lg.InfoWithVars("The loop is started with that state.", "state: %d, ", state)
 		id, data, err := read(c)
 		if err != nil {
-			return err
+			return false, err
 		}
-		lg.Info("id: %d, data: %+V", id, data)
+		lg.InfoWithVars("Unknown packet was read.", "id: %d, data: %+V", id, data)
 
 		switch state {
 		case HandshakingState:
+			lg.Info("The HandshakingState handler is started.")
 			state = h1(lg, state, id, data)
 			break
 		case StatusState:
+			lg.Info("The StatusState handler is started.")
 			data, finish := h2(lg, id, data, online)
-			lg.Info("data: %+V", data)
+
 			if _, err = c.Write(data.GetBuf()); err != nil {
-				return err
+				return false, err
 			}
 			if finish == true {
-				return nil
+				return false, nil
 			}
 			break
 		case LoginState:
-			if err := h3(lg, id, data); err != nil {
-				return err
+			lg.Info("The LoginState handler is started.")
+			data, success, err := h3(lg, id, data)
+			if err != nil {
+				return false, err
+			}
+			if _, err = c.Write(data.GetBuf()); err != nil {
+				return false, err
+			}
+			if success == true {
+				return true, nil
 			}
 			break
 		}
@@ -223,18 +240,26 @@ func (s *Server) Render() {
 			panic(err)
 		}
 		go func() {
-			lg := NewLogger("address: %s", c.RemoteAddr())
-			lg.Info("start logging")
+			lg := NewLogger("addr: %s", c.RemoteAddr())
+			lg.Info("The connection is started with logging.")
+
 			defer func() {
 				_ = c.Close()
-				lg.Info("close logging")
+				lg.Info("The connection is closed with logging.")
 			}()
-			if err := h0(lg, c, s.online); err == io.EOF {
+
+			success, err := h0(lg, c, s.online)
+			if err == io.EOF {
 				return
 			} else if err != nil {
 				lg.Error(err)
 				return
 			}
+			if success == false {
+				lg.Info("The login is failure.")
+				return
+			}
+
 		}()
 	}
 
