@@ -8,8 +8,8 @@ type entity struct {
 	x     float64
 	y     float64
 	z     float64
-	yaw   float64
-	pitch float64
+	yaw   float32
+	pitch float32
 	prevX float64
 	prevY float64
 	prevZ float64
@@ -21,8 +21,8 @@ func newEntity(
 	x float64,
 	y float64,
 	z float64,
-	yaw float64,
-	pitch float64,
+	yaw float32,
+	pitch float32,
 ) *entity {
 	return &entity{
 		eid:   eid,
@@ -58,11 +58,11 @@ func (e *entity) GetZ() float64 {
 	return e.z
 }
 
-func (e *entity) GetYaw() float64 {
+func (e *entity) GetYaw() float32 {
 	return e.yaw
 }
 
-func (e *entity) GetPitch() float64 {
+func (e *entity) GetPitch() float32 {
 	return e.pitch
 }
 
@@ -88,8 +88,8 @@ func newLiving(
 	x float64,
 	y float64,
 	z float64,
-	yaw float64,
-	pitch float64,
+	yaw float32,
+	pitch float32,
 ) *living {
 	return &living{
 		entity: newEntity(
@@ -117,8 +117,8 @@ func NewPlayer(
 	x float64,
 	y float64,
 	z float64,
-	yaw float64,
-	pitch float64,
+	yaw float32,
+	pitch float32,
 
 ) *Player {
 	return &Player{

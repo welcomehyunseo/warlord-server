@@ -12,7 +12,7 @@ const DisconnectLoginPacketID = 0x00
 const CompleteLoginPacketID = 0x02
 
 const JoinGamePacketID = 0x23
-const PlayerAbilitiesPacketID = 0x2C
+const SetPlayerAbilitiesPacketID = 0x2C
 const SetPlayerPosAndLookPacketID = 0x2F
 const SetSpawnPosPacketID = 0x46
 
@@ -239,7 +239,7 @@ func (p *JoinGamePacket) GetDebug() bool {
 	return p.debug
 }
 
-type PlayerAbilitiesPacket struct {
+type SetPlayerAbilitiesPacket struct {
 	*packet
 	invulnerable bool
 	flying       bool
@@ -249,19 +249,19 @@ type PlayerAbilitiesPacket struct {
 	fovModifier  float32
 }
 
-func NewPlayerAbilitiesPacket(
+func NewSetPlayerAbilitiesPacket(
 	invulnerable bool,
 	flying bool,
 	allowFlying bool,
 	instantBreak bool,
 	flyingSpeed float32,
 	fovModifier float32,
-) *PlayerAbilitiesPacket {
-	return &PlayerAbilitiesPacket{
+) *SetPlayerAbilitiesPacket {
+	return &SetPlayerAbilitiesPacket{
 		packet: newPacket(
 			Outbound,
 			PlayState,
-			PlayerAbilitiesPacketID,
+			SetPlayerAbilitiesPacketID,
 		),
 		invulnerable: invulnerable,
 		flying:       flying,
@@ -272,7 +272,7 @@ func NewPlayerAbilitiesPacket(
 	}
 }
 
-func (p *PlayerAbilitiesPacket) Write() *Data {
+func (p *SetPlayerAbilitiesPacket) Write() *Data {
 	d0 := NewData()
 	d0.WriteVarInt(p.GetID())
 	bitmask := uint8(0)
@@ -299,27 +299,27 @@ func (p *PlayerAbilitiesPacket) Write() *Data {
 	return d1
 }
 
-func (p *PlayerAbilitiesPacket) GetInvulnerable() bool {
+func (p *SetPlayerAbilitiesPacket) GetInvulnerable() bool {
 	return p.invulnerable
 }
 
-func (p *PlayerAbilitiesPacket) GetFlying() bool {
+func (p *SetPlayerAbilitiesPacket) GetFlying() bool {
 	return p.flying
 }
 
-func (p *PlayerAbilitiesPacket) GetAllowFlying() bool {
+func (p *SetPlayerAbilitiesPacket) GetAllowFlying() bool {
 	return p.allowFlying
 }
 
-func (p *PlayerAbilitiesPacket) GetInstantBreak() bool {
+func (p *SetPlayerAbilitiesPacket) GetInstantBreak() bool {
 	return p.instantBreak
 }
 
-func (p *PlayerAbilitiesPacket) GetFlyingSpeed() float32 {
+func (p *SetPlayerAbilitiesPacket) GetFlyingSpeed() float32 {
 	return p.flyingSpeed
 }
 
-func (p *PlayerAbilitiesPacket) GetFovModifier() float32 {
+func (p *SetPlayerAbilitiesPacket) GetFovModifier() float32 {
 	return p.fovModifier
 }
 

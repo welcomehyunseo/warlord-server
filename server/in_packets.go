@@ -7,6 +7,7 @@ const PingPacketID = 0x01
 
 const StartLoginPacketID = 0x00
 
+const ConfirmTeleportPacketID = 0x00
 const TakeActionPacketID = 0x03
 const ChangeClientSettingsPacketID = 0x04
 
@@ -130,6 +131,29 @@ func (p *StartLoginPacket) GetUsername() string {
 	return p.username
 }
 
+type ConfirmTeleportPacket struct {
+	*packet
+	payload int32
+}
+
+func NewConfirmTeleportPacket() *ConfirmTeleportPacket {
+	return &ConfirmTeleportPacket{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			ConfirmTeleportPacketID,
+		),
+	}
+}
+
+func (p *ConfirmTeleportPacket) Read(data *Data) {
+	p.payload = data.ReadVarInt()
+}
+
+func (p *ConfirmTeleportPacket) GetPayload() int32 {
+	return p.payload
+}
+
 type TakeActionPacket struct {
 	*packet
 	respawn bool
@@ -140,7 +164,7 @@ func NewTakeActionPacket() *TakeActionPacket {
 	return &TakeActionPacket{
 		packet: newPacket(
 			Inbound,
-			LoginState,
+			PlayState,
 			TakeActionPacketID,
 		),
 	}
@@ -185,7 +209,7 @@ func NewChangeClientSettingsPacket() *ChangeClientSettingsPacket {
 	return &ChangeClientSettingsPacket{
 		packet: newPacket(
 			Inbound,
-			StatusState,
+			PlayState,
 			ChangeClientSettingsPacketID,
 		),
 	}

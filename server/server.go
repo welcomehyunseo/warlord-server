@@ -2,8 +2,10 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"io"
+	"math/rand"
 	"net"
 )
 
@@ -76,10 +78,22 @@ func read(
 
 	lg.InfoWithVars(
 		"Uninterpreted packet was read.",
-		"id: %d, data: %+v", id, data,
+		"id: %d, data: %+v", pid, data,
 	)
 
 	return pid, data, nil
+}
+
+func send(
+	lg *Logger,
+	w io.Writer,
+	data *Data,
+) error {
+	if _, err := w.Write(data.GetBuf()); err != nil {
+		return err
+	}
+	lg.InfoWithVars("Data was sent.", "data: %+v", data)
+	return nil
 }
 
 func h4(
@@ -91,46 +105,36 @@ func h4(
 	}()
 
 	for {
-		pid, data, err := read(c)
+		_, _, err := read(lg, c)
 		if err != nil {
 			return err
 		}
-		lg.InfoWithVars(
-			"Unknown packet was read.",
-			"eid: %d, data: %+V", pid, data,
-		)
 
 	}
 }
 
-func f0(
+func f1(
 	lg *Logger,
 	p *Player,
 	c net.Conn,
 ) error {
-
 	lg.Info("The connection is trying to start the normal sequence after login.")
 
-	joinGamePacket := NewJoinGamePacket(
-		p.GetEid(),
-		1,
-		0,
-		2,
-		"default",
-		false,
-	)
-	lg.InfoWithVars(
-		"JoinGamePacket was created.",
-		"packet: %+V", joinGamePacket,
-	)
-	data := joinGamePacket.Write()
-	if _, err := c.Write(data.GetBuf()); err != nil {
-		return err
-	}
-
 	if err := func() error {
-		id, _, err := read(lg, c)
-		if err != nil {
+		packet := NewJoinGamePacket(
+			p.GetEid(),
+			1,
+			0,
+			2,
+			"default",
+			false,
+		)
+		lg.InfoWithVars(
+			"JoinGamePacket was created.",
+			"packet: %+V", packet,
+		)
+		data := packet.Write()
+		if err := send(lg, c, data); err != nil {
 			return err
 		}
 		return nil
@@ -139,14 +143,10 @@ func f0(
 	}
 
 	if err := func() error {
-		id, data, err := read(c)
+		id, data, err := read(lg, c)
 		if err != nil {
 			return err
 		}
-		lg.InfoWithVars(
-			"Uninterpreted packet was read.",
-			"id: %d", id,
-		)
 		if id != ChangeClientSettingsPacketID {
 			return errors.New("packet must be ChangeClientSettingsPacket, but is not")
 		}
@@ -162,23 +162,102 @@ func f0(
 	}
 
 	if err := func() error {
-		id, data, err := read(c)
+		_, _, err := read(lg, c)
 		if err != nil {
 			return err
 		}
-		lg.InfoWithVars(
-			"Uninterpreted packet was read.",
-			"id: %d", id,
+		// plugin message
+		return nil
+	}(); err != nil {
+		return err
+	}
+
+	fmt.Println("sdf")
+
+	//if err := func() error {
+	//	id, data, err := read(lg, c)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	if id != TakeActionPacketID {
+	//		return errors.New("packet must be TakeActionPacket, but is not")
+	//	}
+	//	takeActionPacket := NewTakeActionPacket()
+	//	takeActionPacket.Read(data)
+	//	lg.InfoWithVars(
+	//		"TakeActionPacket was read.",
+	//		"packet: %+V", takeActionPacket,
+	//	)
+	//	return nil
+	//}(); err != nil {
+	//	return err
+	//}
+
+	if err := func() error {
+		packet := NewSetPlayerAbilitiesPacket(
+			true,
+			true,
+			true,
+			true,
+			0,
+			0.2,
 		)
-		if id != TakeActionPacketID {
-			return errors.New("packet must be TakeActionPacket, but is not")
+		lg.InfoWithVars(
+			"SetPlayerAbilitiesPacket was created.",
+			"packet: %+V", packet,
+		)
+		data := packet.Write()
+		if err := send(lg, c, data); err != nil {
+			return err
 		}
-		takeActionPacket := NewTakeActionPacket()
-		takeActionPacket.Read(data)
-		lg.InfoWithVars(
-			"TakeActionPacket was read.",
-			"packet: %+V", takeActionPacket,
+		return nil
+	}(); err != nil {
+		return err
+	}
+
+	payload := rand.Int31()
+	if err := func() error {
+		packet := NewSetPlayerPosAndLookPacket(
+			p.GetX(),
+			p.GetY(),
+			p.GetZ(),
+			p.GetYaw(),
+			p.GetPitch(),
+			payload,
 		)
+		lg.InfoWithVars(
+			"SetPlayerPosAndLookPacket was created.",
+			"packet: %+V", packet,
+		)
+		data := packet.Write()
+		if err := send(lg, c, data); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return err
+	}
+
+	if err := func() error {
+		id, data, err := read(lg, c)
+		if err != nil {
+			return err
+		}
+		if id != ConfirmTeleportPacketID {
+			return errors.New("packet must be ConfirmTeleportPacket, but is not")
+		}
+		packet := NewConfirmTeleportPacket()
+		packet.Read(data)
+		lg.InfoWithVars(
+			"ConfirmTeleportPacket was read.",
+			"packet: %+V", packet,
+		)
+		payloadPrime := packet.GetPayload()
+		if payload != payloadPrime {
+			return errors.New(
+				"the Payload value that read is not same the given",
+			)
+		}
 		return nil
 	}(); err != nil {
 		return err
@@ -188,13 +267,25 @@ func f0(
 	return nil
 }
 
-func h3(
+func f0(
 	lg *Logger,
-	pid int32,
-	data *Data,
-) (uuid.UUID, string, *Data, bool, error) {
-	switch pid {
-	case StartLoginPacketID:
+	c net.Conn,
+) (
+	uuid.UUID,
+	string,
+	error,
+) {
+	uid, username, err := func() (
+		uuid.UUID,
+		string,
+		error,
+	) {
+		pid, data, err := read(lg, c)
+		if pid != StartLoginPacketID {
+			return uuid.Nil, "", errors.New(
+				"packet that read must be StartLoginPacket, but is not",
+			)
+		}
 		startLoginPacket := NewStartLoginPacket()
 		startLoginPacket.Read(data)
 		lg.InfoWithVars(
@@ -204,21 +295,32 @@ func h3(
 		username := startLoginPacket.GetUsername()
 		uid, err := UsernameToUUID(username)
 		if err != nil {
-			return uuid.Nil, "", nil, false, err
+			return uuid.Nil, "", err
 		}
+
+		return uid, username, nil
+	}()
+	if err != nil {
+		return uuid.Nil, "", err
+	}
+
+	if err := func() error {
 		completeLoginPacket := NewCompleteLoginPacket(uid, username)
 		lg.InfoWithVars(
 			"CompleteLoginPacket was created.",
 			"packet: %+V", completeLoginPacket,
 		)
 		data := completeLoginPacket.Write()
-		lg.InfoWithVars("Data was wrote.", "data: %+V", data)
-		return uid, username, data, true, nil
-		//case EncryptionResponsePacketID:
-		//	break
-	}
+		if err := send(lg, c, data); err != nil {
+			return err
+		}
 
-	return uuid.Nil, "", nil, false, errors.New("no Data")
+		return nil
+	}(); err != nil {
+		return uuid.Nil, "", err
+	}
+	return uid, username, nil
+
 }
 
 func h2(
@@ -259,7 +361,6 @@ func h2(
 			"packet: %+V", responsePacket,
 		)
 		data := responsePacket.Write()
-		lg.InfoWithVars("Data was wrote.", "data: %+V", data)
 		return data, false
 	case PingPacketID:
 		pingPacket := NewPingPacket()
@@ -276,7 +377,6 @@ func h2(
 			"packet: %+V", pongPacket,
 		)
 		data := pongPacket.Write()
-		lg.InfoWithVars("Data was wrote.", "data: %+V", data)
 		return data, true
 	}
 
@@ -308,7 +408,7 @@ func h0(
 	lg *Logger,
 	c net.Conn,
 	online int,
-) (uuid.UUID, string, bool, error) {
+) (bool, error) {
 	defer func() {
 		lg.Info("The loop is ended in the handler h0.")
 	}()
@@ -318,42 +418,27 @@ func h0(
 			"The loop is started with that state in the handler h0.",
 			"state: %d, ", state,
 		)
-		pid, data, err := read(c)
+		pid, data, err := read(lg, c)
 		if err != nil {
-			return uuid.Nil, "", false, err
+			return false, err
 		}
-		lg.InfoWithVars(
-			"Unknown packet was read.",
-			"eid: %d, data: %+V", pid, data,
-		)
 
 		switch state {
 		case HandshakingState:
 			lg.Info("The HandshakingState handler h1 is started.")
 			state = h1(lg, state, pid, data)
+			if state == LoginState {
+				return true, nil
+			}
 			break
 		case StatusState:
 			lg.Info("The StatusState handler h2 is started.")
 			data, finish := h2(lg, pid, data, online)
-
-			if _, err = c.Write(data.GetBuf()); err != nil {
-				return uuid.Nil, "", false, err
+			if err := send(lg, c, data); err != nil {
+				return false, err
 			}
 			if finish == true {
-				return uuid.Nil, "", false, nil
-			}
-			break
-		case LoginState:
-			lg.Info("The LoginState handler h3 is started.")
-			uid, username, data, success, err := h3(lg, pid, data)
-			if err != nil {
-				return uuid.Nil, "", false, err
-			}
-			if _, err = c.Write(data.GetBuf()); err != nil {
-				return uuid.Nil, "", false, err
-			}
-			if success == true {
-				return uid, username, true, nil
+				return false, nil
 			}
 			break
 		}
@@ -400,15 +485,22 @@ func (s *Server) Render() {
 				lg.Info("The connection is closed with logging.")
 			}()
 
-			uid, username, success, err := h0(lg, c, s.online)
+			login, err := h0(lg, c, s.online)
 			if err == io.EOF {
 				return
 			} else if err != nil {
 				lg.Error(err)
 				return
 			}
-			if success == false {
-				lg.Info("The login is failure.")
+			if login == false {
+				return
+			}
+
+			lg.Info("The login sequence is started.")
+			uid, username, err := f0(lg, c)
+			if err != nil {
+				lg.Error(err)
+				lg.Info("The login sequence is failure.")
 				return
 			}
 
@@ -422,13 +514,12 @@ func (s *Server) Render() {
 			s.m0[uid] = c
 			s.m1[uid] = p
 
-			if err := f0(lg, p, c); err == io.EOF {
+			if err := f1(lg, p, c); err == io.EOF {
 				return
 			} else if err != nil {
 				lg.Error(err)
 				return
 			}
-
 			if err := h4(lg, c); err == io.EOF {
 				return
 			} else if err != nil {
