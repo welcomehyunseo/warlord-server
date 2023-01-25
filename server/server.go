@@ -7,17 +7,17 @@ import (
 )
 
 func NewE0875(err error) error {
-	return fmt.Errorf("[E0875] err: %+v", err)
+	return fmt.Errorf("[E0875] err: %+V", err)
 }
 
 const (
-	Address         = ":9999"
-	Type            = "tcp"
-	VersionName     = "1.12.2"
-	VersionProtocol = 340
-	Max             = 10
-	Text            = "Hello, World!"
-	Favicon         = ""
+	Addr     = ":9999"
+	Type     = "tcp"
+	Mc       = "1.12.2"
+	Protocol = 340
+	Max      = 10
+	Text     = "Hello, World!"
+	Favicon  = ""
 )
 
 func readVarInt(r io.Reader) (int, int32, error) {
@@ -93,7 +93,7 @@ func h3(
 	case StartLoginPacketID:
 		startLoginPacket := NewStartLoginPacket()
 		startLoginPacket.Read(data)
-		lg.Info("startLoginPacket: %+v", startLoginPacket)
+		lg.Info("startLoginPacket: %+V", startLoginPacket)
 		username := startLoginPacket.GetUsername()
 		_, err := UsernameToPlayerID(username)
 		if err != nil {
@@ -112,17 +112,17 @@ func h2(
 	id int32,
 	data *Data,
 	online int,
-) *Data {
+) (*Data, bool) {
 	switch id {
 	case RequestPacketID:
 		requestPacket := NewRequestPacket()
 		requestPacket.Read(data)
-		lg.Info("requestPacket: %+v", requestPacket)
+		lg.Info("requestPacket: %+V", requestPacket)
 
 		jsonResponse := &JsonResponse{
 			Version: &Version{
-				Name:     VersionName,
-				Protocol: VersionProtocol,
+				Name:     Mc,
+				Protocol: Protocol,
 			},
 			Players: &Players{
 				Max:    Max,
@@ -137,24 +137,20 @@ func h2(
 			EnforcesSecureChat: false,
 		}
 		responsePacket := NewResponsePacket(jsonResponse)
-		lg.Info("responsePacket: %+v", responsePacket)
-		data := responsePacket.Write()
-		lg.Info("data: %+v", data)
-		return data
+		lg.Info("responsePacket: %+V", responsePacket)
+		return responsePacket.Write(), false
 	case PingPacketID:
 		pingPacket := NewPingPacket()
 		pingPacket.Read(data)
-		lg.Info("pingPacket: %+v", pingPacket)
+		lg.Info("pingPacket: %+V", pingPacket)
 		payload := pingPacket.GetPayload()
 
 		pongPacket := NewPongPacket(payload)
-		lg.Info("pongPacket: %+v", pongPacket)
-		data := pongPacket.Write()
-		lg.Info("data: %+v", data)
-		return data
+		lg.Info("pongPacket: %+V", pongPacket)
+		return pongPacket.Write(), true
 	}
 
-	return nil
+	return nil, true
 }
 
 func h1(
@@ -167,7 +163,7 @@ func h1(
 	case HandshakePacketID:
 		handshakePacket := NewHandshakePacket()
 		handshakePacket.Read(data)
-		lg.Info("handshakePacket: %+v", handshakePacket)
+		lg.Info("handshakePacket: %+V", handshakePacket)
 		nextState := handshakePacket.GetNextState()
 		state = nextState
 		break
@@ -182,23 +178,25 @@ func h0(
 ) error {
 	state := HandshakingState
 	for {
-		lg.Info("state: %d", state)
+		lg.Info("initial state: %d", state)
 		id, data, err := read(c)
-		lg.Info("id: %d, data: %+v", id, data)
 		if err != nil {
 			return err
 		}
-		//fmt.Println("playerID:", playerID)
-		//fmt.Printf("data: %+v\n", data)
+		lg.Info("id: %d, data: %+V", id, data)
 
 		switch state {
 		case HandshakingState:
 			state = h1(lg, state, id, data)
 			break
 		case StatusState:
-			data := h2(lg, id, data, online)
+			data, finish := h2(lg, id, data, online)
+			lg.Info("data: %+V", data)
 			if _, err = c.Write(data.GetBuf()); err != nil {
 				return err
+			}
+			if finish == true {
+				return nil
 			}
 			break
 		case LoginState:
@@ -211,7 +209,7 @@ func h0(
 }
 
 func (s *Server) Render() {
-	ln, err := net.Listen(Type, Address)
+	ln, err := net.Listen(Type, Addr)
 	if err != nil {
 		panic(err)
 	}
@@ -226,10 +224,10 @@ func (s *Server) Render() {
 		}
 		go func() {
 			lg := NewLogger("address: %s", c.RemoteAddr())
-			lg.Info("start")
+			lg.Info("start logging")
 			defer func() {
 				_ = c.Close()
-				lg.Info("close")
+				lg.Info("close logging")
 			}()
 			if err := h0(lg, c, s.online); err == io.EOF {
 				return
