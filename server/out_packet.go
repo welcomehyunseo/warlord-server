@@ -188,10 +188,13 @@ func (p *SendChunkDataPacket) Write() *Data {
 	d0.WriteVarInt(1)
 
 	d1 := NewData()
-	n := 8
+	n := 4
 	d1.WriteUint8(uint8(n)) // bits
-	d1.WriteVarInt(1)       // insert palette l2
-	d1.WriteVarInt(16)      // stone
+	d1.WriteVarInt(16)      // insert palette l3
+	for i := 0; i < 15; i++ {
+		d1.WriteVarInt(0) // air
+	}
+	d1.WriteVarInt(16) // stone
 
 	l0 := (16 * 16 * 16 * int(n)) / 64
 	d1.WriteVarInt(int32(l0))
@@ -201,7 +204,7 @@ func (p *SendChunkDataPacket) Write() *Data {
 		offset := (i * n) % 64
 		end := ((i+1)*n - 1) / 64
 
-		v := uint64(0)
+		v := uint64(16)
 
 		longs[start] |= v << offset
 
