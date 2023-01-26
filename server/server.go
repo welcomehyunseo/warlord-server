@@ -242,13 +242,28 @@ func f1(
 	}
 
 	if err := func() error {
-		packet := NewSendChunkDataPacket()
+		cc := NewChunkColumn()
+		cc.SetBiome(0, 0, VoidBiomeID)
+		chunk := NewChunk()
+		chunk.SetBlock(0, 0, 0, StoneBlock)
+		cc.SetChunk(0, chunk)
+		init := true
+		overworld := true
+		bitmask, d0 := cc.Write(init, overworld)
+
+		packet := NewSendChunkDataPacket(
+			0,
+			0,
+			init,
+			bitmask,
+			d0,
+		)
 		lg.InfoWithVars(
 			"SendChunkDataPacket was created.",
 			"packet: %+V", packet,
 		)
-		data := packet.Write()
-		if err := send(lg, c, data); err != nil {
+		d1 := packet.Write()
+		if err := send(lg, c, d1); err != nil {
 			return err
 		}
 		return nil
