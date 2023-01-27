@@ -684,11 +684,11 @@ func (cnt *Client) Init(
 	return nil
 }
 
-func (cnt *Client) LoadChunkColumn(
+func (cnt *Client) LoadChunk(
 	overworld bool,
 	init bool,
 	cx, cz int32,
-	cc *ChunkColumn,
+	cc *Chunk,
 ) error {
 	lg := cnt.lg
 

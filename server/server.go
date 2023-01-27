@@ -20,17 +20,17 @@ const (
 
 var OutOfRndDistRangeError = errors.New("it is out of maximum and minimum value of render distance")
 
-type ChunkPosStr = string
+type PosStr = string
 
-func toChunkPosStr(
-	cx int,
-	cy int,
-	cz int,
-) ChunkPosStr {
-	return fmt.Sprintf("(%d,%d,%d)", cx, cy, cz)
+func toPosStr(
+	x int,
+	y int,
+	z int,
+) PosStr {
+	return fmt.Sprintf("(%d,%d,%d)", x, y, z)
 }
 
-func playerPosToChunkPos(
+func toChunkSecPos(
 	x float64,
 	y float64,
 	z float64,
@@ -39,19 +39,19 @@ func playerPosToChunkPos(
 	int,
 	int,
 ) {
-	x0 := int(x) / 16
-	y0 := int(y) / 16
-	z0 := int(z) / 16
-	if x0 < 0 {
-		x0 = x0 - 16
+	cx := int(x) / 16
+	cy := int(y) / 16
+	cz := int(z) / 16
+	if cx < 0 {
+		cx = cx - 16
 	}
-	//if y0 < 0 {
-	//	y0 = y0 - 16
+	//if cy < 0 {
+	//	cy = cy - 16
 	//}
-	if z0 < 0 {
-		z0 = z0 - 16
+	if cz < 0 {
+		cz = cz - 16
 	}
-	return x0, y0, z0
+	return cx, cy, cz
 }
 
 type Server struct {
@@ -66,8 +66,8 @@ type Server struct {
 
 	rndDist int // render distance
 
-	m0 map[ChunkPosStr]*Chunk
-	m1 map[ChunkPosStr][]*Player
+	m0 map[PosStr]*ChunkSection
+	m1 map[PosStr][]*Player
 }
 
 func NewServer(
@@ -91,8 +91,8 @@ func NewServer(
 		favicon: favicon,
 		desc:    desc,
 		rndDist: rndDist,
-		m0:      make(map[ChunkPosStr]*Chunk),
-		m1:      make(map[ChunkPosStr][]*Player),
+		m0:      make(map[PosStr]*ChunkSection),
+		m1:      make(map[PosStr][]*Player),
 	}, nil
 }
 
@@ -110,7 +110,7 @@ func (s *Server) initChunks(
 ) error {
 	rndDist := s.rndDist
 
-	cx, cy, cz := playerPosToChunkPos(x, y, z)
+	cx, cy, cz := toChunkSecPos(x, y, z)
 	cx0, cy0, cz0 := cx+rndDist, cy+rndDist, cz+rndDist
 	cx1, cy1, cz1 := cx-rndDist, cy-rndDist, cz-rndDist
 
@@ -123,17 +123,17 @@ func (s *Server) initChunks(
 
 	for i := cz0; i >= cz1; i-- {
 		for j := cx0; j >= cx1; j-- {
-			cc := NewChunkColumn()
+			cc := NewChunk()
 
 			for k := cy0; k >= cy1; k-- {
-				chunk := s.GetChunk(j, k, i)
+				chunk := s.GetChunkSec(j, k, i)
 				if chunk == nil {
 					continue
 				}
-				cc.SetChunk(uint8(k), chunk)
+				cc.SetChunkSection(uint8(k), chunk)
 			}
 
-			err := cnt.LoadChunkColumn(true, true, int32(j), int32(i), cc)
+			err := cnt.LoadChunk(true, true, int32(j), int32(i), cc)
 			if err != nil {
 				return err
 			}
@@ -283,23 +283,23 @@ func (s *Server) GetOnline() int {
 	return s.online
 }
 
-func (s *Server) GetChunk(
+func (s *Server) GetChunkSec(
 	cx int,
 	cy int,
 	cz int,
-) *Chunk {
-	key := toChunkPosStr(cx, cy, cz)
+) *ChunkSection {
+	key := toPosStr(cx, cy, cz)
 	chunk := s.m0[key]
 
 	return chunk
 }
 
-func (s *Server) SetChunk(
+func (s *Server) SetChunkSec(
 	cx int,
 	cy int,
 	cz int,
-	chunk *Chunk,
+	section *ChunkSection,
 ) {
-	key := toChunkPosStr(cx, cy, cz)
-	s.m0[key] = chunk
+	key := toPosStr(cx, cy, cz)
+	s.m0[key] = section
 }

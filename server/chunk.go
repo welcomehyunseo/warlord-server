@@ -3,11 +3,11 @@ package server
 import "sync"
 
 const (
-	ChunkWidth   = 16
-	ChunkVolume  = ChunkWidth * ChunkWidth * ChunkWidth
-	MaxChunksNum = 16
-	MaxBiomesNum = ChunkWidth * ChunkWidth
-	LongSize     = 64
+	ChunkSecWidth   = 16           // width of chunk section
+	ChunkSecVol     = 16 * 16 * 16 // volume of chunk section
+	MaxChunkSecsNum = 16           // maximum number of chunk sections
+	MaxBiomesNum    = ChunkSecWidth * ChunkSecWidth
+	LongSize        = 64
 )
 
 type BiomeID = uint8
@@ -148,23 +148,23 @@ var (
 	GrassBlock = newBlock(2, 0, LightLevel0, LightLevelF)
 )
 
-type Chunk struct {
+type ChunkSection struct {
 	sync.Mutex
 
 	palette []*Block
-	ids     [ChunkVolume]int
+	ids     [ChunkSecVol]int
 	m0      map[*Block]int // globalID to paletteID
 }
 
-func NewChunk() *Chunk {
-	return &Chunk{
+func NewChunkSection() *ChunkSection {
+	return &ChunkSection{
 		palette: []*Block{AirBlock},
-		ids:     [ChunkVolume]int{},
+		ids:     [ChunkSecVol]int{},
 		m0:      map[*Block]int{AirBlock: 0},
 	}
 }
 
-func (c *Chunk) write(
+func (c *ChunkSection) write(
 	overworld bool,
 ) *Data {
 	c.Lock()
@@ -201,10 +201,10 @@ func (c *Chunk) write(
 
 	}
 
-	l0 := LongSize * int(bits) // (ChunkVolume * int(bits)) / LongSize
+	l0 := LongSize * int(bits) // (ChunkSecVol * int(bits)) / LongSize
 	data.WriteVarInt(int32(l0))
 	longs := make([]uint64, l0)
-	for i := 0; i < ChunkVolume; i++ {
+	for i := 0; i < ChunkSecVol; i++ {
 		start := (i * int(bits)) / LongSize
 		offset := (i * int(bits)) % LongSize
 		end := ((i+1)*int(bits) - 1) / LongSize
@@ -230,7 +230,7 @@ func (c *Chunk) write(
 	for i := 0; i < l0; i++ {
 		data.WriteInt64(int64(longs[i]))
 	}
-	for i := 0; i < ChunkVolume; i += 2 {
+	for i := 0; i < ChunkSecVol; i += 2 {
 		paletteID0 := c.ids[i]
 		paletteID1 := c.ids[i+1]
 		b0 := c.palette[paletteID0]
@@ -244,7 +244,7 @@ func (c *Chunk) write(
 	if overworld == false {
 		return data
 	}
-	for i := 0; i < ChunkVolume; i += 2 {
+	for i := 0; i < ChunkSecVol; i += 2 {
 		paletteID0 := c.ids[i]
 		paletteID1 := c.ids[i+1]
 		b0 := c.palette[paletteID0]
@@ -259,7 +259,7 @@ func (c *Chunk) write(
 	return data
 }
 
-//func (c *Chunk) SetBlockLight(
+//func (c *ChunkSection) SetBlockLight(
 //	x uint8,
 //	y uint8,
 //	z uint8,
@@ -269,7 +269,7 @@ func (c *Chunk) write(
 //	c.blockLights[i] = level
 //}
 //
-//func (c *Chunk) SetSkyLight(
+//func (c *ChunkSection) SetSkyLight(
 //	x uint8,
 //	y uint8,
 //	z uint8,
@@ -279,7 +279,7 @@ func (c *Chunk) write(
 //	c.l2[i] = level
 //}
 
-func (c *Chunk) GetBlock(
+func (c *ChunkSection) GetBlock(
 	x uint8,
 	y uint8,
 	z uint8,
@@ -293,7 +293,7 @@ func (c *Chunk) GetBlock(
 	return block
 }
 
-func (c *Chunk) SetBlock(
+func (c *ChunkSection) SetBlock(
 	x uint8,
 	y uint8,
 	z uint8,
@@ -314,23 +314,23 @@ func (c *Chunk) SetBlock(
 
 }
 
-type ChunkColumn struct {
+type Chunk struct {
 	sync.Mutex
 
-	chunks [MaxChunksNum]*Chunk
+	chunks [MaxChunkSecsNum]*ChunkSection
 	biomes [MaxBiomesNum]BiomeID
 }
 
-func NewChunkColumn() *ChunkColumn {
-	return &ChunkColumn{
-		chunks: [MaxChunksNum]*Chunk{},
+func NewChunk() *Chunk {
+	return &Chunk{
+		chunks: [MaxChunkSecsNum]*ChunkSection{},
 		biomes: [MaxBiomesNum]BiomeID{},
 	}
 }
 
-func (cc *ChunkColumn) GetChunk(
+func (cc *Chunk) GetChunkSection(
 	cy uint8,
-) *Chunk {
+) *ChunkSection {
 	cc.Lock()
 	defer cc.Unlock()
 
@@ -338,29 +338,29 @@ func (cc *ChunkColumn) GetChunk(
 	return cc.chunks[i]
 }
 
-func (cc *ChunkColumn) SetChunk(
+func (cc *Chunk) SetChunkSection(
 	cy uint8,
-	chunk *Chunk,
+	section *ChunkSection,
 ) {
 	cc.Lock()
 	defer cc.Unlock()
 
 	i := int(cy)
-	cc.chunks[i] = chunk
+	cc.chunks[i] = section
 }
 
-func (cc *ChunkColumn) GetBiome(
+func (cc *Chunk) GetBiome(
 	x uint8,
 	z uint8,
 ) BiomeID {
 	cc.Lock()
 	defer cc.Unlock()
 
-	i := (z * ChunkWidth) + x
+	i := (z * ChunkSecWidth) + x
 	return cc.biomes[i]
 }
 
-func (cc *ChunkColumn) SetBiome(
+func (cc *Chunk) SetBiome(
 	x uint8,
 	z uint8,
 	biome BiomeID,
@@ -368,11 +368,11 @@ func (cc *ChunkColumn) SetBiome(
 	cc.Lock()
 	defer cc.Unlock()
 
-	i := (z * ChunkWidth) + x
+	i := (z * ChunkSecWidth) + x
 	cc.biomes[i] = biome
 }
 
-func (cc *ChunkColumn) Write(
+func (cc *Chunk) Write(
 	init bool,
 	overworld bool,
 ) (uint16, *Data) {
@@ -382,7 +382,7 @@ func (cc *ChunkColumn) Write(
 	d0 := NewData()
 
 	var bitmask uint16
-	for i := 0; i < MaxChunksNum; i++ {
+	for i := 0; i < MaxChunkSecsNum; i++ {
 		chunk := cc.chunks[i]
 		if chunk == nil {
 			continue
