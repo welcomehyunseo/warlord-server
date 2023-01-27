@@ -202,7 +202,7 @@ func (cnt *Client) readWithComp() (
 		)
 
 		return pid, data, nil
-	} else if l1 < Threshold {
+	} else if l1 < CompThold {
 		return 0, nil, LessThanThresholdError
 	}
 
@@ -275,7 +275,7 @@ func (cnt *Client) writeWithComp(
 	arr0 := buf0.Bytes()
 	l0 := len(arr0) // length of packet before compression
 
-	if l0 <= Threshold {
+	if l0 <= CompThold {
 		buf1 := bytes.NewBuffer(nil)
 		l1, err := writeVarInt(int32(0), buf1)
 		if err != nil {
@@ -376,7 +376,10 @@ func (cnt *Client) Loop0(
 
 func (cnt *Client) Loop1(
 	state State,
+	max int,
 	online int,
+	desc string,
+	favicon string,
 ) (
 	bool,
 	error,
@@ -411,18 +414,18 @@ func (cnt *Client) Loop1(
 
 		jsonResponse := &JsonResponse{
 			Version: &Version{
-				Name:     Mc,
-				Protocol: Protocol,
+				Name:     McName,
+				Protocol: ProtVer,
 			},
 			Players: &Players{
-				Max:    Max,
+				Max:    max,
 				Online: online,
 				Sample: []*Sample{},
 			},
 			Description: &Description{
-				Text: Text,
+				Text: desc,
 			},
-			Favicon:            Favicon,
+			Favicon:            favicon,
 			PreviewsChat:       false,
 			EnforcesSecureChat: false,
 		}
@@ -500,7 +503,7 @@ func (cnt *Client) Loop2(
 			return true, uuid.Nil, "", err
 		}
 
-		enableCompressionPacket := NewEnableCompressionPacket(Threshold)
+		enableCompressionPacket := NewEnableCompressionPacket(CompThold)
 		lg.InfoWithVars(
 			"EnableCompressionPacket was created.",
 			"packet: %+v", enableCompressionPacket,

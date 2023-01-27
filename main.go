@@ -6,10 +6,25 @@ import (
 )
 
 func main() {
-	s := server.NewServer()
+	addr := ":9999"
+	max := 20
+	favicon := ""
+	desc := "Hello, World!"
+	rndDist := 3
 
-	for z := 5; z >= -5; z-- {
-		for x := 5; x >= -5; x-- {
+	s, err := server.NewServer(
+		addr,
+		max,
+		favicon,
+		desc,
+		rndDist,
+		)
+	if err != nil {
+		panic(err)
+	}
+
+	for cz := 20; cz >= -20; cz-- {
+		for cx := 20; cx >= -20; cx-- {
 			chunk := server.NewChunk()
 			for z := 0; z < server.ChunkWidth; z++ {
 				for x := 0; x < server.ChunkWidth; x++ {
@@ -17,7 +32,7 @@ func main() {
 				}
 			}
 
-			s.SetChunk(x, 0, z, chunk)
+			s.SetChunk(cx, 0, cz, chunk)
 		}
 	}
 

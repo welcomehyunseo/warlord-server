@@ -1,24 +1,24 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"net"
 )
 
 const (
-	Addr     = ":9999"
-	Type     = "tcp"
-	Mc       = "1.12.2"
-	Protocol = 340
-	Max      = 10
-	Text     = "Hello, World!"
-	Favicon  = ""
+	NetType = "tcp"    // network type of server
+	McName  = "1.12.2" // minecraft version name
+	ProtVer = 340      // protocol version
 
-	Threshold = 16
+	CompThold = 16 // threshold for compression
 
-	ViewDistance = 2
+	MinRndDist = 3  // minimum render distance
+	MaxRndDist = 32 // maximum render distance
 )
+
+var OutOfRndDistRangeError = errors.New("it is out of maximum and minimum value of render distance")
 
 type ChunkPosStr = string
 
@@ -55,20 +55,45 @@ func playerPosToChunkPos(
 }
 
 type Server struct {
-	online int
-	last   int32
+	addr string // address
+
+	max    int   // maximum number of players
+	online int   // number of online players
+	last   int32 // last number of entity
+
+	favicon string // web image url
+	desc    string // description of server
+
+	rndDist int // render distance
 
 	m0 map[ChunkPosStr]*Chunk
 	m1 map[ChunkPosStr][]*Player
 }
 
-func NewServer() *Server {
-	return &Server{
-		online: 0,
-		last:   0,
-		m0:     make(map[ChunkPosStr]*Chunk),
-		m1:     make(map[ChunkPosStr][]*Player),
+func NewServer(
+	addr string,
+	max int,
+	favicon string,
+	desc string,
+	rndDist int,
+) (*Server, error) {
+	// TODO: check addr is valid
+	// TODO: check favicon is valid
+	if rndDist < MinRndDist || MaxRndDist < rndDist {
+		return nil, OutOfRndDistRangeError
 	}
+
+	return &Server{
+		addr:    addr,
+		max:     max,
+		online:  0,
+		last:    0,
+		favicon: favicon,
+		desc:    desc,
+		rndDist: rndDist,
+		m0:      make(map[ChunkPosStr]*Chunk),
+		m1:      make(map[ChunkPosStr][]*Player),
+	}, nil
 }
 
 func (s *Server) countLast() int32 {
@@ -81,12 +106,13 @@ func (s *Server) initChunks(
 	x float64,
 	y float64,
 	z float64,
-	d int,
 	cnt *Client,
 ) error {
+	rndDist := s.rndDist
+
 	cx, cy, cz := playerPosToChunkPos(x, y, z)
-	cx0, cy0, cz0 := cx+d, cy+d, cz+d
-	cx1, cy1, cz1 := cx-d, cy-d, cz-d
+	cx0, cy0, cz0 := cx+rndDist, cy+rndDist, cz+rndDist
+	cx1, cy1, cz1 := cx-rndDist, cy-rndDist, cz-rndDist
 
 	if cy0 > 15 {
 		cy0 = 15
@@ -154,7 +180,13 @@ func (s *Server) handleConnection(
 
 	if state == StatusState {
 		for {
-			finish, err := cnt.Loop1(state, s.online)
+			finish, err := cnt.Loop1(
+				state,
+				s.max,
+				s.online,
+				s.desc,
+				s.favicon,
+			)
 			if err != nil {
 				panic(err)
 			}
@@ -209,7 +241,7 @@ func (s *Server) handleConnection(
 		panic(err)
 	}
 
-	if err := s.initChunks(sx, sy, sz, ViewDistance, cnt); err != nil {
+	if err := s.initChunks(sx, sy, sz, cnt); err != nil {
 		panic(err)
 	}
 
@@ -228,7 +260,8 @@ func (s *Server) handleConnection(
 }
 
 func (s *Server) Render() {
-	ln, err := net.Listen(Type, Addr)
+	addr := s.addr
+	ln, err := net.Listen(NetType, addr)
 	if err != nil {
 		panic(err)
 	}
