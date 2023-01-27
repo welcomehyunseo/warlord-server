@@ -169,7 +169,6 @@ func NewEnableCompressionPacket(
 
 func (p *EnableCompressionPacket) Write() *Data {
 	data := NewData()
-	data.WriteVarInt(p.GetID())
 	data.WriteVarInt(p.threshold)
 
 	return data

@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"compress/zlib"
+	"fmt"
 	"io"
 )
 
@@ -24,6 +25,7 @@ func Compress(
 func Uncompress(
 	arr []uint8,
 ) (*bytes.Buffer, error) {
+	fmt.Printf("%+v\n", arr)
 	out := bytes.NewBuffer(nil)
 	buf := bytes.NewBuffer(arr)
 	r, err := zlib.NewReader(buf)

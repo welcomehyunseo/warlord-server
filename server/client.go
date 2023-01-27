@@ -40,6 +40,7 @@ func readVarInt(
 		}
 		length += 1
 		b := buf[0]
+		//fmt.Println("b:", b)
 		v |= int32(b&SegmentBits) << position
 
 		if (b & ContinueBit) == 0 {
@@ -177,14 +178,19 @@ func (cnt *Client) readWithComp() (
 	if err != nil {
 		return 0, nil, err
 	}
+	//fmt.Println("l0:", l0)
 
 	l1, l2, err := readVarInt(conn) // uncompressed length of id and data of packet
 	if err != nil {
 		return 0, nil, err
 	}
 
+	//fmt.Println("l1:", l1)
+	//fmt.Println("l2:", l2)
+	l3 := int(l0) - l2 // length of id and data of packet
+	//fmt.Println("l3:", l3)
 	if l1 == 0 {
-		pid, data, err := read(int(l0), conn)
+		pid, data, err := read(l3, conn)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -200,7 +206,6 @@ func (cnt *Client) readWithComp() (
 		return 0, nil, LessThanThresholdError
 	}
 
-	l3 := int(l0) - l2 // compressed length of id and data of packet
 	arr := make([]uint8, l3)
 	if _, err = conn.Read(arr); err != nil {
 		return 0, nil, err
@@ -495,12 +500,21 @@ func (cnt *Client) Loop2(
 			return true, uuid.Nil, "", err
 		}
 
+		enableCompressionPacket := NewEnableCompressionPacket(Threshold)
+		lg.InfoWithVars(
+			"EnableCompressionPacket was created.",
+			"packet: %+v", enableCompressionPacket,
+		)
+		if err := cnt.write(enableCompressionPacket); err != nil {
+			return true, uuid.Nil, "", err
+		}
+
 		completeLoginPacket := NewCompleteLoginPacket(uid, username)
 		lg.InfoWithVars(
 			"CompleteLoginPacket was created.",
 			"packet: %+v", completeLoginPacket,
 		)
-		if err := cnt.write(completeLoginPacket); err != nil {
+		if err := cnt.writeWithComp(completeLoginPacket); err != nil {
 			return true, uuid.Nil, "", err
 		}
 
@@ -527,7 +541,7 @@ func (cnt *Client) Loop3(
 
 	finish := false
 
-	pid, _, err := cnt.read()
+	pid, _, err := cnt.readWithComp()
 	if err != nil {
 		return true, err
 	}
@@ -560,7 +574,7 @@ func (cnt *Client) Init(
 			"JoinGamePacket was created.",
 			"packet: %+v", packet,
 		)
-		if err := cnt.write(packet); err != nil {
+		if err := cnt.writeWithComp(packet); err != nil {
 			return err
 		}
 		return nil
@@ -569,7 +583,7 @@ func (cnt *Client) Init(
 	}
 
 	if err := func() error {
-		id, data, err := cnt.read()
+		id, data, err := cnt.readWithComp()
 		if err != nil {
 			return err
 		}
@@ -588,7 +602,7 @@ func (cnt *Client) Init(
 	}
 
 	if err := func() error {
-		_, _, err := cnt.read()
+		_, _, err := cnt.readWithComp()
 		if err != nil {
 			return err
 		}
@@ -611,7 +625,7 @@ func (cnt *Client) Init(
 			"SetPlayerAbilitiesPacket was created.",
 			"packet: %+v", packet,
 		)
-		if err := cnt.write(packet); err != nil {
+		if err := cnt.writeWithComp(packet); err != nil {
 			return err
 		}
 		return nil
@@ -633,7 +647,7 @@ func (cnt *Client) Init(
 			"SetPlayerPosAndLookPacket was created.",
 			"packet: %+v", packet,
 		)
-		if err := cnt.write(packet); err != nil {
+		if err := cnt.writeWithComp(packet); err != nil {
 			return err
 		}
 		return nil
@@ -642,7 +656,7 @@ func (cnt *Client) Init(
 	}
 
 	if err := func() error {
-		id, data, err := cnt.read()
+		id, data, err := cnt.readWithComp()
 		if err != nil {
 			return err
 		}
@@ -693,7 +707,7 @@ func (cnt *Client) LoadChunkColumn(
 		"SendChunkDataPacket was created.",
 		"packet: %+v", packet,
 	)
-	if err := cnt.write(packet); err != nil {
+	if err := cnt.writeWithComp(packet); err != nil {
 		return err
 	}
 
