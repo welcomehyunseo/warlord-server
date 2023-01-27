@@ -1,10 +1,13 @@
 package server
 
+type State = int32
+
 const (
-	HandshakingState = int32(0)
-	StatusState      = int32(1)
-	LoginState       = int32(2)
-	PlayState        = int32(3)
+	NilState         = State(-1)
+	PlayState        = State(0)
+	StatusState      = State(1)
+	LoginState       = State(2)
+	HandshakingState = State(3)
 
 	Inbound  = 0
 	Outbound = 1
