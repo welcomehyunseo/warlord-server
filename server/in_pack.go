@@ -12,11 +12,9 @@ const TakeActionPacketID = 0x03
 const ChangeClientSettingsPacketID = 0x04
 
 type InPacket interface {
-	Read(*Data)
+	*Packet
 
-	GetBoundTo() int
-	GetState() int
-	GetID() int32
+	Read(*Data)
 }
 
 type HandshakePacket struct {

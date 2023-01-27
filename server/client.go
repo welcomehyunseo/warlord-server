@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"errors"
 	"github.com/google/uuid"
+	"io"
 	"math/rand"
 	"net"
 )
@@ -15,7 +17,112 @@ type Client struct {
 	lg *Logger
 }
 
+var InvalidPacketIDError = errors.New("current packet ID was invalid")
+var InvalidPayloadError = errors.New("payload does not match to given")
 var UnknownPacketIDError = errors.New("current packet ID was unknown")
+var LessThanThresholdError = errors.New("length of uncompressed id and data of packet is less than the threshold that set")
+
+func readVarInt(
+	r io.Reader,
+) (
+	int32,
+	int,
+	error,
+) {
+	v := int32(0)
+	position := uint8(0)
+	length := 0
+
+	for {
+		buf := make([]uint8, 1)
+		if _, err := r.Read(buf); err != nil {
+			return 0, 0, err
+		}
+		length += 1
+		b := buf[0]
+		v |= int32(b&SegmentBits) << position
+
+		if (b & ContinueBit) == 0 {
+			break
+		}
+
+		position += 7
+	}
+
+	return v, length, nil
+}
+
+func writeVarInt(
+	v int32,
+	w io.Writer,
+) (
+	int,
+	error,
+) {
+	v0 := uint32(v)
+	arr := make([]uint8, 0)
+
+	for {
+		if (v0 & ^uint32(SegmentBits)) == 0 {
+			b := uint8(v0)
+			arr = append(arr, b)
+			break
+		}
+
+		b := uint8(v0&uint32(SegmentBits)) | ContinueBit
+		arr = append(arr, b)
+
+		v0 >>= 7
+	}
+
+	if _, err := w.Write(arr); err != nil {
+		return 0, err
+	}
+	return len(arr), nil
+}
+
+func read(
+	length int, // length of packet
+	r io.Reader,
+) (int32, *Data, error) {
+	pid, l0, err := readVarInt(r)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	data := NewData()
+
+	l1 := length - l0
+	if l1 == 0 {
+		return pid, data, nil
+	}
+
+	buf := make([]uint8, l1)
+	if _, err = r.Read(buf); err != nil {
+		return 0, nil, err
+	}
+
+	data.WriteBytes(buf)
+
+	return pid, data, nil
+}
+
+func write(
+	pid int32,
+	data *Data,
+) (*bytes.Buffer, error) {
+	buf := bytes.NewBuffer(nil) // buffer of id and data of packet
+
+	if _, err := writeVarInt(pid, buf); err != nil {
+		return nil, err
+	}
+
+	if _, err := buf.Write(data.GetBytes()); err != nil {
+		return nil, err
+	}
+
+	return buf, nil
+}
 
 func NewClient(
 	cid uuid.UUID,
@@ -32,37 +139,6 @@ func NewClient(
 	}
 }
 
-func (cnt *Client) readVarInt() (
-	int32,
-	int,
-	error,
-) {
-	conn := cnt.conn
-
-	v := int32(0)
-	position := uint8(0)
-	length := 0
-
-	for {
-		buf := make([]uint8, 1)
-		n, err := conn.Read(buf)
-		if err != nil {
-			return 0, 0, err
-		}
-		length += n
-		b := buf[0]
-		v |= int32(b&SegmentBits) << position
-
-		if (b & ContinueBit) == 0 {
-			break
-		}
-
-		position += 7
-	}
-
-	return v, length, nil
-}
-
 func (cnt *Client) read() (
 	int32,
 	*Data,
@@ -71,57 +147,187 @@ func (cnt *Client) read() (
 	conn := cnt.conn
 	lg := cnt.lg
 
-	d0 := NewData()
-
-	l0, _, err := cnt.readVarInt()
+	l0, _, err := readVarInt(conn) // length of packet
 	if err != nil {
 		return 0, nil, err
 	}
 
-	pid, l1, err := cnt.readVarInt()
+	pid, data, err := read(int(l0), conn)
 	if err != nil {
 		return 0, nil, err
 	}
-
-	l2 := int(l0) - l1
-	buf := make([]uint8, l2)
-	if l2 == 0 {
-		lg.InfoWithVars(
-			"Uninterpreted packet was read in the network.",
-			"id: %d", pid,
-		)
-		return pid, d0, nil
-	}
-	_, err = conn.Read(buf)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	d0.WriteBuf(buf)
 
 	lg.InfoWithVars(
-		"Uninterpreted packet was read in the network with Data.",
-		"id: %d, data: %+v", pid, d0,
+		"Uninterpreted packet was read in the connection.",
+		"id: %d", pid,
 	)
 
-	return pid, d0, nil
+	return pid, data, nil
+}
+
+func (cnt *Client) readWithComp() (
+	int32,
+	*Data,
+	error,
+) {
+	conn := cnt.conn
+	lg := cnt.lg
+
+	l0, _, err := readVarInt(conn) // length of packet
+	if err != nil {
+		return 0, nil, err
+	}
+
+	l1, l2, err := readVarInt(conn) // uncompressed length of id and data of packet
+	if err != nil {
+		return 0, nil, err
+	}
+
+	if l1 == 0 {
+		pid, data, err := read(int(l0), conn)
+		if err != nil {
+			return 0, nil, err
+		}
+
+		lg.InfoWithVars(
+			"Uninterpreted packet was read "+
+				"in the connection with non-compression.",
+			"id: %d", pid,
+		)
+
+		return pid, data, nil
+	} else if l1 < Threshold {
+		return 0, nil, LessThanThresholdError
+	}
+
+	l3 := int(l0) - l2 // compressed length of id and data of packet
+	arr := make([]uint8, l3)
+	if _, err = conn.Read(arr); err != nil {
+		return 0, nil, err
+	}
+
+	buf, err := Uncompress(arr)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	pid, _, err := readVarInt(buf)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	data := NewData(buf.Bytes()...)
+
+	lg.InfoWithVars(
+		"Uninterpreted packet was read "+
+			"in the connection with compression.",
+		"id: %d", pid,
+	)
+
+	return pid, data, nil
 }
 
 func (cnt *Client) write(
-	data *Data,
+	packet OutPacket,
 ) error {
 	lg := cnt.lg
 	conn := cnt.conn
 
-	if _, err := conn.Write(data.GetBuf()); err != nil {
+	pid := packet.GetID()
+	data := packet.Write()
+
+	buf, err := write(pid, data)
+	if err != nil {
+		return err
+	}
+	arr := buf.Bytes()
+	length := len(arr)
+	if _, err := writeVarInt(int32(length), conn); err != nil {
+		return err
+	}
+	if _, err := conn.Write(arr); err != nil {
+		return err
+	}
+
+	lg.Info("Packet was wrote in the connection.")
+
+	return nil
+}
+
+func (cnt *Client) writeWithComp(
+	packet OutPacket,
+) error {
+	lg := cnt.lg
+	conn := cnt.conn
+
+	pid := packet.GetID()
+	data := packet.Write()
+
+	buf0, err := write(pid, data)
+	if err != nil {
+		return err
+	}
+	arr0 := buf0.Bytes()
+	l0 := len(arr0) // length of packet before compression
+
+	if l0 <= Threshold {
+		buf1 := bytes.NewBuffer(nil)
+		l1, err := writeVarInt(int32(0), buf1)
+		if err != nil {
+			return err
+		}
+
+		arr1 := buf1.Bytes()
+		l2 := l0 + l1
+
+		if _, err := writeVarInt(int32(l2), conn); err != nil {
+			return err
+		}
+		if _, err := conn.Write(arr1); err != nil {
+			return err
+		}
+		if _, err := conn.Write(arr0); err != nil {
+			return err
+		}
+
+		lg.InfoWithVars(
+			"Packet was wrote "+
+				"in the connection with non-compression.",
+			"packet: %+v", packet,
+		)
+		return nil
+	}
+
+	buf1, err := Compress(arr0)
+	if err != nil {
+		return err
+	}
+	arr1 := buf1.Bytes()
+	l1 := len(arr1) // length of packet after compression
+
+	buf2 := bytes.NewBuffer(nil)
+	l2, err := writeVarInt(int32(l0), buf2)
+	if err != nil {
+		return err
+	}
+	arr2 := buf2.Bytes()
+
+	l3 := l2 + l1
+	if _, err := writeVarInt(int32(l3), conn); err != nil {
+		return err
+	}
+	if _, err := conn.Write(arr2); err != nil {
+		return err
+	}
+	if _, err := conn.Write(arr1); err != nil {
 		return err
 	}
 
 	lg.InfoWithVars(
-		"Data was wrote to the network.",
-		"data: %+v", data,
+		"Packet was wrote "+
+			"in the connection with compression.",
+		"packet: %+v", packet,
 	)
-
 	return nil
 }
 
@@ -154,7 +360,7 @@ func (cnt *Client) Loop0(
 		handshakePacket.Read(data)
 		lg.InfoWithVars(
 			"HandshakePacket was read.",
-			"packet: %+V", handshakePacket,
+			"packet: %+v", handshakePacket,
 		)
 		state = handshakePacket.GetNextState()
 		break
@@ -180,23 +386,22 @@ func (cnt *Client) Loop1(
 		"The Loop1 loop is started with that state.",
 		"state: %d", state,
 	)
-	pid, d0, err := cnt.read()
+	pid, data, err := cnt.read()
 	if err != nil {
 		return true, err
 	}
 
 	finish := false
-	var d1 *Data
 
 	switch pid {
 	default:
 		return true, UnknownPacketIDError
 	case RequestPacketID:
 		requestPacket := NewRequestPacket()
-		requestPacket.Read(d0)
+		requestPacket.Read(data)
 		lg.InfoWithVars(
 			"RequestPacket was read.",
-			"packet: %+V", requestPacket,
+			"packet: %+v", requestPacket,
 		)
 
 		jsonResponse := &JsonResponse{
@@ -219,31 +424,31 @@ func (cnt *Client) Loop1(
 		responsePacket := NewResponsePacket(jsonResponse)
 		lg.InfoWithVars(
 			"ResponsePacket was created.",
-			"packet: %+V", responsePacket,
+			"packet: %+v", responsePacket,
 		)
-		d1 = responsePacket.Write()
+		if err := cnt.write(responsePacket); err != nil {
+			return true, err
+		}
 		break
 	case PingPacketID:
 		pingPacket := NewPingPacket()
-		pingPacket.Read(d0)
+		pingPacket.Read(data)
 		lg.InfoWithVars(
 			"PingPacket was read.",
-			"packet: %+V", pingPacket,
+			"packet: %+v", pingPacket,
 		)
 		payload := pingPacket.GetPayload()
 
 		pongPacket := NewPongPacket(payload)
 		lg.InfoWithVars(
 			"PongPacket was created.",
-			"packet: %+V", pongPacket,
+			"packet: %+v", pongPacket,
 		)
-		d1 = pongPacket.Write()
+		if err := cnt.write(pongPacket); err != nil {
+			return true, err
+		}
 		finish = true
 		break
-	}
-
-	if err := cnt.write(d1); err != nil {
-		return true, err
 	}
 
 	return finish, nil
@@ -280,7 +485,7 @@ func (cnt *Client) Loop2(
 		startLoginPacket.Read(d0)
 		lg.InfoWithVars(
 			"StartLoginPacket was read.",
-			"packet: %+V", startLoginPacket,
+			"packet: %+v", startLoginPacket,
 		)
 
 		username := startLoginPacket.GetUsername()
@@ -293,10 +498,9 @@ func (cnt *Client) Loop2(
 		completeLoginPacket := NewCompleteLoginPacket(uid, username)
 		lg.InfoWithVars(
 			"CompleteLoginPacket was created.",
-			"packet: %+V", completeLoginPacket,
+			"packet: %+v", completeLoginPacket,
 		)
-		data := completeLoginPacket.Write()
-		if err := cnt.write(data); err != nil {
+		if err := cnt.write(completeLoginPacket); err != nil {
 			return true, uuid.Nil, "", err
 		}
 
@@ -334,14 +538,14 @@ func (cnt *Client) Loop3(
 	return finish, nil
 }
 
-func (cnt *Client) f0(
+func (cnt *Client) Init(
 	eid int32,
 ) error {
 	lg := cnt.lg
 
-	lg.Info("The normal sequence is started after login in the f0 func.")
+	lg.Info("The normal sequence is started after login in the Init func.")
 	defer func() {
-		lg.Info("The normal sequence was finished in the f0 func.")
+		lg.Info("The normal sequence was finished in the Init func.")
 	}()
 	if err := func() error {
 		packet := NewJoinGamePacket(
@@ -354,10 +558,9 @@ func (cnt *Client) f0(
 		)
 		lg.InfoWithVars(
 			"JoinGamePacket was created.",
-			"packet: %+V", packet,
+			"packet: %+v", packet,
 		)
-		data := packet.Write()
-		if err := cnt.write(data); err != nil {
+		if err := cnt.write(packet); err != nil {
 			return err
 		}
 		return nil
@@ -371,13 +574,13 @@ func (cnt *Client) f0(
 			return err
 		}
 		if id != ChangeClientSettingsPacketID {
-			return errors.New("packet must be ChangeClientSettingsPacket, but is not")
+			return InvalidPacketIDError
 		}
 		changeClientSettingsPacket := NewChangeClientSettingsPacket()
 		changeClientSettingsPacket.Read(data)
 		lg.InfoWithVars(
 			"ChangeClientSettingsPacket was read.",
-			"packet: %+V", changeClientSettingsPacket,
+			"packet: %+v", changeClientSettingsPacket,
 		)
 		return nil
 	}(); err != nil {
@@ -406,10 +609,9 @@ func (cnt *Client) f0(
 		)
 		lg.InfoWithVars(
 			"SetPlayerAbilitiesPacket was created.",
-			"packet: %+V", packet,
+			"packet: %+v", packet,
 		)
-		data := packet.Write()
-		if err := cnt.write(data); err != nil {
+		if err := cnt.write(packet); err != nil {
 			return err
 		}
 		return nil
@@ -429,10 +631,9 @@ func (cnt *Client) f0(
 		)
 		lg.InfoWithVars(
 			"SetPlayerPosAndLookPacket was created.",
-			"packet: %+V", packet,
+			"packet: %+v", packet,
 		)
-		data := packet.Write()
-		if err := cnt.write(data); err != nil {
+		if err := cnt.write(packet); err != nil {
 			return err
 		}
 		return nil
@@ -446,55 +647,57 @@ func (cnt *Client) f0(
 			return err
 		}
 		if id != ConfirmTeleportPacketID {
-			return errors.New("packet must be ConfirmTeleportPacket, but is not")
+			return InvalidPacketIDError
 		}
 		packet := NewConfirmTeleportPacket()
 		packet.Read(data)
 		lg.InfoWithVars(
 			"ConfirmTeleportPacket was read.",
-			"packet: %+V", packet,
+			"packet: %+v", packet,
 		)
 		payloadPrime := packet.GetPayload()
 		if payload != payloadPrime {
-			return errors.New(
-				"the Payload value that read is not same the given",
-			)
+			return InvalidPayloadError
 		}
 		return nil
 	}(); err != nil {
 		return err
 	}
 
-	if err := func() error {
-		cc := NewChunkColumn()
-		cc.SetBiome(0, 0, VoidBiomeID)
-		chunk := NewChunk()
-		chunk.SetBlock(0, 0, 0, StoneBlock)
-		cc.SetChunk(0, chunk)
-		init := true
-		overworld := true
-		bitmask, d0 := cc.Write(init, overworld)
+	return nil
+}
 
-		packet := NewSendChunkDataPacket(
-			0,
-			0,
-			init,
-			bitmask,
-			d0,
-		)
-		lg.InfoWithVars(
-			"SendChunkDataPacket was created.",
-			"packet: %+V", packet,
-		)
-		d1 := packet.Write()
-		if err := cnt.write(d1); err != nil {
-			return err
-		}
-		return nil
-	}(); err != nil {
+func (cnt *Client) LoadChunkColumn(
+	overworld bool,
+	init bool,
+	cx, cz int32,
+	cc *ChunkColumn,
+) error {
+	lg := cnt.lg
+
+	lg.InfoWithVars(
+		"The chunk column is started to loaded.",
+		"cx: %d, cz: %d",
+		cx, cz,
+	)
+
+	bitmask, d0 := cc.Write(init, overworld)
+	packet := NewSendChunkDataPacket(
+		cx,
+		cz,
+		init,
+		bitmask,
+		d0,
+	)
+	lg.InfoWithVars(
+		"SendChunkDataPacket was created.",
+		"packet: %+v", packet,
+	)
+	if err := cnt.write(packet); err != nil {
 		return err
 	}
 
+	lg.Info("The chunk column is finished to load.")
 	return nil
 }
 

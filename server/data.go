@@ -408,7 +408,7 @@ func (d *Data) ReadBuf(n int) []uint8 {
 	return b0
 }
 
-func (d *Data) WriteBuf(buf []uint8) {
+func (d *Data) WriteBytes(buf []uint8) {
 	d.buf = concat(d.buf, buf)
 }
 
@@ -420,6 +420,6 @@ func (d *Data) GetLength() int {
 	return len(d.buf)
 }
 
-func (d *Data) GetBuf() []uint8 {
+func (d *Data) GetBytes() []uint8 {
 	return d.buf
 }

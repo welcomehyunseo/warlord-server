@@ -10,6 +10,7 @@ const PongPacketID = 0x01
 
 const DisconnectLoginPacketID = 0x00
 const CompleteLoginPacketID = 0x02
+const EnableCompressionPacketID = 0x03
 
 const SendChunkDataPacketID = 0x20
 const JoinGamePacketID = 0x23
@@ -18,11 +19,9 @@ const SetPlayerPosAndLookPacketID = 0x2F
 const SetSpawnPosPacketID = 0x46
 
 type OutPacket interface {
-	Write() *Data
+	Packet
 
-	GetBoundTo() int
-	GetState() int
-	GetID() int32
+	Write() *Data
 }
 
 type Version struct {
@@ -73,16 +72,11 @@ func NewResponsePacket(
 }
 
 func (p *ResponsePacket) Write() *Data {
-	d0 := NewData()
-	d0.WriteVarInt(p.GetID())
+	data := NewData()
 	buf, _ := json.Marshal(p.jsonResponse)
-	d0.WriteString(string(buf))
+	data.WriteString(string(buf))
 
-	length := d0.GetLength()
-	d1 := NewData()
-	d1.WriteVarInt(int32(length))
-	d1.Write(d0)
-	return d1
+	return data
 }
 
 func (p *ResponsePacket) GetJsonResponse() *JsonResponse {
@@ -108,15 +102,10 @@ func NewPongPacket(
 }
 
 func (p *PongPacket) Write() *Data {
-	d0 := NewData()
-	d0.WriteVarInt(p.GetID())
-	d0.WriteInt64(p.payload)
+	data := NewData()
+	data.WriteInt64(p.payload)
 
-	length := d0.GetLength()
-	d1 := NewData()
-	d1.WriteVarInt(int32(length))
-	d1.Write(d0)
-	return d1
+	return data
 }
 
 func (p *PongPacket) GetPayload() int64 {
@@ -145,16 +134,11 @@ func NewCompleteLoginPacket(
 }
 
 func (p *CompleteLoginPacket) Write() *Data {
-	d0 := NewData()
-	d0.WriteVarInt(p.GetID())
-	d0.WriteString(p.playerID.String())
-	d0.WriteString(p.username)
+	data := NewData()
+	data.WriteString(p.playerID.String())
+	data.WriteString(p.username)
 
-	length := d0.GetLength()
-	d1 := NewData()
-	d1.WriteVarInt(int32(length))
-	d1.Write(d0)
-	return d1
+	return data
 }
 
 func (p *CompleteLoginPacket) GetPlayerID() uuid.UUID {
@@ -163,6 +147,36 @@ func (p *CompleteLoginPacket) GetPlayerID() uuid.UUID {
 
 func (p *CompleteLoginPacket) GetUsername() string {
 	return p.username
+}
+
+type EnableCompressionPacket struct {
+	*packet
+	threshold int32
+}
+
+func NewEnableCompressionPacket(
+	threshold int32,
+) *EnableCompressionPacket {
+	return &EnableCompressionPacket{
+		packet: newPacket(
+			Outbound,
+			LoginState,
+			EnableCompressionPacketID,
+		),
+		threshold: threshold,
+	}
+}
+
+func (p *EnableCompressionPacket) Write() *Data {
+	data := NewData()
+	data.WriteVarInt(p.GetID())
+	data.WriteVarInt(p.threshold)
+
+	return data
+}
+
+func (p *EnableCompressionPacket) GetThreshold() int32 {
+	return p.threshold
 }
 
 type SendChunkDataPacket struct {
@@ -196,24 +210,19 @@ func NewSendChunkDataPacket(
 }
 
 func (p *SendChunkDataPacket) Write() *Data {
-	d0 := NewData()
-	d0.WriteVarInt(p.GetID())
-	d0.WriteInt32(p.cx)
-	d0.WriteInt32(p.cz)
-	d0.WriteBool(p.init)
-	d0.WriteVarInt(int32(p.bitmask))
+	data := NewData()
+	data.WriteInt32(p.cx)
+	data.WriteInt32(p.cz)
+	data.WriteBool(p.init)
+	data.WriteVarInt(int32(p.bitmask))
 	l0 := p.data.GetLength()
-	d0.WriteVarInt(int32(l0))
-	d0.Write(p.data)
+	data.WriteVarInt(int32(l0))
+	data.Write(p.data)
 
 	l1 := 0
-	d0.WriteVarInt(int32(l1)) // block entities
+	data.WriteVarInt(int32(l1)) // block entities
 
-	l2 := d0.GetLength()
-	d2 := NewData()
-	d2.WriteVarInt(int32(l2))
-	d2.Write(d0)
-	return d2
+	return data
 }
 
 func (p *SendChunkDataPacket) GetCx() int32 {
@@ -270,21 +279,16 @@ func NewJoinGamePacket(
 }
 
 func (p *JoinGamePacket) Write() *Data {
-	d0 := NewData()
-	d0.WriteVarInt(p.GetID())
-	d0.WriteInt32(p.eid)
-	d0.WriteUint8(p.gamemode)
-	d0.WriteInt32(p.dimension)
-	d0.WriteUint8(p.difficulty)
-	d0.WriteUint8(0) // max is ignored
-	d0.WriteString(p.level)
-	d0.WriteBool(p.debug)
+	data := NewData()
+	data.WriteInt32(p.eid)
+	data.WriteUint8(p.gamemode)
+	data.WriteInt32(p.dimension)
+	data.WriteUint8(p.difficulty)
+	data.WriteUint8(0) // max is ignored
+	data.WriteString(p.level)
+	data.WriteBool(p.debug)
 
-	length := d0.GetLength()
-	d1 := NewData()
-	d1.WriteVarInt(int32(length))
-	d1.Write(d0)
-	return d1
+	return data
 }
 
 func (p *JoinGamePacket) GetEid() int32 {
@@ -345,8 +349,7 @@ func NewSetPlayerAbilitiesPacket(
 }
 
 func (p *SetPlayerAbilitiesPacket) Write() *Data {
-	d0 := NewData()
-	d0.WriteVarInt(p.GetID())
+	data := NewData()
 	bitmask := uint8(0)
 	if p.invulnerable == true {
 		bitmask |= uint8(1)
@@ -360,15 +363,11 @@ func (p *SetPlayerAbilitiesPacket) Write() *Data {
 	if p.instantBreak == true {
 		bitmask |= uint8(8)
 	}
-	d0.WriteUint8(bitmask)
-	d0.WriteFloat32(p.flyingSpeed)
-	d0.WriteFloat32(p.fovModifier)
+	data.WriteUint8(bitmask)
+	data.WriteFloat32(p.flyingSpeed)
+	data.WriteFloat32(p.fovModifier)
 
-	length := d0.GetLength()
-	d1 := NewData()
-	d1.WriteVarInt(int32(length))
-	d1.Write(d0)
-	return d1
+	return data
 }
 
 func (p *SetPlayerAbilitiesPacket) GetInvulnerable() bool {
@@ -429,21 +428,16 @@ func NewSetPlayerPosAndLookPacket(
 }
 
 func (p *SetPlayerPosAndLookPacket) Write() *Data {
-	d0 := NewData()
-	d0.WriteVarInt(p.GetID())
-	d0.WriteFloat64(p.x)
-	d0.WriteFloat64(p.y)
-	d0.WriteFloat64(p.z)
-	d0.WriteFloat32(p.yaw)
-	d0.WriteFloat32(p.pitch)
-	d0.WriteInt8(0)
-	d0.WriteVarInt(p.payload)
+	data := NewData()
+	data.WriteFloat64(p.x)
+	data.WriteFloat64(p.y)
+	data.WriteFloat64(p.z)
+	data.WriteFloat32(p.yaw)
+	data.WriteFloat32(p.pitch)
+	data.WriteInt8(0)
+	data.WriteVarInt(p.payload)
 
-	length := d0.GetLength()
-	d1 := NewData()
-	d1.WriteVarInt(int32(length))
-	d1.Write(d0)
-	return d1
+	return data
 }
 
 func (p *SetPlayerPosAndLookPacket) GetX() float64 {
@@ -495,15 +489,10 @@ func NewSetSpawnPosPacket(
 }
 
 func (p *SetSpawnPosPacket) Write() *Data {
-	d0 := NewData()
-	d0.WriteVarInt(p.GetID())
-	d0.WritePosition(p.x, p.y, p.z)
+	data := NewData()
+	data.WritePosition(p.x, p.y, p.z)
 
-	length := d0.GetLength()
-	d1 := NewData()
-	d1.WriteVarInt(int32(length))
-	d1.Write(d0)
-	return d1
+	return data
 }
 
 func (p *SetSpawnPosPacket) GetX() int {

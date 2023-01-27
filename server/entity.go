@@ -134,3 +134,7 @@ func NewPlayer(
 		username: username,
 	}
 }
+
+func (p *Player) GetUsername() string {
+	return p.username
+}

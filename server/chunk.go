@@ -3,10 +3,10 @@ package server
 import "sync"
 
 const (
-	Width        = 16
-	Volume       = Width * Width * Width
+	ChunkWidth   = 16
+	ChunkVolume  = ChunkWidth * ChunkWidth * ChunkWidth
 	MaxChunksNum = 16
-	MaxBiomesNum = Width * Width
+	MaxBiomesNum = ChunkWidth * ChunkWidth
 	LongSize     = 64
 )
 
@@ -152,14 +152,14 @@ type Chunk struct {
 	sync.Mutex
 
 	palette []*Block
-	ids     [Volume]int
+	ids     [ChunkVolume]int
 	m0      map[*Block]int // globalID to paletteID
 }
 
 func NewChunk() *Chunk {
 	return &Chunk{
 		palette: []*Block{AirBlock},
-		ids:     [Volume]int{},
+		ids:     [ChunkVolume]int{},
 		m0:      map[*Block]int{AirBlock: 0},
 	}
 }
@@ -201,10 +201,10 @@ func (c *Chunk) write(
 
 	}
 
-	l0 := LongSize * int(bits) // (Volume * int(bits)) / LongSize
+	l0 := LongSize * int(bits) // (ChunkVolume * int(bits)) / LongSize
 	data.WriteVarInt(int32(l0))
 	longs := make([]uint64, l0)
-	for i := 0; i < Volume; i++ {
+	for i := 0; i < ChunkVolume; i++ {
 		start := (i * int(bits)) / LongSize
 		offset := (i * int(bits)) % LongSize
 		end := ((i+1)*int(bits) - 1) / LongSize
@@ -230,7 +230,7 @@ func (c *Chunk) write(
 	for i := 0; i < l0; i++ {
 		data.WriteInt64(int64(longs[i]))
 	}
-	for i := 0; i < Volume; i += 2 {
+	for i := 0; i < ChunkVolume; i += 2 {
 		paletteID0 := c.ids[i]
 		paletteID1 := c.ids[i+1]
 		b0 := c.palette[paletteID0]
@@ -244,7 +244,7 @@ func (c *Chunk) write(
 	if overworld == false {
 		return data
 	}
-	for i := 0; i < Volume; i += 2 {
+	for i := 0; i < ChunkVolume; i += 2 {
 		paletteID0 := c.ids[i]
 		paletteID1 := c.ids[i+1]
 		b0 := c.palette[paletteID0]
@@ -356,7 +356,7 @@ func (cc *ChunkColumn) GetBiome(
 	cc.Lock()
 	defer cc.Unlock()
 
-	i := (z * Width) + x
+	i := (z * ChunkWidth) + x
 	return cc.biomes[i]
 }
 
@@ -368,7 +368,7 @@ func (cc *ChunkColumn) SetBiome(
 	cc.Lock()
 	defer cc.Unlock()
 
-	i := (z * Width) + x
+	i := (z * ChunkWidth) + x
 	cc.biomes[i] = biome
 }
 
