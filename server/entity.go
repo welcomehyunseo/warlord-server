@@ -38,6 +38,19 @@ func newEntity(
 	}
 }
 
+func (e *entity) UpdatePos(
+	x float64,
+	y float64,
+	z float64,
+) {
+	e.prevX = e.x
+	e.prevY = e.y
+	e.prevZ = e.z
+	e.x = x
+	e.y = y
+	e.z = z
+}
+
 func (e *entity) GetEid() int32 {
 	return e.eid
 }

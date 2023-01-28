@@ -58,28 +58,29 @@ func toChunkSecPos(
 // findCube returns endpoints of cube at the distance d from the center (x, y, z).
 // The order is from maximum point to minimum point.
 func findCube(
-	x int,
-	y int,
-	z int,
+	cx int,
+	cy int,
+	cz int,
 	d int,
 ) (
 	int, int, int,
 	int, int, int,
 ) {
-	return x + d, y + d, z + d, x - d, y - d, z - d
+	return cx + d, cy + d, cz + d, cx - d, cy - d, cz - d
 }
 
 func isCubesOverlap(
-	x0 int, // current
-	y0 int,
-	z0 int,
-	x1 int, // prev
-	y1 int,
-	z1 int,
+	cx0 int, // current
+	cy0 int,
+	cz0 int,
+	cx1 int, // prev
+	cy1 int,
+	cz1 int,
 	d int,
 ) bool {
-	x2, y2, z2, x3, y3, z3 := findCube(x0, y0, z0, 2*d)
-	if x1 < x3 || y1 < y3 || z1 < z3 || x2 < x1 || y2 < y1 || z2 < z1 {
+	cx2, cy2, cz2, cx3, cy3, cz3 := findCube(cx0, cy0, cz0, 2*d)
+	if cx1 < cx3 || cy1 < cy3 || cz1 < cz3 ||
+		cx2 < cx1 || cy2 < cy1 || cz2 < cz1 {
 		return false
 	}
 
@@ -90,22 +91,22 @@ func isCubesOverlap(
 // The parameters (x0, y0, z0) and (x1, y1, z1) are the center points of the cubes.
 // The order is from maximum point to minimum point.
 func subCubes(
-	x0 int,
-	y0 int,
-	z0 int,
-	x1 int,
-	y1 int,
-	z1 int,
+	cx0 int,
+	cy0 int,
+	cz0 int,
+	cx1 int,
+	cy1 int,
+	cz1 int,
 	d int,
 ) (
 	int, int, int,
 	int, int, int,
 ) {
-	x2, y2, z2, x3, y3, z3 := findCube(x0, y0, z0, d)
-	x4, y4, z4, x5, y5, z5 := findCube(x1, y1, z1, d)
-	l0 := []int{x2, x3, x4, x5}
-	l1 := []int{y2, y3, y4, y5}
-	l2 := []int{z2, z3, z4, z5}
+	cx2, cy2, cz2, cx3, cy3, cz3 := findCube(cx0, cy0, cz0, d)
+	cx4, cy4, cz4, cx5, cy5, cz5 := findCube(cx1, cy1, cz1, d)
+	l0 := []int{cx2, cx3, cx4, cx5}
+	l1 := []int{cy2, cy3, cy4, cy5}
+	l2 := []int{cz2, cz3, cz4, cz5}
 	sort.Ints(l0)
 	sort.Ints(l1)
 	sort.Ints(l2)
@@ -161,14 +162,12 @@ func (s *Server) countLast() int32 {
 }
 
 func (s *Server) initChunks(
-	x float64,
-	y float64,
-	z float64,
+	cx int,
+	cy int,
+	cz int,
 	cnt *Client,
 ) error {
 	rndDist := s.rndDist
-
-	cx, cy, cz := toChunkSecPos(x, y, z)
 
 	cx0, cy0, cz0, cx1, cy1, cz1 := findCube(
 		cx, cy, cz, rndDist,
@@ -299,6 +298,8 @@ func (s *Server) handleConnection(
 		"player: %+V", player,
 	)
 
+	rndDist := s.rndDist
+
 	eid := player.GetEid()
 	//uid := player.GetUid()
 	//username := player.GetUsername()
@@ -307,16 +308,37 @@ func (s *Server) handleConnection(
 		panic(err)
 	}
 
-	if err := s.initChunks(sx, sy, sz, cnt); err != nil {
+	cx, cy, cz := toChunkSecPos(sx, sy, sz)
+	if err := s.initChunks(cx, cy, cz, cnt); err != nil {
 		panic(err)
 	}
 
 	for {
-		finish, err := cnt.Loop3(state)
+		move, finish, err := cnt.Loop3(
+			player,
+			state,
+		)
 		if err != nil {
 			panic(err)
 		}
+		if move == true {
+			x0, y0, z0 :=
+				player.GetX(), player.GetY(), player.GetZ()
+			x1, y1, z1 :=
+				player.GetPrevX(), player.GetPrevY(), player.GetPrevZ()
+			cx0, cy0, cz0 := toChunkSecPos(x0, y0, z0)
+			cx1, cy1, cz1 := toChunkSecPos(x1, y1, z1)
 
+			if isCubesOverlap(cx0, cy0, cz0, cx1, cy1, cz1, rndDist) == false {
+				if err := s.initChunks(cx0, cy0, cz0, cnt); err != nil {
+					panic(err)
+				}
+
+				// unload chunks
+				continue
+			}
+
+		}
 		if finish == false {
 			continue
 		}

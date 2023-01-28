@@ -526,9 +526,11 @@ func (cnt *Client) Loop2(
 }
 
 func (cnt *Client) Loop3(
+	player *Player,
 	state State,
 ) (
-	bool,
+	bool, // move
+	bool, // finish
 	error,
 ) {
 	lg := cnt.lg
@@ -542,21 +544,38 @@ func (cnt *Client) Loop3(
 		"state: %d", state,
 	)
 
+	move := false
 	finish := false
 
-	pid, _, err := cnt.readWithComp()
+	pid, data, err := cnt.readWithComp()
 	if err != nil {
-		return true, err
+		return false, true, err
 	}
 
 	switch pid {
 	case ChangePlayerPosPacketID:
+		packet := NewChangePlayerPosPacket()
+		packet.Read(data)
+		move = true
+		player.UpdatePos(
+			packet.GetX(),
+			packet.GetY(),
+			packet.GetZ(),
+		)
 		break
 	case ChangePlayerPosAndLookPacketID:
+		packet := NewChangePlayerPosAndLookPacket()
+		packet.Read(data)
+		move = true
+		player.UpdatePos(
+			packet.GetX(),
+			packet.GetY(),
+			packet.GetZ(),
+		)
 		break
 	}
 
-	return finish, nil
+	return move, finish, nil
 }
 
 func (cnt *Client) Init(
@@ -722,6 +741,12 @@ func (cnt *Client) LoadChunk(
 	return nil
 }
 
+func (cnt *Client) UnloadChunk(
+	cx, cz int32,
+) error {
+	// TODO
+	return nil
+}
 func (cnt *Client) Close() {
 	lg := cnt.lg
 
