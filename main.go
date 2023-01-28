@@ -25,14 +25,14 @@ func main() {
 
 	for cz := 20; cz >= -20; cz-- {
 		for cx := 20; cx >= -20; cx-- {
-			chunk := server.NewChunkRow()
-			for z := 0; z < server.ChunkRowWidth; z++ {
-				for x := 0; x < server.ChunkRowWidth; x++ {
+			chunk := server.NewChunkCell()
+			for z := 0; z < server.ChunkCellWidth; z++ {
+				for x := 0; x < server.ChunkCellWidth; x++ {
 					chunk.SetBlock(uint8(x), 0, uint8(z), server.StoneBlock)
 				}
 			}
 
-			s.SetChunkRow(cx, 0, cz, chunk)
+			s.SetChunkCell(cx, 0, cz, chunk)
 		}
 	}
 

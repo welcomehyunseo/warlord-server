@@ -31,7 +31,7 @@ func toPosStr(
 	return fmt.Sprintf("(%d,%d,%d)", x, y, z)
 }
 
-func toChunkSecPos(
+func toChunkCellPos(
 	x float64,
 	y float64,
 	z float64,
@@ -125,7 +125,7 @@ type Server struct {
 
 	rndDist int // render distance
 
-	m0 map[PosStr]*ChunkRow
+	m0 map[PosStr]*ChunkCell
 	m1 map[PosStr][]*Player
 }
 
@@ -150,7 +150,7 @@ func NewServer(
 		favicon: favicon,
 		desc:    desc,
 		rndDist: rndDist,
-		m0:      make(map[PosStr]*ChunkRow),
+		m0:      make(map[PosStr]*ChunkCell),
 		m1:      make(map[PosStr][]*Player),
 	}, nil
 }
@@ -182,14 +182,14 @@ func (s *Server) initChunks(
 
 	for i := cz0; i >= cz1; i-- {
 		for j := cx0; j >= cx1; j-- {
-			cc := NewChunk()
+			cc := NewChunkCol()
 
 			for k := cy0; k >= cy1; k-- {
-				chunk := s.GetChunkRow(j, k, i)
+				chunk := s.GetChunkCell(j, k, i)
 				if chunk == nil {
 					continue
 				}
-				cc.SetChunkRow(uint8(k), chunk)
+				cc.SetChunkCell(uint8(k), chunk)
 			}
 
 			err := cnt.LoadChunk(
@@ -308,7 +308,7 @@ func (s *Server) handleConnection(
 		panic(err)
 	}
 
-	cx, cy, cz := toChunkSecPos(sx, sy, sz)
+	cx, cy, cz := toChunkCellPos(sx, sy, sz)
 	if err := s.initChunks(cx, cy, cz, cnt); err != nil {
 		panic(err)
 	}
@@ -326,8 +326,8 @@ func (s *Server) handleConnection(
 				player.GetX(), player.GetY(), player.GetZ()
 			x1, y1, z1 :=
 				player.GetPrevX(), player.GetPrevY(), player.GetPrevZ()
-			cx0, cy0, cz0 := toChunkSecPos(x0, y0, z0)
-			cx1, cy1, cz1 := toChunkSecPos(x1, y1, z1)
+			cx0, cy0, cz0 := toChunkCellPos(x0, y0, z0)
+			cx1, cy1, cz1 := toChunkCellPos(x1, y1, z1)
 
 			if isCubesOverlap(cx0, cy0, cz0, cx1, cy1, cz1, rndDist) == false {
 				if err := s.initChunks(cx0, cy0, cz0, cnt); err != nil {
@@ -371,23 +371,23 @@ func (s *Server) GetOnline() int {
 	return s.online
 }
 
-func (s *Server) GetChunkRow(
+func (s *Server) GetChunkCell(
 	cx int,
 	cy int,
 	cz int,
-) *ChunkRow {
+) *ChunkCell {
 	key := toPosStr(cx, cy, cz)
 	chunk := s.m0[key]
 
 	return chunk
 }
 
-func (s *Server) SetChunkRow(
+func (s *Server) SetChunkCell(
 	cx int,
 	cy int,
 	cz int,
-	section *ChunkRow,
+	cell *ChunkCell,
 ) {
 	key := toPosStr(cx, cy, cz)
-	s.m0[key] = section
+	s.m0[key] = cell
 }

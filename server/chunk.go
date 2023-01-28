@@ -3,11 +3,11 @@ package server
 import "sync"
 
 const (
-	ChunkRowWidth   = 16           // width of chunk section
-	ChunkRowVol     = 16 * 16 * 16 // volume of chunk section
-	MaxChunkSecsNum = 16           // maximum number of chunk sections
-	MaxBiomesNum    = ChunkRowWidth * ChunkRowWidth
-	LongSize        = 64
+	ChunkCellWidth   = 16           // width of chunk cell
+	ChunkCellVol     = 16 * 16 * 16 // volume of chunk cell
+	MaxChunkCellsNum = 16           // maximum number of chunk cells
+	MaxBiomesNum     = ChunkCellWidth * ChunkCellWidth
+	LongSize         = 64
 )
 
 type BiomeID = uint8
@@ -148,23 +148,23 @@ var (
 	GrassBlock = newBlock(2, 0, LightLevel0, LightLevelF)
 )
 
-type ChunkRow struct {
+type ChunkCell struct {
 	sync.Mutex
 
 	palette []*Block
-	ids     [ChunkRowVol]int
+	ids     [ChunkCellVol]int
 	m0      map[*Block]int // globalID to paletteID
 }
 
-func NewChunkRow() *ChunkRow {
-	return &ChunkRow{
+func NewChunkCell() *ChunkCell {
+	return &ChunkCell{
 		palette: []*Block{AirBlock},
-		ids:     [ChunkRowVol]int{},
+		ids:     [ChunkCellVol]int{},
 		m0:      map[*Block]int{AirBlock: 0},
 	}
 }
 
-func (c *ChunkRow) write(
+func (c *ChunkCell) write(
 	overworld bool,
 ) *Data {
 	c.Lock()
@@ -201,10 +201,10 @@ func (c *ChunkRow) write(
 
 	}
 
-	l0 := LongSize * int(bits) // (ChunkRowVol * int(bits)) / LongSize
+	l0 := LongSize * int(bits) // (ChunkCellVol * int(bits)) / LongSize
 	data.WriteVarInt(int32(l0))
 	longs := make([]uint64, l0)
-	for i := 0; i < ChunkRowVol; i++ {
+	for i := 0; i < ChunkCellVol; i++ {
 		start := (i * int(bits)) / LongSize
 		offset := (i * int(bits)) % LongSize
 		end := ((i+1)*int(bits) - 1) / LongSize
@@ -230,7 +230,7 @@ func (c *ChunkRow) write(
 	for i := 0; i < l0; i++ {
 		data.WriteInt64(int64(longs[i]))
 	}
-	for i := 0; i < ChunkRowVol; i += 2 {
+	for i := 0; i < ChunkCellVol; i += 2 {
 		paletteID0 := c.ids[i]
 		paletteID1 := c.ids[i+1]
 		b0 := c.palette[paletteID0]
@@ -244,7 +244,7 @@ func (c *ChunkRow) write(
 	if overworld == false {
 		return data
 	}
-	for i := 0; i < ChunkRowVol; i += 2 {
+	for i := 0; i < ChunkCellVol; i += 2 {
 		paletteID0 := c.ids[i]
 		paletteID1 := c.ids[i+1]
 		b0 := c.palette[paletteID0]
@@ -259,7 +259,7 @@ func (c *ChunkRow) write(
 	return data
 }
 
-//func (c *ChunkRow) SetBlockLight(
+//func (c *ChunkCell) SetBlockLight(
 //	x uint8,
 //	y uint8,
 //	z uint8,
@@ -269,7 +269,7 @@ func (c *ChunkRow) write(
 //	c.blockLights[i] = level
 //}
 //
-//func (c *ChunkRow) SetSkyLight(
+//func (c *ChunkCell) SetSkyLight(
 //	x uint8,
 //	y uint8,
 //	z uint8,
@@ -279,7 +279,7 @@ func (c *ChunkRow) write(
 //	c.l2[i] = level
 //}
 
-func (c *ChunkRow) GetBlock(
+func (c *ChunkCell) GetBlock(
 	x uint8,
 	y uint8,
 	z uint8,
@@ -293,7 +293,7 @@ func (c *ChunkRow) GetBlock(
 	return block
 }
 
-func (c *ChunkRow) SetBlock(
+func (c *ChunkCell) SetBlock(
 	x uint8,
 	y uint8,
 	z uint8,
@@ -317,20 +317,20 @@ func (c *ChunkRow) SetBlock(
 type Chunk struct {
 	sync.Mutex
 
-	chunks [MaxChunkSecsNum]*ChunkRow
+	chunks [MaxChunkCellsNum]*ChunkCell
 	biomes [MaxBiomesNum]BiomeID
 }
 
-func NewChunk() *Chunk {
+func NewChunkCol() *Chunk {
 	return &Chunk{
-		chunks: [MaxChunkSecsNum]*ChunkRow{},
+		chunks: [MaxChunkCellsNum]*ChunkCell{},
 		biomes: [MaxBiomesNum]BiomeID{},
 	}
 }
 
-func (cc *Chunk) GetChunkRow(
+func (cc *Chunk) GetChunkCell(
 	cy uint8,
-) *ChunkRow {
+) *ChunkCell {
 	cc.Lock()
 	defer cc.Unlock()
 
@@ -338,15 +338,15 @@ func (cc *Chunk) GetChunkRow(
 	return cc.chunks[i]
 }
 
-func (cc *Chunk) SetChunkRow(
+func (cc *Chunk) SetChunkCell(
 	cy uint8,
-	section *ChunkRow,
+	cell *ChunkCell,
 ) {
 	cc.Lock()
 	defer cc.Unlock()
 
 	i := int(cy)
-	cc.chunks[i] = section
+	cc.chunks[i] = cell
 }
 
 func (cc *Chunk) GetBiome(
@@ -356,7 +356,7 @@ func (cc *Chunk) GetBiome(
 	cc.Lock()
 	defer cc.Unlock()
 
-	i := (z * ChunkRowWidth) + x
+	i := (z * ChunkCellWidth) + x
 	return cc.biomes[i]
 }
 
@@ -368,7 +368,7 @@ func (cc *Chunk) SetBiome(
 	cc.Lock()
 	defer cc.Unlock()
 
-	i := (z * ChunkRowWidth) + x
+	i := (z * ChunkCellWidth) + x
 	cc.biomes[i] = biome
 }
 
@@ -382,7 +382,7 @@ func (cc *Chunk) Write(
 	d0 := NewData()
 
 	var bitmask uint16
-	for i := 0; i < MaxChunkSecsNum; i++ {
+	for i := 0; i < MaxChunkCellsNum; i++ {
 		chunk := cc.chunks[i]
 		if chunk == nil {
 			continue
