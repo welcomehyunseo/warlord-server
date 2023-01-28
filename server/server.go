@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"net"
+	"sort"
 )
 
 const (
@@ -52,6 +53,63 @@ func toChunkSecPos(
 		cz = cz - 16
 	}
 	return cx, cy, cz
+}
+
+// findCube returns endpoints of cube at the distance d from the center (x, y, z).
+// The order is from maximum point to minimum point.
+func findCube(
+	x int,
+	y int,
+	z int,
+	d int,
+) (
+	int, int, int,
+	int, int, int,
+) {
+	return x + d, y + d, z + d, x - d, y - d, z - d
+}
+
+func isCubesOverlap(
+	x0 int, // current
+	y0 int,
+	z0 int,
+	x1 int, // prev
+	y1 int,
+	z1 int,
+	d int,
+) bool {
+	x2, y2, z2, x3, y3, z3 := findCube(x0, y0, z0, 2*d)
+	if x1 < x3 || y1 < y3 || z1 < z3 || x2 < x1 || y2 < y1 || z2 < z1 {
+		return false
+	}
+
+	return true
+}
+
+// subCubes returns endpoints of overlapping cube between cubes c0 and c1 overlapped to each other.
+// The parameters (x0, y0, z0) and (x1, y1, z1) are the center points of the cubes.
+// The order is from maximum point to minimum point.
+func subCubes(
+	x0 int,
+	y0 int,
+	z0 int,
+	x1 int,
+	y1 int,
+	z1 int,
+	d int,
+) (
+	int, int, int,
+	int, int, int,
+) {
+	x2, y2, z2, x3, y3, z3 := findCube(x0, y0, z0, d)
+	x4, y4, z4, x5, y5, z5 := findCube(x1, y1, z1, d)
+	l0 := []int{x2, x3, x4, x5}
+	l1 := []int{y2, y3, y4, y5}
+	l2 := []int{z2, z3, z4, z5}
+	sort.Ints(l0)
+	sort.Ints(l1)
+	sort.Ints(l2)
+	return l0[2], l1[2], l2[2], l0[1], l1[1], l2[1]
 }
 
 type Server struct {
@@ -111,8 +169,10 @@ func (s *Server) initChunks(
 	rndDist := s.rndDist
 
 	cx, cy, cz := toChunkSecPos(x, y, z)
-	cx0, cy0, cz0 := cx+rndDist, cy+rndDist, cz+rndDist
-	cx1, cy1, cz1 := cx-rndDist, cy-rndDist, cz-rndDist
+
+	cx0, cy0, cz0, cx1, cy1, cz1 := findCube(
+		cx, cy, cz, rndDist,
+	)
 
 	if cy0 > 15 {
 		cy0 = 15
@@ -133,7 +193,13 @@ func (s *Server) initChunks(
 				cc.SetChunkSection(uint8(k), chunk)
 			}
 
-			err := cnt.LoadChunk(true, true, int32(j), int32(i), cc)
+			err := cnt.LoadChunk(
+				true,
+				true,
+				int32(j),
+				int32(i),
+				cc,
+			)
 			if err != nil {
 				return err
 			}

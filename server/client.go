@@ -550,6 +550,10 @@ func (cnt *Client) Loop3(
 	}
 
 	switch pid {
+	case ChangePlayerPosPacketID:
+		break
+	case ChangePlayerPosAndLookPacketID:
+		break
 	}
 
 	return finish, nil

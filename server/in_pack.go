@@ -10,6 +10,8 @@ const StartLoginPacketID = 0x00
 const ConfirmTeleportPacketID = 0x00
 const TakeActionPacketID = 0x03
 const ChangeClientSettingsPacketID = 0x04
+const ChangePlayerPosPacketID = 0x0D
+const ChangePlayerPosAndLookPacketID = 0x0E
 
 type InPacket interface {
 	*Packet
@@ -305,4 +307,98 @@ func (p *ChangeClientSettingsPacket) getHat() bool {
 
 func (p *ChangeClientSettingsPacket) getMainHand() int32 {
 	return p.mainHand
+}
+
+type ChangePlayerPosPacket struct {
+	*packet
+	x        float64
+	y        float64
+	z        float64
+	onGround bool
+}
+
+func NewChangePlayerPosPacket() *ChangePlayerPosPacket {
+	return &ChangePlayerPosPacket{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			ChangePlayerPosPacketID,
+		),
+	}
+}
+
+func (p *ChangePlayerPosPacket) Read(data *Data) {
+	p.x = data.ReadFloat64()
+	p.y = data.ReadFloat64()
+	p.z = data.ReadFloat64()
+	p.onGround = data.ReadBool()
+}
+
+func (p *ChangePlayerPosPacket) GetX() float64 {
+	return p.x
+}
+
+func (p *ChangePlayerPosPacket) GetY() float64 {
+	return p.y
+}
+
+func (p *ChangePlayerPosPacket) GetZ() float64 {
+	return p.z
+}
+
+func (p *ChangePlayerPosPacket) GetOnGround() bool {
+	return p.onGround
+}
+
+type ChangePlayerPosAndLookPacket struct {
+	*packet
+	x        float64
+	y        float64
+	z        float64
+	yaw      float32
+	pitch    float32
+	onGround bool
+}
+
+func NewChangePlayerPosAndLookPacket() *ChangePlayerPosAndLookPacket {
+	return &ChangePlayerPosAndLookPacket{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			ChangePlayerPosAndLookPacketID,
+		),
+	}
+}
+
+func (p *ChangePlayerPosAndLookPacket) Read(data *Data) {
+	p.x = data.ReadFloat64()
+	p.y = data.ReadFloat64()
+	p.z = data.ReadFloat64()
+	p.yaw = data.ReadFloat32()
+	p.pitch = data.ReadFloat32()
+	p.onGround = data.ReadBool()
+}
+
+func (p *ChangePlayerPosAndLookPacket) GetX() float64 {
+	return p.x
+}
+
+func (p *ChangePlayerPosAndLookPacket) GetY() float64 {
+	return p.y
+}
+
+func (p *ChangePlayerPosAndLookPacket) GetZ() float64 {
+	return p.z
+}
+
+func (p *ChangePlayerPosAndLookPacket) GetYaw() float32 {
+	return p.yaw
+}
+
+func (p *ChangePlayerPosAndLookPacket) GetPitch() float32 {
+	return p.pitch
+}
+
+func (p *ChangePlayerPosAndLookPacket) GetOnGround() bool {
+	return p.onGround
 }
