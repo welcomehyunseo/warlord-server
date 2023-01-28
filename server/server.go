@@ -125,7 +125,7 @@ type Server struct {
 
 	rndDist int // render distance
 
-	m0 map[PosStr]*ChunkSection
+	m0 map[PosStr]*ChunkRow
 	m1 map[PosStr][]*Player
 }
 
@@ -150,7 +150,7 @@ func NewServer(
 		favicon: favicon,
 		desc:    desc,
 		rndDist: rndDist,
-		m0:      make(map[PosStr]*ChunkSection),
+		m0:      make(map[PosStr]*ChunkRow),
 		m1:      make(map[PosStr][]*Player),
 	}, nil
 }
@@ -185,11 +185,11 @@ func (s *Server) initChunks(
 			cc := NewChunk()
 
 			for k := cy0; k >= cy1; k-- {
-				chunk := s.GetChunkSec(j, k, i)
+				chunk := s.GetChunkRow(j, k, i)
 				if chunk == nil {
 					continue
 				}
-				cc.SetChunkSection(uint8(k), chunk)
+				cc.SetChunkRow(uint8(k), chunk)
 			}
 
 			err := cnt.LoadChunk(
@@ -371,22 +371,22 @@ func (s *Server) GetOnline() int {
 	return s.online
 }
 
-func (s *Server) GetChunkSec(
+func (s *Server) GetChunkRow(
 	cx int,
 	cy int,
 	cz int,
-) *ChunkSection {
+) *ChunkRow {
 	key := toPosStr(cx, cy, cz)
 	chunk := s.m0[key]
 
 	return chunk
 }
 
-func (s *Server) SetChunkSec(
+func (s *Server) SetChunkRow(
 	cx int,
 	cy int,
 	cz int,
-	section *ChunkSection,
+	section *ChunkRow,
 ) {
 	key := toPosStr(cx, cy, cz)
 	s.m0[key] = section
