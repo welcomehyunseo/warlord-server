@@ -774,7 +774,7 @@ func TestWritePosition(
 		if compare(y, yPrime) == true {
 			continue
 		}
-		t.Errorf("function value of x %+v is different than expect %+v", yPrime, y)
+		t.Errorf("function value %+v of x is different than expect %+v", yPrime, y)
 	}
 
 }

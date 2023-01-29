@@ -1,11 +1,12 @@
 package server
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"github.com/google/uuid"
 	"net"
 	"sort"
+	"time"
 )
 
 const (
@@ -15,102 +16,46 @@ const (
 
 	CompThold = 16 // threshold for compression
 
-	MinRndDist = 3  // minimum render distance
+	MinRndDist = 2  // minimum render distance
 	MaxRndDist = 32 // maximum render distance
 )
 
+func findRect(
+	cx, cz int, // player pos
+	d int, // positive
+) (int, int, int, int) {
+
+	return cx + d, cz + d, cx - d, cz - d
+}
+
 var OutOfRndDistRangeError = errors.New("it is out of maximum and minimum value of render distance")
 
-type PosStr = string
-
-func toPosStr(
-	x int,
-	y int,
-	z int,
-) PosStr {
-	return fmt.Sprintf("(%d,%d,%d)", x, y, z)
+type UpdatePlayerPosEvent struct {
+	x float64
+	y float64
+	z float64
 }
 
-func toChunkCellPos(
-	x float64,
-	y float64,
-	z float64,
-) (
-	int,
-	int,
-	int,
-) {
-	cx := int(x) / 16
-	cy := int(y) / 16
-	cz := int(z) / 16
-	if cx < 0 {
-		cx = cx - 16
+func NewUpdatePlayerPosEvent(
+	x, y, z float64,
+) *UpdatePlayerPosEvent {
+	return &UpdatePlayerPosEvent{
+		x: x,
+		y: y,
+		z: z,
 	}
-	//if cy < 0 {
-	//	cy = cy - 16
-	//}
-	if cz < 0 {
-		cz = cz - 16
-	}
-	return cx, cy, cz
 }
 
-// findCube returns endpoints of cube at the distance d from the center (x, y, z).
-// The order is from maximum point to minimum point.
-func findCube(
-	cx int,
-	cy int,
-	cz int,
-	d int,
-) (
-	int, int, int,
-	int, int, int,
-) {
-	return cx + d, cy + d, cz + d, cx - d, cy - d, cz - d
+func (e *UpdatePlayerPosEvent) GetX() float64 {
+	return e.x
 }
 
-func isCubesOverlap(
-	cx0 int, // current
-	cy0 int,
-	cz0 int,
-	cx1 int, // prev
-	cy1 int,
-	cz1 int,
-	d int,
-) bool {
-	cx2, cy2, cz2, cx3, cy3, cz3 := findCube(cx0, cy0, cz0, 2*d)
-	if cx1 < cx3 || cy1 < cy3 || cz1 < cz3 ||
-		cx2 < cx1 || cy2 < cy1 || cz2 < cz1 {
-		return false
-	}
-
-	return true
+func (e *UpdatePlayerPosEvent) GetY() float64 {
+	return e.y
 }
 
-// subCubes returns endpoints of overlapping cube between cubes c0 and c1 overlapped to each other.
-// The parameters (x0, y0, z0) and (x1, y1, z1) are the center points of the cubes.
-// The order is from maximum point to minimum point.
-func subCubes(
-	cx0 int,
-	cy0 int,
-	cz0 int,
-	cx1 int,
-	cy1 int,
-	cz1 int,
-	d int,
-) (
-	int, int, int,
-	int, int, int,
-) {
-	cx2, cy2, cz2, cx3, cy3, cz3 := findCube(cx0, cy0, cz0, d)
-	cx4, cy4, cz4, cx5, cy5, cz5 := findCube(cx1, cy1, cz1, d)
-	l0 := []int{cx2, cx3, cx4, cx5}
-	l1 := []int{cy2, cy3, cy4, cy5}
-	l2 := []int{cz2, cz3, cz4, cz5}
-	sort.Ints(l0)
-	sort.Ints(l1)
-	sort.Ints(l2)
-	return l0[2], l1[2], l2[2], l0[1], l1[1], l2[1]
+func (e *UpdatePlayerPosEvent) GetZ() float64 {
+	return e.z
 }
 
 type Server struct {
@@ -125,8 +70,8 @@ type Server struct {
 
 	rndDist int // render distance
 
-	m0 map[PosStr]*ChunkCell
-	m1 map[PosStr][]*Player
+	m0 map[ChunkPosStr]*Chunk
+	m1 map[ChunkPosStr]map[uuid.UUID]*Player
 }
 
 func NewServer(
@@ -150,8 +95,8 @@ func NewServer(
 		favicon: favicon,
 		desc:    desc,
 		rndDist: rndDist,
-		m0:      make(map[PosStr]*ChunkCell),
-		m1:      make(map[PosStr][]*Player),
+		m0:      make(map[ChunkPosStr]*Chunk),
+		m1:      make(map[ChunkPosStr]map[uuid.UUID]*Player),
 	}, nil
 }
 
@@ -161,43 +106,93 @@ func (s *Server) countLast() int32 {
 	return x
 }
 
-func (s *Server) initChunks(
-	cx int,
-	cy int,
-	cz int,
+func (s *Server) updateChunks(
+	cx0, cz0, cx1, cz1, // current chunk range
+	cx2, cz2, cx3, cz3 int, // previous chunk range
 	cnt *Client,
 ) error {
-	rndDist := s.rndDist
+	l0 := []int{cx0, cx1, cx2, cx3}
+	l1 := []int{cz0, cz1, cz2, cz3}
+	sort.Ints(l0)
+	sort.Ints(l1)
 
-	cx0, cy0, cz0, cx1, cy1, cz1 := findCube(
-		cx, cy, cz, rndDist,
-	)
-
-	if cy0 > 15 {
-		cy0 = 15
-	}
-	if cy1 < 0 {
-		cy1 = 0
-	}
+	cx4, cz4, cx5, cz5 := l0[2], l1[2], l0[1], l1[1]
 
 	for i := cz0; i >= cz1; i-- {
 		for j := cx0; j >= cx1; j-- {
-			cc := NewChunkCol()
-
-			for k := cy0; k >= cy1; k-- {
-				chunk := s.GetChunkCell(j, k, i)
-				if chunk == nil {
-					continue
-				}
-				cc.SetChunkCell(uint8(k), chunk)
+			if cx5 <= j && j <= cx4 && cz5 <= i && i <= cz4 {
+				continue
 			}
+
+			chunk := s.GetChunk(j, i)
 
 			err := cnt.LoadChunk(
 				true,
 				true,
 				int32(j),
 				int32(i),
-				cc,
+				chunk,
+			)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	for i := cz2; i >= cz3; i-- {
+		for j := cx2; j >= cx3; j-- {
+			if cx5 <= j && j <= cx4 && cz5 <= i && i <= cz4 {
+				continue
+			}
+
+			err := cnt.UnloadChunk(
+				int32(j),
+				int32(i),
+			)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *Server) unloadChunks(
+	cx0, cz0, // max
+	cx1, cz1 int, // min
+	cnt *Client,
+) error {
+	for i := cz0; i >= cz1; i-- {
+		for j := cx0; j >= cx1; j-- {
+			err := cnt.UnloadChunk(
+				int32(j),
+				int32(i),
+			)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *Server) initChunks(
+	cx0, cz0, // max
+	cx1, cz1 int, // min
+	cnt *Client,
+) error {
+	for i := cz0; i >= cz1; i-- {
+		for j := cx0; j >= cx1; j-- {
+			chunk := s.GetChunk(j, i)
+
+			err := cnt.LoadChunk(
+				true,
+				true,
+				int32(j),
+				int32(i),
+				chunk,
 			)
 			if err != nil {
 				return err
@@ -295,10 +290,10 @@ func (s *Server) handleConnection(
 
 	lg.InfoWithVars(
 		"Player was created.",
-		"player: %+V", player,
+		"player: %+v", player,
 	)
 
-	rndDist := s.rndDist
+	dist := s.rndDist
 
 	eid := player.GetEid()
 	//uid := player.GetUid()
@@ -308,43 +303,92 @@ func (s *Server) handleConnection(
 		panic(err)
 	}
 
-	cx, cy, cz := toChunkCellPos(sx, sy, sz)
-	if err := s.initChunks(cx, cy, cz, cnt); err != nil {
+	cx0, cz0 := toChunkPos(sx, sz)
+	cx1, cz1, cx2, cz2 := findRect(
+		cx0, cz0, dist,
+	)
+	if err := s.initChunks(
+		cx1, cz1, cx2, cz2,
+		cnt,
+	); err != nil {
 		panic(err)
 	}
 
-	for {
-		move, finish, err := cnt.Loop3(
-			player,
-			state,
-		)
-		if err != nil {
-			panic(err)
-		}
-		if move == true {
-			x0, y0, z0 :=
-				player.GetX(), player.GetY(), player.GetZ()
-			x1, y1, z1 :=
-				player.GetPrevX(), player.GetPrevY(), player.GetPrevZ()
-			cx0, cy0, cz0 := toChunkCellPos(x0, y0, z0)
-			cx1, cy1, cz1 := toChunkCellPos(x1, y1, z1)
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
 
-			if isCubesOverlap(cx0, cy0, cz0, cx1, cy1, cz1, rndDist) == false {
-				if err := s.initChunks(cx0, cy0, cz0, cnt); err != nil {
-					panic(err)
+	defer func() {
+		cancel()
+	}()
+
+	chanForErrors := make(chan any, 1)
+
+	chanForUpdatePlayerPosEvent := make(chan *UpdatePlayerPosEvent, 1)
+
+	go func() {
+		lg.Info("The handling thread is started for ChangePlayerPosPacket.")
+
+		defer func() {
+			lg.Info("The handling thread is ended for ChangePlayerPosPacket.")
+
+			if err := recover(); err != nil {
+				chanForErrors <- err
+			}
+		}()
+
+		for {
+			select {
+			case event := <-chanForUpdatePlayerPosEvent:
+				lg.Info(
+					"The channel was received " +
+						"ChangePlayerPosPacket in the thread.",
+				)
+				x := event.GetX()
+				y := event.GetY()
+				z := event.GetZ()
+				player.UpdatePos(x, y, z)
+				prevX := player.GetPrevX()
+				//prevY := player.GetPrevY()
+				prevZ := player.GetPrevZ()
+
+				cx0, cz0 := toChunkPos(x, z)
+				cx1, cz1 := toChunkPos(prevX, prevZ)
+				if cx0 != cx1 || cz0 != cz1 {
+					cx2, cz2, cx3, cz3 := findRect(cx0, cz0, dist)
+					cx4, cz4, cx5, cz5 := findRect(cx1, cz1, dist)
+					if err := s.updateChunks(
+						cx2, cz2, cx3, cz3,
+						cx4, cz4, cx5, cz5,
+						cnt,
+					); err != nil {
+						panic(err)
+					}
 				}
 
-				// unload chunks
+				//onGround := packet.GetOnGround()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-time.After(1):
+			finish, err := cnt.Loop3(
+				chanForUpdatePlayerPosEvent,
+				state,
+			)
+			if err != nil {
+				panic(err)
+			}
+			if finish == false {
 				continue
 			}
-
+		case err := <-chanForErrors:
+			panic(err)
 		}
-		if finish == false {
-			continue
-		}
-		break
 	}
-
 }
 
 func (s *Server) Render() {
@@ -371,23 +415,19 @@ func (s *Server) GetOnline() int {
 	return s.online
 }
 
-func (s *Server) GetChunkCell(
-	cx int,
-	cy int,
-	cz int,
-) *ChunkCell {
-	key := toPosStr(cx, cy, cz)
+func (s *Server) GetChunk(
+	cx, cz int,
+) *Chunk {
+	key := toChunkPosStr(cx, cz)
 	chunk := s.m0[key]
 
 	return chunk
 }
 
-func (s *Server) SetChunkCell(
-	cx int,
-	cy int,
-	cz int,
-	cell *ChunkCell,
+func (s *Server) SetChunk(
+	cx, cz int,
+	chunk *Chunk,
 ) {
-	key := toPosStr(cx, cy, cz)
-	s.m0[key] = cell
+	key := toChunkPosStr(cx, cz)
+	s.m0[key] = chunk
 }

@@ -402,14 +402,18 @@ func (d *Data) WriteUUID(
 	d.buf = concat(d.buf, buf)
 }
 
-func (d *Data) ReadBuf(n int) []uint8 {
+func (d *Data) GetBytes() []uint8 {
+	return d.buf
+}
+
+func (d *Data) ReadBytes(n int) []uint8 {
 	b0, b1 := split(d.buf, n)
 	d.buf = b1
 	return b0
 }
 
-func (d *Data) WriteBytes(buf []uint8) {
-	d.buf = concat(d.buf, buf)
+func (d *Data) WriteBytes(b []uint8) {
+	d.buf = concat(d.buf, b)
 }
 
 func (d *Data) Write(v *Data) {
@@ -418,8 +422,4 @@ func (d *Data) Write(v *Data) {
 
 func (d *Data) GetLength() int {
 	return len(d.buf)
-}
-
-func (d *Data) GetBytes() []uint8 {
-	return d.buf
 }

@@ -328,11 +328,7 @@ func (cnt *Client) writeWithComp(
 		return err
 	}
 
-	lg.InfoWithVars(
-		"Packet was wrote "+
-			"in the connection with compression.",
-		"packet: %+v", packet,
-	)
+	lg.Info("Packet was wrote in the connection with compression.")
 	return nil
 }
 
@@ -526,10 +522,9 @@ func (cnt *Client) Loop2(
 }
 
 func (cnt *Client) Loop3(
-	player *Player,
+	chanForUpdatePlayerPosEvent chan *UpdatePlayerPosEvent,
 	state State,
 ) (
-	bool, // move
 	bool, // finish
 	error,
 ) {
@@ -544,38 +539,35 @@ func (cnt *Client) Loop3(
 		"state: %d", state,
 	)
 
-	move := false
 	finish := false
 
 	pid, data, err := cnt.readWithComp()
 	if err != nil {
-		return false, true, err
+		return true, err
 	}
 
 	switch pid {
 	case ChangePlayerPosPacketID:
 		packet := NewChangePlayerPosPacket()
 		packet.Read(data)
-		move = true
-		player.UpdatePos(
-			packet.GetX(),
-			packet.GetY(),
-			packet.GetZ(),
+		x, y, z :=
+			packet.GetX(), packet.GetY(), packet.GetZ()
+		chanForUpdatePlayerPosEvent <- NewUpdatePlayerPosEvent(
+			x, y, z,
 		)
 		break
 	case ChangePlayerPosAndLookPacketID:
 		packet := NewChangePlayerPosAndLookPacket()
 		packet.Read(data)
-		move = true
-		player.UpdatePos(
-			packet.GetX(),
-			packet.GetY(),
-			packet.GetZ(),
+		x, y, z :=
+			packet.GetX(), packet.GetY(), packet.GetZ()
+		chanForUpdatePlayerPosEvent <- NewUpdatePlayerPosEvent(
+			x, y, z,
 		)
 		break
 	}
 
-	return move, finish, nil
+	return finish, nil
 }
 
 func (cnt *Client) Init(
@@ -711,42 +703,40 @@ func (cnt *Client) LoadChunk(
 	overworld bool,
 	init bool,
 	cx, cz int32,
-	cc *Chunk,
+	chunk *Chunk,
 ) error {
 	lg := cnt.lg
 
-	lg.InfoWithVars(
-		"The chunk column is started to loaded.",
-		"cx: %d, cz: %d",
-		cx, cz,
-	)
-
-	bitmask, d0 := cc.Write(init, overworld)
+	bitmask, data := chunk.Write(init, overworld)
 	packet := NewSendChunkDataPacket(
-		cx,
-		cz,
+		cx, cz,
 		init,
 		bitmask,
-		d0,
+		data,
 	)
-	lg.InfoWithVars(
-		"SendChunkDataPacket was created.",
-		"packet: %+v", packet,
-	)
+	lg.Info("SendChunkDataPacket was created.")
 	if err := cnt.writeWithComp(packet); err != nil {
 		return err
 	}
 
-	lg.Info("The chunk column is finished to load.")
 	return nil
 }
 
 func (cnt *Client) UnloadChunk(
 	cx, cz int32,
 ) error {
-	// TODO
+	lg := cnt.lg
+
+	packet := NewUnloadChunkPacket(
+		cx, cz,
+	)
+	lg.Info("UnloadChunkPacket was created.")
+	if err := cnt.writeWithComp(packet); err != nil {
+		return err
+	}
 	return nil
 }
+
 func (cnt *Client) Close() {
 	lg := cnt.lg
 

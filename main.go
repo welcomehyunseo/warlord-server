@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"github.com/welcomehyunseo/warlord-server/server"
 )
 
@@ -9,8 +8,8 @@ func main() {
 	addr := ":9999"
 	max := 20
 	favicon := ""
-	desc := "Hello, World!"
-	rndDist := 3
+	desc := "Warlord Server for Dev"
+	rndDist := 4
 
 	s, err := server.NewServer(
 		addr,
@@ -23,21 +22,20 @@ func main() {
 		panic(err)
 	}
 
-	for cz := 20; cz >= -20; cz-- {
-		for cx := 20; cx >= -20; cx-- {
-			chunk := server.NewChunkCell()
-			for z := 0; z < server.ChunkCellWidth; z++ {
-				for x := 0; x < server.ChunkCellWidth; x++ {
-					chunk.SetBlock(uint8(x), 0, uint8(z), server.StoneBlock)
+	for cz := 10; cz >= -10; cz-- {
+		for cx := 10; cx >= -10; cx-- {
+			chunk := server.NewChunk()
+			part := server.NewChunkPart()
+			for z := 0; z < server.ChunkPartWidth; z++ {
+				for x := 0; x < server.ChunkPartWidth; x++ {
+					part.SetBlock(uint8(x), 0, uint8(z), server.StoneBlock)
 				}
 			}
 
-			s.SetChunkCell(cx, 0, cz, chunk)
+			chunk.SetChunkPart(0, part)
+			s.SetChunk(cx, cz, chunk)
 		}
 	}
-
-	b := bytes.NewBuffer(nil)
-	b.Bytes()
 
 	s.Render()
 }

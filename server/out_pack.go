@@ -12,6 +12,7 @@ const DisconnectLoginPacketID = 0x00
 const CompleteLoginPacketID = 0x02
 const EnableCompressionPacketID = 0x03
 
+const UnloadChunkPacketID = 0x1D
 const SendChunkDataPacketID = 0x20
 const JoinGamePacketID = 0x23
 const SetPlayerAbilitiesPacketID = 0x2C
@@ -178,21 +179,56 @@ func (p *EnableCompressionPacket) GetThreshold() int32 {
 	return p.threshold
 }
 
+type UnloadChunkPacket struct {
+	*packet
+	cx int32
+	cz int32
+}
+
+func NewUnloadChunkPacket(
+	cx, cz int32,
+) *UnloadChunkPacket {
+	return &UnloadChunkPacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			UnloadChunkPacketID,
+		),
+		cx: cx,
+		cz: cz,
+	}
+}
+
+func (p *UnloadChunkPacket) Write() *Data {
+	data := NewData()
+	data.WriteInt32(p.cx)
+	data.WriteInt32(p.cz)
+
+	return data
+}
+
+func (p *UnloadChunkPacket) GetCx() int32 {
+	return p.cx
+}
+
+func (p *UnloadChunkPacket) GetCz() int32 {
+	return p.cz
+}
+
 type SendChunkDataPacket struct {
 	*packet
 	cx      int32
 	cz      int32
 	init    bool
 	bitmask uint16
-	data    *Data
+	data    []uint8
 }
 
 func NewSendChunkDataPacket(
-	cx int32,
-	cz int32,
+	cx, cz int32,
 	init bool,
 	bitmask uint16,
-	data *Data,
+	data []uint8,
 ) *SendChunkDataPacket {
 	return &SendChunkDataPacket{
 		packet: newPacket(
@@ -214,9 +250,9 @@ func (p *SendChunkDataPacket) Write() *Data {
 	data.WriteInt32(p.cz)
 	data.WriteBool(p.init)
 	data.WriteVarInt(int32(p.bitmask))
-	l0 := p.data.GetLength()
+	l0 := len(p.data)
 	data.WriteVarInt(int32(l0))
-	data.Write(p.data)
+	data.WriteBytes(p.data)
 
 	l1 := 0
 	data.WriteVarInt(int32(l1)) // block entities
@@ -240,7 +276,7 @@ func (p *SendChunkDataPacket) GetBitmask() uint16 {
 	return p.bitmask
 }
 
-func (p *SendChunkDataPacket) GetData() *Data {
+func (p *SendChunkDataPacket) GetData() []uint8 {
 	return p.data
 }
 
@@ -325,9 +361,9 @@ type SetPlayerAbilitiesPacket struct {
 }
 
 func NewSetPlayerAbilitiesPacket(
-	invulnerable bool,
-	flying bool,
-	allowFlying bool,
+	invulnerable,
+	flying,
+	allowFlying,
 	instantBreak bool,
 	flyingSpeed float32,
 	fovModifier float32,
