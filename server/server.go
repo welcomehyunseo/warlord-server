@@ -144,9 +144,6 @@ func (s *Server) updateChunks(
 			}
 
 			chunk := s.GetChunk(j, i)
-			if chunk == nil {
-				chunk = NewChunk()
-			}
 
 			err := cnt.LoadChunk(
 				lg,
@@ -224,9 +221,6 @@ func (s *Server) initChunks(
 	for i := cz0; i >= cz1; i-- {
 		for j := cx0; j >= cx1; j-- {
 			chunk := s.GetChunk(j, i)
-			if chunk == nil {
-				chunk = NewChunk()
-			}
 
 			err := cnt.LoadChunk(
 				lg,
@@ -527,8 +521,10 @@ func (s *Server) GetChunk(
 	cx, cz int,
 ) *Chunk {
 	key := toChunkPosStr(cx, cz)
-	chunk := s.m0[key]
-
+	chunk, has := s.m0[key]
+	if has == false {
+		chunk = NewChunk()
+	}
 	return chunk
 }
 

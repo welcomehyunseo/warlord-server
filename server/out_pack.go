@@ -23,7 +23,7 @@ const SetSpawnPosPacketID = 0x46
 type OutPacket interface {
 	Packet
 
-	Write() *Data
+	Pack() *Data
 }
 
 type Version struct {
@@ -73,7 +73,7 @@ func NewResponsePacket(
 	}
 }
 
-func (p *ResponsePacket) Write() *Data {
+func (p *ResponsePacket) Pack() *Data {
 	data := NewData()
 	buf, _ := json.Marshal(p.jsonResponse)
 	data.WriteString(string(buf))
@@ -103,7 +103,7 @@ func NewPongPacket(
 	}
 }
 
-func (p *PongPacket) Write() *Data {
+func (p *PongPacket) Pack() *Data {
 	data := NewData()
 	data.WriteInt64(p.payload)
 
@@ -135,7 +135,7 @@ func NewCompleteLoginPacket(
 	}
 }
 
-func (p *CompleteLoginPacket) Write() *Data {
+func (p *CompleteLoginPacket) Pack() *Data {
 	data := NewData()
 	data.WriteString(p.playerID.String())
 	data.WriteString(p.username)
@@ -169,7 +169,7 @@ func NewEnableCompressionPacket(
 	}
 }
 
-func (p *EnableCompressionPacket) Write() *Data {
+func (p *EnableCompressionPacket) Pack() *Data {
 	data := NewData()
 	data.WriteVarInt(p.threshold)
 
@@ -200,7 +200,7 @@ func NewUnloadChunkPacket(
 	}
 }
 
-func (p *UnloadChunkPacket) Write() *Data {
+func (p *UnloadChunkPacket) Pack() *Data {
 	data := NewData()
 	data.WriteInt32(p.cx)
 	data.WriteInt32(p.cz)
@@ -245,7 +245,7 @@ func NewSendChunkDataPacket(
 	}
 }
 
-func (p *SendChunkDataPacket) Write() *Data {
+func (p *SendChunkDataPacket) Pack() *Data {
 	data := NewData()
 	data.WriteInt32(p.cx)
 	data.WriteInt32(p.cz)
@@ -321,7 +321,7 @@ func NewJoinGamePacket(
 	}
 }
 
-func (p *JoinGamePacket) Write() *Data {
+func (p *JoinGamePacket) Pack() *Data {
 	data := NewData()
 	data.WriteInt32(p.eid)
 	data.WriteUint8(p.gamemode)
@@ -391,7 +391,7 @@ func NewSetPlayerAbilitiesPacket(
 	}
 }
 
-func (p *SetPlayerAbilitiesPacket) Write() *Data {
+func (p *SetPlayerAbilitiesPacket) Pack() *Data {
 	data := NewData()
 	bitmask := uint8(0)
 	if p.invulnerable == true {
@@ -470,7 +470,7 @@ func NewSetPlayerPosAndLookPacket(
 	}
 }
 
-func (p *SetPlayerPosAndLookPacket) Write() *Data {
+func (p *SetPlayerPosAndLookPacket) Pack() *Data {
 	data := NewData()
 	data.WriteFloat64(p.x)
 	data.WriteFloat64(p.y)
@@ -531,7 +531,7 @@ func NewSetSpawnPosPacket(
 	}
 }
 
-func (p *SetSpawnPosPacket) Write() *Data {
+func (p *SetSpawnPosPacket) Pack() *Data {
 	data := NewData()
 	data.WritePosition(p.x, p.y, p.z)
 
@@ -549,3 +549,5 @@ func (p *SetSpawnPosPacket) GetY() int {
 func (p *SetSpawnPosPacket) GetZ() int {
 	return p.z
 }
+
+// TODO: packet String

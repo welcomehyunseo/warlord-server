@@ -188,7 +188,7 @@ var (
 )
 
 type ChunkPart struct {
-	*sync.Mutex
+	*sync.RWMutex
 
 	palette []*Block
 	ids     [ChunkPartVol]int
@@ -196,21 +196,21 @@ type ChunkPart struct {
 }
 
 func NewChunkPart() *ChunkPart {
-	var mutex sync.Mutex
+	var mutex sync.RWMutex
 
 	return &ChunkPart{
-		Mutex:   &mutex,
+		RWMutex: &mutex,
 		palette: []*Block{AirBlock},
 		ids:     [ChunkPartVol]int{},
 		m0:      map[*Block]int{AirBlock: 0},
 	}
 }
 
-func (p *ChunkPart) write(
+func (p *ChunkPart) generateData(
 	overworld bool,
 ) []uint8 {
-	p.Lock()
-	defer p.Unlock()
+	p.RLock()
+	defer p.RUnlock()
 
 	data := NewData()
 
@@ -323,8 +323,8 @@ func (p *ChunkPart) GetBlock(
 	y uint8,
 	z uint8,
 ) *Block {
-	p.Lock()
-	defer p.Unlock()
+	p.RLock()
+	defer p.RUnlock()
 
 	i := (((y * 16) + z) * 16) + x
 	paletteID := p.ids[i]
@@ -361,16 +361,16 @@ func (p *ChunkPart) String() string {
 }
 
 type Chunk struct {
-	*sync.Mutex
+	*sync.RWMutex
 
 	chunkParts [MaxChunkPartsNum]*ChunkPart
 	biomes     [MaxBiomesNum]BiomeID
 }
 
 func NewChunk() *Chunk {
-	var mutex sync.Mutex
+	var mutex sync.RWMutex
 	return &Chunk{
-		Mutex:      &mutex,
+		RWMutex:    &mutex,
 		chunkParts: [MaxChunkPartsNum]*ChunkPart{},
 		biomes:     [MaxBiomesNum]BiomeID{},
 	}
@@ -379,8 +379,8 @@ func NewChunk() *Chunk {
 func (c *Chunk) GetChunkPart(
 	cy uint8,
 ) *ChunkPart {
-	c.Lock()
-	defer c.Unlock()
+	c.RLock()
+	defer c.RUnlock()
 
 	i := int(cy)
 	return c.chunkParts[i]
@@ -401,8 +401,8 @@ func (c *Chunk) GetBiome(
 	x uint8,
 	z uint8,
 ) BiomeID {
-	c.Lock()
-	defer c.Unlock()
+	c.RLock()
+	defer c.RUnlock()
 
 	i := (z * ChunkPartWidth) + x
 	return c.biomes[i]
@@ -420,11 +420,11 @@ func (c *Chunk) SetBiome(
 	c.biomes[i] = biome
 }
 
-func (c *Chunk) Write(
+func (c *Chunk) GenerateData(
 	init, overworld bool,
 ) (uint16, []uint8) {
-	c.Lock()
-	defer c.Unlock()
+	c.RLock()
+	defer c.RUnlock()
 
 	data := NewData()
 
@@ -436,7 +436,7 @@ func (c *Chunk) Write(
 		}
 
 		bitmask |= 1 << i
-		arr := part.write(overworld)
+		arr := part.generateData(overworld)
 		data.WriteBytes(arr)
 	}
 

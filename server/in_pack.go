@@ -16,7 +16,7 @@ const ChangePlayerPosAndLookPacketID = 0x0E
 type InPacket interface {
 	*Packet
 
-	Read(*Data)
+	Unpack(*Data)
 }
 
 type HandshakePacket struct {
@@ -37,7 +37,7 @@ func NewHandshakePacket() *HandshakePacket {
 	}
 }
 
-func (p *HandshakePacket) Read(
+func (p *HandshakePacket) Unpack(
 	data *Data,
 ) {
 	p.protocolVersion = data.ReadVarInt()
@@ -76,7 +76,7 @@ func NewRequestPacket() *RequestPacket {
 	}
 }
 
-func (p *RequestPacket) Read(
+func (p *RequestPacket) Unpack(
 	data *Data,
 ) {
 }
@@ -96,7 +96,7 @@ func NewPingPacket() *PingPacket {
 	}
 }
 
-func (p *PingPacket) Read(
+func (p *PingPacket) Unpack(
 	data *Data,
 ) {
 	p.payload = data.ReadInt64()
@@ -121,7 +121,7 @@ func NewStartLoginPacket() *StartLoginPacket {
 	}
 }
 
-func (p *StartLoginPacket) Read(
+func (p *StartLoginPacket) Unpack(
 	data *Data,
 ) {
 	p.username = data.ReadString()
@@ -146,7 +146,7 @@ func NewConfirmTeleportPacket() *ConfirmTeleportPacket {
 	}
 }
 
-func (p *ConfirmTeleportPacket) Read(data *Data) {
+func (p *ConfirmTeleportPacket) Unpack(data *Data) {
 	p.payload = data.ReadVarInt()
 }
 
@@ -170,7 +170,7 @@ func NewTakeActionPacket() *TakeActionPacket {
 	}
 }
 
-func (p *TakeActionPacket) Read(data *Data) {
+func (p *TakeActionPacket) Unpack(data *Data) {
 	action := data.ReadVarInt()
 	if action == 0 {
 		p.respawn = true
@@ -215,7 +215,7 @@ func NewChangeClientSettingsPacket() *ChangeClientSettingsPacket {
 	}
 }
 
-func (p *ChangeClientSettingsPacket) Read(
+func (p *ChangeClientSettingsPacket) Unpack(
 	data *Data,
 ) {
 	p.local = data.ReadString()
@@ -327,7 +327,7 @@ func NewChangePlayerPosPacket() *ChangePlayerPosPacket {
 	}
 }
 
-func (p *ChangePlayerPosPacket) Read(data *Data) {
+func (p *ChangePlayerPosPacket) Unpack(data *Data) {
 	p.x = data.ReadFloat64()
 	p.y = data.ReadFloat64()
 	p.z = data.ReadFloat64()
@@ -370,7 +370,7 @@ func NewChangePlayerPosAndLookPacket() *ChangePlayerPosAndLookPacket {
 	}
 }
 
-func (p *ChangePlayerPosAndLookPacket) Read(data *Data) {
+func (p *ChangePlayerPosAndLookPacket) Unpack(data *Data) {
 	p.x = data.ReadFloat64()
 	p.y = data.ReadFloat64()
 	p.z = data.ReadFloat64()
@@ -402,3 +402,5 @@ func (p *ChangePlayerPosAndLookPacket) GetPitch() float32 {
 func (p *ChangePlayerPosAndLookPacket) GetOnGround() bool {
 	return p.onGround
 }
+
+// TODO: packet String

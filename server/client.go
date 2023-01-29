@@ -226,14 +226,14 @@ func (cnt *Client) write(
 	packet OutPacket,
 ) error {
 	lg.Debug(
-		"It is started to write the packet.",
+		"It is started to generateData the packet.",
 		NewLgElement("packet", packet),
 	)
 
 	conn := cnt.conn
 
 	pid := packet.GetID()
-	data := packet.Write()
+	data := packet.Pack()
 
 	buf, err := write(pid, data)
 	if err != nil {
@@ -249,7 +249,7 @@ func (cnt *Client) write(
 	}
 
 	lg.Debug(
-		"It is finished to write the packet.",
+		"It is finished to generateData the packet.",
 	)
 	return nil
 }
@@ -259,14 +259,14 @@ func (cnt *Client) writeWithComp(
 	packet OutPacket,
 ) error {
 	lg.Debug(
-		"It is started to write the packet with compression.",
+		"It is started to generateData the packet with compression.",
 		NewLgElement("packet", packet),
 	)
 
 	conn := cnt.conn
 
 	pid := packet.GetID()
-	data := packet.Write()
+	data := packet.Pack()
 
 	buf0, err := write(pid, data)
 	if err != nil {
@@ -324,7 +324,7 @@ func (cnt *Client) writeWithComp(
 	}
 
 	lg.Debug(
-		"It is finished to write the packet with compression.",
+		"It is finished to generateData the packet with compression.",
 	)
 	return nil
 }
@@ -351,7 +351,7 @@ func (cnt *Client) Loop0(
 		return NilState, UnknownPacketIDError
 	case HandshakePacketID:
 		packet := NewHandshakePacket()
-		packet.Read(data)
+		packet.Unpack(data)
 		lg.Debug(
 			"HandshakePacket was created.",
 			NewLgElement("packet", packet),
@@ -394,7 +394,7 @@ func (cnt *Client) Loop1(
 		return true, UnknownPacketIDError
 	case RequestPacketID:
 		packet0 := NewRequestPacket()
-		packet0.Read(data)
+		packet0.Unpack(data)
 		lg.Debug(
 			"RequestPacket was created.",
 			NewLgElement("packet", packet0),
@@ -428,7 +428,7 @@ func (cnt *Client) Loop1(
 		break
 	case PingPacketID:
 		packet0 := NewPingPacket()
-		packet0.Read(data)
+		packet0.Unpack(data)
 		lg.Debug(
 			"PingPacket was created.",
 			NewLgElement("packet", packet0),
@@ -478,7 +478,7 @@ func (cnt *Client) Loop2(
 		return true, uuid.Nil, "", UnknownPacketIDError
 	case StartLoginPacketID:
 		packet0 := NewStartLoginPacket()
-		packet0.Read(d0)
+		packet0.Unpack(d0)
 		lg.Debug(
 			"StartLoginPacket was created.",
 			NewLgElement("packet", packet0),
@@ -542,7 +542,7 @@ func (cnt *Client) Loop3(
 	switch pid {
 	case ChangePlayerPosPacketID:
 		packet := NewChangePlayerPosPacket()
-		packet.Read(data)
+		packet.Unpack(data)
 		lg.Debug(
 			"ChangePlayerPosPacket was created.",
 			NewLgElement("packet", packet),
@@ -555,7 +555,7 @@ func (cnt *Client) Loop3(
 		break
 	case ChangePlayerPosAndLookPacketID:
 		packet := NewChangePlayerPosAndLookPacket()
-		packet.Read(data)
+		packet.Unpack(data)
 		lg.Debug(
 			"ChangePlayerPosAndLookPacket was created.",
 			NewLgElement("packet", packet),
@@ -613,7 +613,7 @@ func (cnt *Client) Init(
 			return InvalidPacketIDError
 		}
 		packet := NewChangeClientSettingsPacket()
-		packet.Read(data)
+		packet.Unpack(data)
 		lg.Debug(
 			"ChangeClientSettingsPacket was created.",
 			NewLgElement("packet", packet),
@@ -686,7 +686,7 @@ func (cnt *Client) Init(
 			return InvalidPacketIDError
 		}
 		packet := NewConfirmTeleportPacket()
-		packet.Read(data)
+		packet.Unpack(data)
 		lg.Debug(
 			"ConfirmTeleportPacket was created.",
 			NewLgElement("packet", packet),
@@ -718,9 +718,9 @@ func (cnt *Client) LoadChunk(
 		NewLgElement("cz", cz),
 		NewLgElement("chunk", chunk),
 	)
-	bitmask, data := chunk.Write(init, overworld)
+	bitmask, data := chunk.GenerateData(init, overworld)
 	lg.Debug(
-		"It was finished to write data.",
+		"It was finished to generateData data.",
 		NewLgElement("bitmask", bitmask),
 		NewLgElement("data", "[...]"),
 	)
