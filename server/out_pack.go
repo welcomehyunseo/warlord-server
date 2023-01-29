@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/google/uuid"
 )
 
@@ -278,6 +279,13 @@ func (p *SendChunkDataPacket) GetBitmask() uint16 {
 
 func (p *SendChunkDataPacket) GetData() []uint8 {
 	return p.data
+}
+
+func (p *SendChunkDataPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, cx: %d, cz: %d, init: %v, bitmask: %d, data: [...] }",
+		p.packet, p.cx, p.cz, p.init, p.bitmask,
+	)
 }
 
 type JoinGamePacket struct {

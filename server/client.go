@@ -3,19 +3,12 @@ package server
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"io"
 	"math/rand"
 	"net"
 )
-
-type Client struct {
-	cid uuid.UUID
-
-	conn net.Conn
-
-	lg *Logger
-}
 
 var InvalidPacketIDError = errors.New("current packet ID was invalid")
 var InvalidPayloadError = errors.New("payload does not match to given")
@@ -125,28 +118,36 @@ func write(
 	return buf, nil
 }
 
+type Client struct {
+	cid  uuid.UUID
+	addr net.Addr
+
+	conn net.Conn
+}
+
 func NewClient(
 	cid uuid.UUID,
 	conn net.Conn,
-	lg *Logger,
 ) *Client {
-
-	lg.Info("Client was started with logging.")
+	addr := conn.RemoteAddr()
 
 	return &Client{
 		cid:  cid,
+		addr: addr,
 		conn: conn,
-		lg:   lg,
 	}
 }
 
-func (cnt *Client) read() (
+func (cnt *Client) read(
+	lg *Logger,
+) (
 	int32,
 	*Data,
 	error,
 ) {
+	lg.Debug("It is started to read a packet.")
+
 	conn := cnt.conn
-	lg := cnt.lg
 
 	l0, _, err := readVarInt(conn) // length of packet
 	if err != nil {
@@ -158,48 +159,39 @@ func (cnt *Client) read() (
 		return 0, nil, err
 	}
 
-	lg.InfoWithVars(
-		"Uninterpreted packet was read in the connection.",
-		"id: %d", pid,
-	)
-
+	lg.Debug("It is finished to read a packet.")
 	return pid, data, nil
 }
 
-func (cnt *Client) readWithComp() (
+func (cnt *Client) readWithComp(
+	lg *Logger,
+) (
 	int32,
 	*Data,
 	error,
 ) {
+	lg.Debug(
+		"It is started to read a packet with compression.",
+	)
+
 	conn := cnt.conn
-	lg := cnt.lg
 
 	l0, _, err := readVarInt(conn) // length of packet
 	if err != nil {
 		return 0, nil, err
 	}
-	//fmt.Println("l0:", l0)
 
 	l1, l2, err := readVarInt(conn) // uncompressed length of id and data of packet
 	if err != nil {
 		return 0, nil, err
 	}
 
-	//fmt.Println("l1:", l1)
-	//fmt.Println("l2:", l2)
 	l3 := int(l0) - l2 // length of id and data of packet
-	//fmt.Println("l3:", l3)
 	if l1 == 0 {
 		pid, data, err := read(l3, conn)
 		if err != nil {
 			return 0, nil, err
 		}
-
-		lg.InfoWithVars(
-			"Uninterpreted packet was read "+
-				"in the connection with non-compression.",
-			"id: %d", pid,
-		)
 
 		return pid, data, nil
 	} else if l1 < CompThold {
@@ -223,19 +215,21 @@ func (cnt *Client) readWithComp() (
 
 	data := NewData(buf.Bytes()...)
 
-	lg.InfoWithVars(
-		"Uninterpreted packet was read "+
-			"in the connection with compression.",
-		"id: %d", pid,
+	lg.Debug(
+		"It is finished to read a packet with compression.",
 	)
-
 	return pid, data, nil
 }
 
 func (cnt *Client) write(
+	lg *Logger,
 	packet OutPacket,
 ) error {
-	lg := cnt.lg
+	lg.Debug(
+		"It is started to write the packet.",
+		NewLgElement("packet", packet),
+	)
+
 	conn := cnt.conn
 
 	pid := packet.GetID()
@@ -254,15 +248,21 @@ func (cnt *Client) write(
 		return err
 	}
 
-	lg.Info("Packet was wrote in the connection.")
-
+	lg.Debug(
+		"It is finished to write the packet.",
+	)
 	return nil
 }
 
 func (cnt *Client) writeWithComp(
+	lg *Logger,
 	packet OutPacket,
 ) error {
-	lg := cnt.lg
+	lg.Debug(
+		"It is started to write the packet with compression.",
+		NewLgElement("packet", packet),
+	)
+
 	conn := cnt.conn
 
 	pid := packet.GetID()
@@ -295,11 +295,6 @@ func (cnt *Client) writeWithComp(
 			return err
 		}
 
-		lg.InfoWithVars(
-			"Packet was wrote "+
-				"in the connection with non-compression.",
-			"packet: %+v", packet,
-		)
 		return nil
 	}
 
@@ -328,27 +323,25 @@ func (cnt *Client) writeWithComp(
 		return err
 	}
 
-	lg.Info("Packet was wrote in the connection with compression.")
+	lg.Debug(
+		"It is finished to write the packet with compression.",
+	)
 	return nil
 }
 
 func (cnt *Client) Loop0(
+	lg *Logger,
 	state State,
 ) (
 	State,
 	error,
 ) {
-	lg := cnt.lg
-
-	defer func() {
-		lg.Info("The Loop0 loop is ended.")
-	}()
-
-	lg.InfoWithVars(
-		"The Loop0 loop is started with that state.",
-		"state: %d", state,
+	lg.Debug(
+		"The sequence of Loop0 is started.",
+		NewLgElement("state", state),
 	)
-	pid, data, err := cnt.read()
+
+	pid, data, err := cnt.read(lg)
 	if err != nil {
 		return NilState, err
 	}
@@ -357,20 +350,24 @@ func (cnt *Client) Loop0(
 	default:
 		return NilState, UnknownPacketIDError
 	case HandshakePacketID:
-		handshakePacket := NewHandshakePacket()
-		handshakePacket.Read(data)
-		lg.InfoWithVars(
-			"HandshakePacket was read.",
-			"packet: %+v", handshakePacket,
+		packet := NewHandshakePacket()
+		packet.Read(data)
+		lg.Debug(
+			"HandshakePacket was created.",
+			NewLgElement("packet", packet),
 		)
-		state = handshakePacket.GetNextState()
+		state = packet.GetNextState()
 		break
 	}
 
+	lg.Debug(
+		"The sequence of Loop0 is finished.",
+	)
 	return state, nil
 }
 
 func (cnt *Client) Loop1(
+	lg *Logger,
 	state State,
 	max int,
 	online int,
@@ -380,32 +377,27 @@ func (cnt *Client) Loop1(
 	bool,
 	error,
 ) {
-	lg := cnt.lg
-
-	defer func() {
-		lg.Info("The Loop1 loop is ended.")
-	}()
-
-	lg.InfoWithVars(
-		"The Loop1 loop is started with that state.",
-		"state: %d", state,
+	lg.Debug(
+		"The sequence of Loop1 is started.",
+		NewLgElement("state", state),
 	)
-	pid, data, err := cnt.read()
+
+	pid, data, err := cnt.read(lg)
 	if err != nil {
 		return true, err
 	}
 
-	finish := false
+	stop := false
 
 	switch pid {
 	default:
 		return true, UnknownPacketIDError
 	case RequestPacketID:
-		requestPacket := NewRequestPacket()
-		requestPacket.Read(data)
-		lg.InfoWithVars(
-			"RequestPacket was read.",
-			"packet: %+v", requestPacket,
+		packet0 := NewRequestPacket()
+		packet0.Read(data)
+		lg.Debug(
+			"RequestPacket was created.",
+			NewLgElement("packet", packet0),
 		)
 
 		jsonResponse := &JsonResponse{
@@ -425,40 +417,45 @@ func (cnt *Client) Loop1(
 			PreviewsChat:       false,
 			EnforcesSecureChat: false,
 		}
-		responsePacket := NewResponsePacket(jsonResponse)
-		lg.InfoWithVars(
+		packet1 := NewResponsePacket(jsonResponse)
+		lg.Debug(
 			"ResponsePacket was created.",
-			"packet: %+v", responsePacket,
+			NewLgElement("packet", packet1),
 		)
-		if err := cnt.write(responsePacket); err != nil {
+		if err := cnt.write(lg, packet1); err != nil {
 			return true, err
 		}
 		break
 	case PingPacketID:
-		pingPacket := NewPingPacket()
-		pingPacket.Read(data)
-		lg.InfoWithVars(
-			"PingPacket was read.",
-			"packet: %+v", pingPacket,
+		packet0 := NewPingPacket()
+		packet0.Read(data)
+		lg.Debug(
+			"PingPacket was created.",
+			NewLgElement("packet", packet0),
 		)
-		payload := pingPacket.GetPayload()
+		payload := packet0.GetPayload()
 
-		pongPacket := NewPongPacket(payload)
-		lg.InfoWithVars(
-			"PongPacket was created.",
-			"packet: %+v", pongPacket,
+		packet1 := NewPongPacket(payload)
+		lg.Debug(
+			"PingPacket was created.",
+			NewLgElement("packet", packet1),
 		)
-		if err := cnt.write(pongPacket); err != nil {
+		if err := cnt.write(lg, packet1); err != nil {
 			return true, err
 		}
-		finish = true
+		stop = true
 		break
 	}
 
-	return finish, nil
+	lg.Debug(
+		"The sequence of Loop1 is finished.",
+		NewLgElement("stop", stop),
+	)
+	return stop, nil
 }
 
 func (cnt *Client) Loop2(
+	lg *Logger,
 	state State,
 ) (
 	bool,
@@ -466,17 +463,12 @@ func (cnt *Client) Loop2(
 	string,
 	error,
 ) {
-	lg := cnt.lg
-
-	defer func() {
-		lg.Info("The Loop2 loop is ended.")
-	}()
-
-	lg.InfoWithVars(
-		"The Loop2 loop is started with that state.",
-		"state: %d", state,
+	lg.Debug(
+		"The sequence of Loop2 is started.",
+		NewLgElement("state", state),
 	)
-	pid, d0, err := cnt.read()
+
+	pid, d0, err := cnt.read(lg)
 	if err != nil {
 		return true, uuid.Nil, "", err
 	}
@@ -485,63 +477,64 @@ func (cnt *Client) Loop2(
 	default:
 		return true, uuid.Nil, "", UnknownPacketIDError
 	case StartLoginPacketID:
-		startLoginPacket := NewStartLoginPacket()
-		startLoginPacket.Read(d0)
-		lg.InfoWithVars(
-			"StartLoginPacket was read.",
-			"packet: %+v", startLoginPacket,
+		packet0 := NewStartLoginPacket()
+		packet0.Read(d0)
+		lg.Debug(
+			"StartLoginPacket was created.",
+			NewLgElement("packet", packet0),
 		)
 
-		username := startLoginPacket.GetUsername()
-		lg.Info("Username starts converting to id.")
+		username := packet0.GetUsername()
 		uid, err := UsernameToUUID(username)
 		if err != nil {
 			return true, uuid.Nil, "", err
 		}
+		lg.Debug(
+			"It is finished to convert username to UUID.",
+			NewLgElement("uid", uid),
+		)
 
-		enableCompressionPacket := NewEnableCompressionPacket(CompThold)
-		lg.InfoWithVars(
+		packet1 := NewEnableCompressionPacket(CompThold)
+		lg.Debug(
 			"EnableCompressionPacket was created.",
-			"packet: %+v", enableCompressionPacket,
+			NewLgElement("packet", packet1),
 		)
-		if err := cnt.write(enableCompressionPacket); err != nil {
+		if err := cnt.write(lg, packet1); err != nil {
 			return true, uuid.Nil, "", err
 		}
 
-		completeLoginPacket := NewCompleteLoginPacket(uid, username)
-		lg.InfoWithVars(
+		packet2 := NewCompleteLoginPacket(uid, username)
+		lg.Debug(
 			"CompleteLoginPacket was created.",
-			"packet: %+v", completeLoginPacket,
+			NewLgElement("packet", packet2),
 		)
-		if err := cnt.writeWithComp(completeLoginPacket); err != nil {
+		if err := cnt.writeWithComp(lg, packet2); err != nil {
 			return true, uuid.Nil, "", err
 		}
 
+		lg.Debug(
+			"The sequence of Loop2 is finished.",
+		)
 		return true, uid, username, nil
 	}
 }
 
 func (cnt *Client) Loop3(
+	lg *Logger,
 	chanForUpdatePlayerPosEvent chan *UpdatePlayerPosEvent,
 	state State,
 ) (
 	bool, // finish
 	error,
 ) {
-	lg := cnt.lg
-
-	defer func() {
-		lg.Info("The Loop3 loop is ended.")
-	}()
-
-	lg.InfoWithVars(
-		"The Loop3 loop is started with that state.",
-		"state: %d", state,
+	lg.Debug(
+		"The sequence of Loop3 is started.",
+		NewLgElement("state", state),
 	)
 
-	finish := false
+	stop := false
 
-	pid, data, err := cnt.readWithComp()
+	pid, data, err := cnt.readWithComp(lg)
 	if err != nil {
 		return true, err
 	}
@@ -550,6 +543,10 @@ func (cnt *Client) Loop3(
 	case ChangePlayerPosPacketID:
 		packet := NewChangePlayerPosPacket()
 		packet.Read(data)
+		lg.Debug(
+			"ChangePlayerPosPacket was created.",
+			NewLgElement("packet", packet),
+		)
 		x, y, z :=
 			packet.GetX(), packet.GetY(), packet.GetZ()
 		chanForUpdatePlayerPosEvent <- NewUpdatePlayerPosEvent(
@@ -559,6 +556,10 @@ func (cnt *Client) Loop3(
 	case ChangePlayerPosAndLookPacketID:
 		packet := NewChangePlayerPosAndLookPacket()
 		packet.Read(data)
+		lg.Debug(
+			"ChangePlayerPosAndLookPacket was created.",
+			NewLgElement("packet", packet),
+		)
 		x, y, z :=
 			packet.GetX(), packet.GetY(), packet.GetZ()
 		chanForUpdatePlayerPosEvent <- NewUpdatePlayerPosEvent(
@@ -567,18 +568,21 @@ func (cnt *Client) Loop3(
 		break
 	}
 
-	return finish, nil
+	lg.Debug(
+		"The sequence of Loop3 is finished.",
+		NewLgElement("stop", stop),
+	)
+	return stop, nil
 }
 
 func (cnt *Client) Init(
+	lg *Logger,
 	eid int32,
 ) error {
-	lg := cnt.lg
-
-	lg.Info("The normal sequence is started after login in the Init func.")
-	defer func() {
-		lg.Info("The normal sequence was finished in the Init func.")
-	}()
+	lg.Debug(
+		"It is started to init.",
+		NewLgElement("eid", eid),
+	)
 	if err := func() error {
 		packet := NewJoinGamePacket(
 			eid,
@@ -588,11 +592,11 @@ func (cnt *Client) Init(
 			"default",
 			false,
 		)
-		lg.InfoWithVars(
+		lg.Debug(
 			"JoinGamePacket was created.",
-			"packet: %+v", packet,
+			NewLgElement("packet", packet),
 		)
-		if err := cnt.writeWithComp(packet); err != nil {
+		if err := cnt.writeWithComp(lg, packet); err != nil {
 			return err
 		}
 		return nil
@@ -601,18 +605,18 @@ func (cnt *Client) Init(
 	}
 
 	if err := func() error {
-		id, data, err := cnt.readWithComp()
+		id, data, err := cnt.readWithComp(lg)
 		if err != nil {
 			return err
 		}
 		if id != ChangeClientSettingsPacketID {
 			return InvalidPacketIDError
 		}
-		changeClientSettingsPacket := NewChangeClientSettingsPacket()
-		changeClientSettingsPacket.Read(data)
-		lg.InfoWithVars(
-			"ChangeClientSettingsPacket was read.",
-			"packet: %+v", changeClientSettingsPacket,
+		packet := NewChangeClientSettingsPacket()
+		packet.Read(data)
+		lg.Debug(
+			"ChangeClientSettingsPacket was created.",
+			NewLgElement("packet", packet),
 		)
 		return nil
 	}(); err != nil {
@@ -620,7 +624,7 @@ func (cnt *Client) Init(
 	}
 
 	if err := func() error {
-		_, _, err := cnt.readWithComp()
+		_, _, err := cnt.readWithComp(lg)
 		if err != nil {
 			return err
 		}
@@ -639,11 +643,11 @@ func (cnt *Client) Init(
 			0.1,
 			0.2,
 		)
-		lg.InfoWithVars(
+		lg.Debug(
 			"SetPlayerAbilitiesPacket was created.",
-			"packet: %+v", packet,
+			NewLgElement("packet", packet),
 		)
-		if err := cnt.writeWithComp(packet); err != nil {
+		if err := cnt.writeWithComp(lg, packet); err != nil {
 			return err
 		}
 		return nil
@@ -661,11 +665,11 @@ func (cnt *Client) Init(
 			0,
 			payload,
 		)
-		lg.InfoWithVars(
+		lg.Debug(
 			"SetPlayerPosAndLookPacket was created.",
-			"packet: %+v", packet,
+			NewLgElement("packet", packet),
 		)
-		if err := cnt.writeWithComp(packet); err != nil {
+		if err := cnt.writeWithComp(lg, packet); err != nil {
 			return err
 		}
 		return nil
@@ -674,7 +678,7 @@ func (cnt *Client) Init(
 	}
 
 	if err := func() error {
-		id, data, err := cnt.readWithComp()
+		id, data, err := cnt.readWithComp(lg)
 		if err != nil {
 			return err
 		}
@@ -683,9 +687,9 @@ func (cnt *Client) Init(
 		}
 		packet := NewConfirmTeleportPacket()
 		packet.Read(data)
-		lg.InfoWithVars(
-			"ConfirmTeleportPacket was read.",
-			"packet: %+v", packet,
+		lg.Debug(
+			"ConfirmTeleportPacket was created.",
+			NewLgElement("packet", packet),
 		)
 		payloadPrime := packet.GetPayload()
 		if payload != payloadPrime {
@@ -696,54 +700,79 @@ func (cnt *Client) Init(
 		return err
 	}
 
+	lg.Debug("It is finished to init.")
 	return nil
 }
 
 func (cnt *Client) LoadChunk(
-	overworld bool,
-	init bool,
+	lg *Logger,
+	overworld, init bool,
 	cx, cz int32,
 	chunk *Chunk,
 ) error {
-	lg := cnt.lg
-
+	lg.Debug(
+		"It is started to load chunk.",
+		NewLgElement("overworld", overworld),
+		NewLgElement("init", init),
+		NewLgElement("cx", cx),
+		NewLgElement("cz", cz),
+		NewLgElement("chunk", chunk),
+	)
 	bitmask, data := chunk.Write(init, overworld)
+	lg.Debug(
+		"It was finished to write data.",
+		NewLgElement("bitmask", bitmask),
+		NewLgElement("data", "[...]"),
+	)
 	packet := NewSendChunkDataPacket(
 		cx, cz,
 		init,
 		bitmask,
 		data,
 	)
-	lg.Info("SendChunkDataPacket was created.")
-	if err := cnt.writeWithComp(packet); err != nil {
+	if err := cnt.writeWithComp(lg, packet); err != nil {
 		return err
 	}
+	lg.Debug("It is finished to load chunk.")
 
 	return nil
 }
 
 func (cnt *Client) UnloadChunk(
+	lg *Logger,
 	cx, cz int32,
 ) error {
-	lg := cnt.lg
+	lg.Debug(
+		"It is started to unload chunk.",
+	)
 
 	packet := NewUnloadChunkPacket(
 		cx, cz,
 	)
-	lg.Info("UnloadChunkPacket was created.")
-	if err := cnt.writeWithComp(packet); err != nil {
+	if err := cnt.writeWithComp(lg, packet); err != nil {
 		return err
 	}
+	lg.Debug(
+		"It is finished to unload chunk.",
+	)
 	return nil
 }
 
-func (cnt *Client) Close() {
-	lg := cnt.lg
+func (cnt *Client) Close(
+	lg *Logger,
+) {
+	lg.Info("Client is closed.")
 
 	_ = cnt.conn.Close()
-	lg.Info("Client was ended with logging.")
 }
 
 func (cnt *Client) GetCID() uuid.UUID {
 	return cnt.cid
+}
+
+func (cnt *Client) String() string {
+	return fmt.Sprintf(
+		"{ cid: %s, addr: %s }",
+		cnt.cid, cnt.addr,
+	)
 }

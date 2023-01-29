@@ -136,14 +136,14 @@ type Block struct {
 func newBlock(
 	id uint8,
 	metadata uint8,
-	emit LightLevel,
-	filter LightLevel,
+	emitLight LightLevel,
+	filterLight LightLevel,
 ) *Block {
 	return &Block{
 		id:          id,
 		metadata:    metadata,
-		emitLight:   emit,
-		filterLight: filter,
+		emitLight:   emitLight,
+		filterLight: filterLight,
 		globalID:    uint16(id<<4 | metadata),
 	}
 }
@@ -168,6 +168,19 @@ func (b *Block) GetGlobalID() uint16 {
 	return b.globalID
 }
 
+func (b *Block) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"id: %d, "+
+			"metadata: %d, "+
+			"emitLight: %d, "+
+			"filterLight: %d, "+
+			"globalID: %d "+
+			"}",
+		b.id, b.metadata, b.emitLight, b.filterLight, b.globalID,
+	)
+}
+
 var (
 	AirBlock   = newBlock(0, 0, LightLevel0, LightLevel0)
 	StoneBlock = newBlock(1, 0, LightLevel0, LightLevelF)
@@ -175,7 +188,7 @@ var (
 )
 
 type ChunkPart struct {
-	sync.Mutex
+	*sync.Mutex
 
 	palette []*Block
 	ids     [ChunkPartVol]int
@@ -183,7 +196,10 @@ type ChunkPart struct {
 }
 
 func NewChunkPart() *ChunkPart {
+	var mutex sync.Mutex
+
 	return &ChunkPart{
+		Mutex:   &mutex,
 		palette: []*Block{AirBlock},
 		ids:     [ChunkPartVol]int{},
 		m0:      map[*Block]int{AirBlock: 0},
@@ -198,7 +214,7 @@ func (p *ChunkPart) write(
 
 	data := NewData()
 
-	var bits uint8
+	bits := uint8(4)
 	l := len(p.palette)
 	if 256 < l {
 		bits = 13
@@ -210,8 +226,6 @@ func (p *ChunkPart) write(
 		bits = 6
 	} else if 16 < l {
 		bits = 5
-	} else {
-		bits = 4
 	}
 
 	data.WriteUint8(bits)
@@ -224,7 +238,6 @@ func (p *ChunkPart) write(
 		}
 	} else {
 		data.WriteVarInt(0)
-
 	}
 
 	l0 := LongSize * int(bits) // (ChunkPartVol * int(bits)) / LongSize
@@ -340,17 +353,26 @@ func (p *ChunkPart) SetBlock(
 
 }
 
-type Chunk struct {
-	sync.Mutex
+func (p *ChunkPart) String() string {
+	return fmt.Sprintf(
+		"{ palette: %+v, ids: [...] m0: %+v }",
+		p.palette, p.m0,
+	)
+}
 
-	chunks [MaxChunkPartsNum]*ChunkPart
-	biomes [MaxBiomesNum]BiomeID
+type Chunk struct {
+	*sync.Mutex
+
+	chunkParts [MaxChunkPartsNum]*ChunkPart
+	biomes     [MaxBiomesNum]BiomeID
 }
 
 func NewChunk() *Chunk {
+	var mutex sync.Mutex
 	return &Chunk{
-		chunks: [MaxChunkPartsNum]*ChunkPart{},
-		biomes: [MaxBiomesNum]BiomeID{},
+		Mutex:      &mutex,
+		chunkParts: [MaxChunkPartsNum]*ChunkPart{},
+		biomes:     [MaxBiomesNum]BiomeID{},
 	}
 }
 
@@ -361,7 +383,7 @@ func (c *Chunk) GetChunkPart(
 	defer c.Unlock()
 
 	i := int(cy)
-	return c.chunks[i]
+	return c.chunkParts[i]
 }
 
 func (c *Chunk) SetChunkPart(
@@ -372,7 +394,7 @@ func (c *Chunk) SetChunkPart(
 	defer c.Unlock()
 
 	i := int(cy)
-	c.chunks[i] = part
+	c.chunkParts[i] = part
 }
 
 func (c *Chunk) GetBiome(
@@ -399,8 +421,7 @@ func (c *Chunk) SetBiome(
 }
 
 func (c *Chunk) Write(
-	init bool,
-	overworld bool,
+	init, overworld bool,
 ) (uint16, []uint8) {
 	c.Lock()
 	defer c.Unlock()
@@ -409,13 +430,13 @@ func (c *Chunk) Write(
 
 	var bitmask uint16
 	for i := 0; i < MaxChunkPartsNum; i++ {
-		chunk := c.chunks[i]
-		if chunk == nil {
+		part := c.chunkParts[i]
+		if part == nil {
 			continue
 		}
 
 		bitmask |= 1 << i
-		arr := chunk.write(overworld)
+		arr := part.write(overworld)
 		data.WriteBytes(arr)
 	}
 
@@ -429,4 +450,11 @@ func (c *Chunk) Write(
 	}
 
 	return bitmask, data.GetBytes()
+}
+
+func (c *Chunk) String() string {
+	return fmt.Sprintf(
+		"{ chunkParts: %+v, biomes: [...] }",
+		c.chunkParts,
+	)
 }

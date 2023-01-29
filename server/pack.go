@@ -1,5 +1,7 @@
 package server
 
+import "fmt"
+
 type BoundType = int
 type State = int32
 type PacketID = int32
@@ -49,4 +51,11 @@ func (p *packet) GetState() State {
 
 func (p *packet) GetID() PacketID {
 	return p.id
+}
+
+func (p *packet) String() string {
+	return fmt.Sprintf(
+		"{ bound: %d, state: %d, id: %d }",
+		p.bound, p.state, p.id,
+	)
 }
