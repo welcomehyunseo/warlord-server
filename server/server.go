@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -26,7 +27,7 @@ const (
 
 func findRect(
 	cx, cz int, // player pos
-	d int,      // positive
+	d int, // positive
 ) (int, int, int, int) {
 	return cx + d, cz + d, cx - d, cz - d
 }
@@ -108,8 +109,11 @@ type Server struct {
 
 	rndDist int // render distance
 
-	m0 map[ChunkPosStr]*Chunk
-	m1 map[ChunkPosStr]map[uuid.UUID]*Player
+	mutex0 *sync.RWMutex
+	m0     map[ChunkPosStr]*Chunk
+
+	mutex1 *sync.RWMutex
+	m1     map[uuid.UUID]*Player
 }
 
 func NewServer(
@@ -125,6 +129,9 @@ func NewServer(
 		return nil, OutOfRndDistRangeError
 	}
 
+	var mutex0 sync.RWMutex
+	var mutex1 sync.RWMutex
+
 	return &Server{
 		addr:    addr,
 		max:     max,
@@ -133,8 +140,10 @@ func NewServer(
 		favicon: favicon,
 		desc:    desc,
 		rndDist: rndDist,
+		mutex0:  &mutex0,
 		m0:      make(map[ChunkPosStr]*Chunk),
-		m1:      make(map[ChunkPosStr]map[uuid.UUID]*Player),
+		mutex1:  &mutex1,
+		m1:      make(map[uuid.UUID]*Player),
 	}, nil
 }
 
@@ -182,7 +191,7 @@ func (s *Server) updateChunks(
 				continue
 			}
 
-			chunk := s.GetChunk(j, i)
+			chunk := s.loadChunk(j, i)
 
 			err := cnt.LoadChunk(
 				lg,
@@ -259,7 +268,7 @@ func (s *Server) initChunks(
 
 	for i := cz0; i >= cz1; i-- {
 		for j := cx0; j >= cx1; j-- {
-			chunk := s.GetChunk(j, i)
+			chunk := s.loadChunk(j, i)
 
 			err := cnt.LoadChunk(
 				lg,
@@ -514,6 +523,14 @@ func (s *Server) handleConnection(
 	uid := player.GetUid()
 	username := player.GetUsername()
 
+	s.addPlayer(player)
+	defer func() {
+		s.removePlayer(uid)
+	}()
+	if err := cnt.AddPlayerToPlayerList(lg, player); err != nil {
+		panic(err)
+	}
+
 	lg.Info(
 		"The player successfully logged in.",
 		NewLgElement("eid", eid),
@@ -639,9 +656,12 @@ func (s *Server) GetOnline() int {
 	return s.online
 }
 
-func (s *Server) GetChunk(
+func (s *Server) loadChunk(
 	cx, cz int,
 ) *Chunk {
+	s.mutex0.RLock()
+	defer s.mutex0.RUnlock()
+
 	key := toChunkPosStr(cx, cz)
 	chunk, has := s.m0[key]
 	if has == false {
@@ -650,10 +670,42 @@ func (s *Server) GetChunk(
 	return chunk
 }
 
-func (s *Server) SetChunk(
+func (s *Server) addChunk(
 	cx, cz int,
 	chunk *Chunk,
 ) {
+	s.mutex0.Lock()
+	defer s.mutex0.Unlock()
+
 	key := toChunkPosStr(cx, cz)
 	s.m0[key] = chunk
+}
+
+func (s *Server) loadPlayer(
+	uid uuid.UUID,
+) (*Player, bool) {
+	s.mutex1.RLock()
+	defer s.mutex1.RUnlock()
+
+	player, has := s.m1[uid]
+	return player, has
+}
+
+func (s *Server) addPlayer(
+	player *Player,
+) {
+	s.mutex1.Lock()
+	defer s.mutex1.Unlock()
+
+	key := player.GetUid()
+	s.m1[key] = player
+}
+
+func (s *Server) removePlayer(
+	uid uuid.UUID,
+) {
+	s.mutex1.Lock()
+	defer s.mutex1.Unlock()
+
+	delete(s.m1, uid)
 }

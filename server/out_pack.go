@@ -18,6 +18,11 @@ const CheckKeepAlivePacketID = 0x1F
 const SendChunkDataPacketID = 0x20
 const JoinGamePacketID = 0x23
 const SetPlayerAbilitiesPacketID = 0x2C
+const SendPlayerListToAddPlayerPacketID = 0x2E
+const SendPlayerListToUpdateGamemodePacketID = 0x2E
+const SendPlayerListToUpdateLatencyPacketID = 0x2E
+const SendPlayerListToUpdateDisplayNamePacketID = 0x2E
+const SendPlayerListToRemovePlayerPacketID = 0x2E
 const SetPlayerPosAndLookPacketID = 0x2F
 const SetSpawnPosPacketID = 0x46
 
@@ -472,6 +477,111 @@ func (p *SetPlayerAbilitiesPacket) GetFlyingSpeed() float32 {
 
 func (p *SetPlayerAbilitiesPacket) GetFovModifier() float32 {
 	return p.fovModifier
+}
+
+type SendPlayerListToAddPlayerPacket struct {
+	*packet
+	uid           uuid.UUID
+	username      string
+	textureString string
+	signature     string
+	gamemode      int32
+	ping          int32
+	displayName   string
+}
+
+func NewSendPlayerListToAddPlayerPacket(
+	uid uuid.UUID,
+	username string,
+	textureString string,
+	signature string,
+	gamemode int32,
+	ping int32,
+	displayName string,
+) *SendPlayerListToAddPlayerPacket {
+	return &SendPlayerListToAddPlayerPacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			SendPlayerListToAddPlayerPacketID,
+		),
+		uid:           uid,
+		username:      username,
+		textureString: textureString,
+		signature:     signature,
+		gamemode:      gamemode,
+		ping:          ping,
+		displayName:   displayName,
+	}
+}
+
+func (p *SendPlayerListToAddPlayerPacket) Pack() *Data {
+	data := NewData()
+	data.WriteVarInt(0)
+	data.WriteVarInt(1)
+
+	data.WriteUUID(p.uid)
+	data.WriteString(p.username)
+	data.WriteVarInt(1)
+	data.WriteString("texture")
+	data.WriteString(p.textureString)
+	data.WriteBool(true)
+	data.WriteString(p.signature)
+	data.WriteVarInt(p.gamemode)
+	data.WriteVarInt(p.ping)
+	data.WriteBool(false)
+	//data.WriteString(p.displayName)
+
+	return data
+}
+
+func (p *SendPlayerListToAddPlayerPacket) GetUid() uuid.UUID {
+	return p.uid
+}
+
+func (p *SendPlayerListToAddPlayerPacket) GetUsername() string {
+	return p.username
+}
+
+func (p *SendPlayerListToAddPlayerPacket) GetTextureString() string {
+	return p.textureString
+}
+
+func (p *SendPlayerListToAddPlayerPacket) GetSignature() string {
+	return p.signature
+}
+
+func (p *SendPlayerListToAddPlayerPacket) GetGamemode() int32 {
+	return p.gamemode
+}
+
+func (p *SendPlayerListToAddPlayerPacket) GetPing() int32 {
+	return p.ping
+}
+
+func (p *SendPlayerListToAddPlayerPacket) GetDisplayName() string {
+	return p.displayName
+}
+
+func (p *SendPlayerListToAddPlayerPacket) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"uid: %s, "+
+			"username: %s, "+
+			"textureString: %s, "+
+			"signature: %s, "+
+			"gamemode: %d, "+
+			"ping: %d, "+
+			"displayName: %s "+
+			"}",
+		p.uid,
+		p.username,
+		p.textureString,
+		p.signature,
+		p.gamemode,
+		p.ping,
+		p.displayName,
+	)
 }
 
 type SetPlayerPosAndLookPacket struct {

@@ -549,8 +549,7 @@ func (cnt *Client) Loop3(
 			NewLgElement("packet", packet),
 		)
 		payload := packet.GetPayload()
-		chanForConfirmKeepAliveEvent <-
-			NewConfirmKeepAliveEvent(payload)
+		chanForConfirmKeepAliveEvent <- NewConfirmKeepAliveEvent(payload)
 		break
 	case ChangePlayerPosPacketID:
 		packet := NewChangePlayerPosPacket()
@@ -785,6 +784,43 @@ func (cnt *Client) UnloadChunk(
 	lg.Debug(
 		"It is finished to unload chunk.",
 	)
+	return nil
+}
+
+func (cnt *Client) AddPlayerToPlayerList(
+	lg *Logger,
+	player *Player,
+) error {
+	lg.Debug(
+		"It is started to add player to player list.",
+	)
+
+	uid := player.GetUid()
+	username := player.GetUsername()
+	textureString, signature, err := UUIDToTextureString(uid)
+	if err != nil {
+		return err
+	}
+	gamemode := int32(0)
+	ping := int32(1000)
+	displayName := username
+	packet := NewSendPlayerListToAddPlayerPacket(
+		uid,
+		username,
+		textureString,
+		signature,
+		gamemode,
+		ping,
+		displayName,
+	)
+	if err := cnt.writeWithComp(lg, packet); err != nil {
+		return err
+	}
+
+	lg.Debug(
+		"It is finished to add player to player list.",
+	)
+
 	return nil
 }
 
