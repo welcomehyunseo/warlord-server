@@ -1,6 +1,9 @@
 package server
 
-import "github.com/google/uuid"
+import (
+	"fmt"
+	"github.com/google/uuid"
+)
 
 type entity struct {
 	eid   int32
@@ -91,6 +94,21 @@ func (e *entity) GetPrevZ() float64 {
 	return e.prevZ
 }
 
+func (e *entity) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"eid: %d, "+
+			"uid: %+v, "+
+			"x: %f, "+
+			"y: %f, "+
+			"z: %f, "+
+			"yaw: %f, "+
+			"pitch: %f "+
+			"}",
+		e.eid, e.uid, e.x, e.y, e.z, e.yaw, e.pitch,
+	)
+}
+
 type living struct {
 	*entity
 }
@@ -115,6 +133,13 @@ func newLiving(
 			pitch,
 		),
 	}
+}
+
+func (l *living) String() string {
+	return fmt.Sprintf(
+		"{ entity: %+v }",
+		l.entity,
+	)
 }
 
 type Player struct {
@@ -150,4 +175,11 @@ func NewPlayer(
 
 func (p *Player) GetUsername() string {
 	return p.username
+}
+
+func (p *Player) String() string {
+	return fmt.Sprintf(
+		"{ living: %+v, username: %s }",
+		p.living, p.username,
+	)
 }

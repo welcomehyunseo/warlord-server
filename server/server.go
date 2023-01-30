@@ -97,6 +97,63 @@ func (e *ConfirmKeepAliveEvent) String() string {
 	)
 }
 
+type ChanForAddToPlayerListEvent chan *AddToPlayerListEvent
+
+type AddToPlayerListEvent struct {
+	uid      uuid.UUID
+	username string
+}
+
+func NewAddToPlayerListEvent(
+	uid uuid.UUID,
+	username string,
+) *AddToPlayerListEvent {
+	return &AddToPlayerListEvent{
+		uid:      uid,
+		username: username,
+	}
+}
+
+func (p *AddToPlayerListEvent) GetUUID() uuid.UUID {
+	return p.uid
+}
+
+func (p *AddToPlayerListEvent) GetUsername() string {
+	return p.username
+}
+
+func (p *AddToPlayerListEvent) String() string {
+	return fmt.Sprintf(
+		"{ uid: %+v, username: %s } ",
+		p.uid, p.username,
+	)
+}
+
+type ChanForRemoveToPlayerListEvent chan *RemoveToPlayerListEvent
+
+type RemoveToPlayerListEvent struct {
+	uid uuid.UUID
+}
+
+func NewRemoveToPlayerListEvent(
+	uid uuid.UUID,
+) *RemoveToPlayerListEvent {
+	return &RemoveToPlayerListEvent{
+		uid: uid,
+	}
+}
+
+func (p *RemoveToPlayerListEvent) GetUUID() uuid.UUID {
+	return p.uid
+}
+
+func (p *RemoveToPlayerListEvent) String() string {
+	return fmt.Sprintf(
+		"{ uid: %+v } ",
+		p.uid,
+	)
+}
+
 type Server struct {
 	addr string // address
 
@@ -110,10 +167,15 @@ type Server struct {
 	rndDist int // render distance
 
 	mutex0 *sync.RWMutex
-	m0     map[ChunkPosStr]*Chunk
+	m0     map[ChunkPosStr]*Chunk // by string of chunk position
 
 	mutex1 *sync.RWMutex
-	m1     map[uuid.UUID]*Player
+	m1     map[uuid.UUID]*Player // by player uid
+
+	mutexForAddToPlayerList     *sync.RWMutex
+	eventsForAddToPlayerList    map[uuid.UUID]ChanForAddToPlayerListEvent // by player uid
+	mutexForRemoveToPlayerList  *sync.RWMutex
+	eventsForRemoveToPlayerList map[uuid.UUID]ChanForRemoveToPlayerListEvent // by player uid
 }
 
 func NewServer(
@@ -131,19 +193,25 @@ func NewServer(
 
 	var mutex0 sync.RWMutex
 	var mutex1 sync.RWMutex
+	var mutexForAddToPlayerList sync.RWMutex
+	var mutexForRemoveToPlayerList sync.RWMutex
 
 	return &Server{
-		addr:    addr,
-		max:     max,
-		online:  0,
-		last:    0,
-		favicon: favicon,
-		desc:    desc,
-		rndDist: rndDist,
-		mutex0:  &mutex0,
-		m0:      make(map[ChunkPosStr]*Chunk),
-		mutex1:  &mutex1,
-		m1:      make(map[uuid.UUID]*Player),
+		addr:                        addr,
+		max:                         max,
+		online:                      0,
+		last:                        0,
+		favicon:                     favicon,
+		desc:                        desc,
+		rndDist:                     rndDist,
+		mutex0:                      &mutex0,
+		m0:                          make(map[ChunkPosStr]*Chunk),
+		mutex1:                      &mutex1,
+		m1:                          make(map[uuid.UUID]*Player),
+		mutexForAddToPlayerList:     &mutexForAddToPlayerList,
+		eventsForAddToPlayerList:    make(map[uuid.UUID]ChanForAddToPlayerListEvent),
+		mutexForRemoveToPlayerList:  &mutexForRemoveToPlayerList,
+		eventsForRemoveToPlayerList: make(map[uuid.UUID]ChanForRemoveToPlayerListEvent),
 	}, nil
 }
 
@@ -288,6 +356,229 @@ func (s *Server) initChunks(
 		"It is finished to init chunks.",
 	)
 	return nil
+}
+
+func (s *Server) closeAddToPlayerListEvent(
+	lg *Logger,
+	uid uuid.UUID,
+) {
+	lg.Debug(
+		"It is started to close AddToPlayerListEvent.",
+		NewLgElement("uid", uid),
+	)
+
+	s.mutexForAddToPlayerList.Lock()
+	defer s.mutexForAddToPlayerList.Unlock()
+
+	delete(s.eventsForAddToPlayerList, uid)
+
+	lg.Debug(
+		"It is finished to close AddToPlayerListEvent.",
+	)
+}
+
+func (s *Server) openAddToPlayerListEvent(
+	lg *Logger,
+	player *Player,
+	cnt *Client,
+) error {
+	s.mutexForAddToPlayerList.Lock()
+	defer s.mutexForAddToPlayerList.Unlock()
+
+	lg.Debug(
+		"It is started to open AddToPlayerListEvent.",
+		NewLgElement("player", player),
+	)
+
+	s.addPlayer(player)
+
+	for _, player := range s.m1 {
+		uid := player.GetUid()
+		username := player.GetUsername()
+		if err := cnt.AddToPlayerList(lg, uid, username); err != nil {
+			return err
+		}
+	}
+
+	uid, username := player.GetUid(), player.GetUsername()
+
+	event := NewAddToPlayerListEvent(uid, username)
+	for _, chanForEvent := range s.eventsForAddToPlayerList {
+		chanForEvent <- event
+	}
+
+	s.eventsForAddToPlayerList[uid] = make(ChanForAddToPlayerListEvent, 1)
+
+	lg.Debug(
+		"It is finished to open AddToPlayerListEvent.",
+	)
+
+	return nil
+}
+
+func (s *Server) closeRemoveToPlayerListEvent(
+	lg *Logger,
+	uid uuid.UUID,
+) {
+	s.mutexForRemoveToPlayerList.Lock()
+	defer s.mutexForRemoveToPlayerList.Unlock()
+
+	lg.Debug(
+		"It is started to close RemoveToPlayerListEvent.",
+		NewLgElement("uid", uid),
+	)
+
+	s.mutexForAddToPlayerList.Lock()
+	defer s.mutexForAddToPlayerList.Unlock()
+
+	delete(s.eventsForRemoveToPlayerList, uid)
+
+	lg.Debug(
+		"It is finished to close RemoveToPlayerListEvent.",
+	)
+}
+
+func (s *Server) openRemoveToPlayerListEvent(
+	lg *Logger,
+	player *Player,
+) error {
+	s.mutexForRemoveToPlayerList.Lock()
+	defer s.mutexForRemoveToPlayerList.Unlock()
+
+	lg.Debug(
+		"It is started to open RemoveToPlayerListEvent.",
+		NewLgElement("player", player),
+	)
+
+	uid := player.GetUid()
+	s.eventsForRemoveToPlayerList[uid] = make(ChanForRemoveToPlayerListEvent, 1)
+
+	lg.Debug(
+		"It is finished to open RemoveToPlayerListEvent.",
+	)
+	return nil
+}
+
+func (s *Server) broadcastRemoveToPlayerListEvent(
+	lg *Logger,
+	uid uuid.UUID,
+) {
+	s.mutexForRemoveToPlayerList.Lock()
+	defer s.mutexForRemoveToPlayerList.Unlock()
+
+	lg.Debug(
+		"It is started to broadcast RemoveToPlayerListEvent.",
+		NewLgElement("uid", uid),
+	)
+
+	event := NewRemoveToPlayerListEvent(uid)
+	for _, chanForEvent := range s.eventsForRemoveToPlayerList {
+		chanForEvent <- event
+	}
+
+	lg.Debug(
+		"It is finished to broadcast RemoveToPlayerListEvent.",
+	)
+}
+
+func (s *Server) handleRemovePlayerToPlayerListEvent(
+	chanForEvent ChanForRemoveToPlayerListEvent,
+	cnt *Client,
+	chanForError ChanForError,
+	ctx context.Context,
+) {
+	lg := NewLogger(
+		NewLgElement("handler", "RemoveToPlayerListEvent"),
+		NewLgElement("client", cnt),
+	)
+	lg.Debug(
+		"The handler for RemoveToPlayerListEvent was started.",
+	)
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event := <-chanForEvent:
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			uid := event.GetUUID()
+			if err := cnt.RemoveToPlayerList(lg, uid); err != nil {
+				panic(err)
+			}
+
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		case <-ctx.Done():
+			stop = true
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("The handler for RemoveToPlayerListEvent was ended")
+}
+
+func (s *Server) handleAddPlayerToPlayerListEvent(
+	chanForEvent ChanForAddToPlayerListEvent,
+	cnt *Client,
+	chanForError ChanForError,
+	ctx context.Context,
+) {
+	lg := NewLogger(
+		NewLgElement("handler", "AddToPlayerListEvent"),
+		NewLgElement("client", cnt),
+	)
+	lg.Debug(
+		"The handler for AddToPlayerListEvent was started.",
+	)
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event := <-chanForEvent:
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			uid, username := event.GetUUID(), event.GetUsername()
+			if err := cnt.AddToPlayerList(lg, uid, username); err != nil {
+				panic(err)
+			}
+
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		case <-ctx.Done():
+			stop = true
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("The handler for AddToPlayerListEvent was ended")
 }
 
 func (s *Server) handleConfirmKeepAliveEvent(
@@ -523,20 +814,34 @@ func (s *Server) handleConnection(
 	uid := player.GetUid()
 	username := player.GetUsername()
 
-	s.addPlayer(player)
-	defer func() {
-		s.removePlayer(uid)
-	}()
-	if err := cnt.AddPlayerToPlayerList(lg, player); err != nil {
-		panic(err)
-	}
-
 	lg.Info(
 		"The player successfully logged in.",
 		NewLgElement("eid", eid),
 		NewLgElement("uid", uid),
 		NewLgElement("username", username),
 	)
+
+	if err := s.openAddToPlayerListEvent(
+		lg,
+		player,
+		cnt,
+	); err != nil {
+		panic(err)
+	}
+	defer func() {
+		s.removePlayer(uid)
+		s.closeAddToPlayerListEvent(lg, uid)
+	}()
+	if err := s.openRemoveToPlayerListEvent(
+		lg,
+		player,
+	); err != nil {
+		panic(err)
+	}
+	defer func() {
+		s.closeRemoveToPlayerListEvent(lg, uid)
+		s.broadcastRemoveToPlayerListEvent(lg, uid)
+	}()
 
 	dist := s.rndDist
 
@@ -566,6 +871,8 @@ func (s *Server) handleConnection(
 
 	chanForUpdatePlayerPosEvent := make(ChanForUpdatePlayerPosEvent, 1)
 	chanForConfirmKeepAliveEvent := make(ChanForConfirmKeepAliveEvent, 1)
+	chanForAddPlayerToPlayerListEvent := s.eventsForAddToPlayerList[uid]
+	chanForRemovePlayerToPlayerListEvent := s.eventsForRemoveToPlayerList[uid]
 
 	go s.handleUpdatePlayerPosEvent(
 		chanForUpdatePlayerPosEvent,
@@ -577,6 +884,20 @@ func (s *Server) handleConnection(
 
 	go s.handleConfirmKeepAliveEvent(
 		chanForConfirmKeepAliveEvent,
+		cnt,
+		chanForError,
+		ctx,
+	)
+
+	go s.handleAddPlayerToPlayerListEvent(
+		chanForAddPlayerToPlayerListEvent,
+		cnt,
+		chanForError,
+		ctx,
+	)
+
+	go s.handleRemovePlayerToPlayerListEvent(
+		chanForRemovePlayerToPlayerListEvent,
 		cnt,
 		chanForError,
 		ctx,
