@@ -787,16 +787,15 @@ func (cnt *Client) UnloadChunk(
 	return nil
 }
 
-func (cnt *Client) AddPlayerToPlayerList(
+func (cnt *Client) AddToPlayerList(
 	lg *Logger,
-	player *Player,
+	uid uuid.UUID,
+	username string,
 ) error {
 	lg.Debug(
-		"It is started to add player to player list.",
+		"It is started to add to player list.",
 	)
 
-	uid := player.GetUid()
-	username := player.GetUsername()
 	textureString, signature, err := UUIDToTextureString(uid)
 	if err != nil {
 		return err
@@ -804,7 +803,7 @@ func (cnt *Client) AddPlayerToPlayerList(
 	gamemode := int32(0)
 	ping := int32(1000)
 	displayName := username
-	packet := NewSendPlayerListToAddPlayerPacket(
+	packet := NewSendPlayerListToAddPacket(
 		uid,
 		username,
 		textureString,
@@ -818,7 +817,29 @@ func (cnt *Client) AddPlayerToPlayerList(
 	}
 
 	lg.Debug(
-		"It is finished to add player to player list.",
+		"It is finished to add to player list.",
+	)
+
+	return nil
+}
+
+func (cnt *Client) RemoveToPlayerList(
+	lg *Logger,
+	uid uuid.UUID,
+) error {
+	lg.Debug(
+		"It is started to remove to player list.",
+	)
+
+	packet := NewSendPlayerListToRemovePacket(
+		uid,
+	)
+	if err := cnt.writeWithComp(lg, packet); err != nil {
+		return err
+	}
+
+	lg.Debug(
+		"It is finished to remove to player list.",
 	)
 
 	return nil

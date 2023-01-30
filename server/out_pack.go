@@ -18,11 +18,11 @@ const CheckKeepAlivePacketID = 0x1F
 const SendChunkDataPacketID = 0x20
 const JoinGamePacketID = 0x23
 const SetPlayerAbilitiesPacketID = 0x2C
-const SendPlayerListToAddPlayerPacketID = 0x2E
+const SendPlayerListToAddPacketID = 0x2E
 const SendPlayerListToUpdateGamemodePacketID = 0x2E
 const SendPlayerListToUpdateLatencyPacketID = 0x2E
 const SendPlayerListToUpdateDisplayNamePacketID = 0x2E
-const SendPlayerListToRemovePlayerPacketID = 0x2E
+const SendPlayerListToRemovePacketID = 0x2E
 const SetPlayerPosAndLookPacketID = 0x2F
 const SetSpawnPosPacketID = 0x46
 
@@ -479,7 +479,7 @@ func (p *SetPlayerAbilitiesPacket) GetFovModifier() float32 {
 	return p.fovModifier
 }
 
-type SendPlayerListToAddPlayerPacket struct {
+type SendPlayerListToAddPacket struct {
 	*packet
 	uid           uuid.UUID
 	username      string
@@ -490,7 +490,7 @@ type SendPlayerListToAddPlayerPacket struct {
 	displayName   string
 }
 
-func NewSendPlayerListToAddPlayerPacket(
+func NewSendPlayerListToAddPacket(
 	uid uuid.UUID,
 	username string,
 	textureString string,
@@ -498,12 +498,12 @@ func NewSendPlayerListToAddPlayerPacket(
 	gamemode int32,
 	ping int32,
 	displayName string,
-) *SendPlayerListToAddPlayerPacket {
-	return &SendPlayerListToAddPlayerPacket{
+) *SendPlayerListToAddPacket {
+	return &SendPlayerListToAddPacket{
 		packet: newPacket(
 			Outbound,
 			PlayState,
-			SendPlayerListToAddPlayerPacketID,
+			SendPlayerListToAddPacketID,
 		),
 		uid:           uid,
 		username:      username,
@@ -515,7 +515,7 @@ func NewSendPlayerListToAddPlayerPacket(
 	}
 }
 
-func (p *SendPlayerListToAddPlayerPacket) Pack() *Data {
+func (p *SendPlayerListToAddPacket) Pack() *Data {
 	data := NewData()
 	data.WriteVarInt(0)
 	data.WriteVarInt(1)
@@ -535,35 +535,35 @@ func (p *SendPlayerListToAddPlayerPacket) Pack() *Data {
 	return data
 }
 
-func (p *SendPlayerListToAddPlayerPacket) GetUid() uuid.UUID {
+func (p *SendPlayerListToAddPacket) GetUid() uuid.UUID {
 	return p.uid
 }
 
-func (p *SendPlayerListToAddPlayerPacket) GetUsername() string {
+func (p *SendPlayerListToAddPacket) GetUsername() string {
 	return p.username
 }
 
-func (p *SendPlayerListToAddPlayerPacket) GetTextureString() string {
+func (p *SendPlayerListToAddPacket) GetTextureString() string {
 	return p.textureString
 }
 
-func (p *SendPlayerListToAddPlayerPacket) GetSignature() string {
+func (p *SendPlayerListToAddPacket) GetSignature() string {
 	return p.signature
 }
 
-func (p *SendPlayerListToAddPlayerPacket) GetGamemode() int32 {
+func (p *SendPlayerListToAddPacket) GetGamemode() int32 {
 	return p.gamemode
 }
 
-func (p *SendPlayerListToAddPlayerPacket) GetPing() int32 {
+func (p *SendPlayerListToAddPacket) GetPing() int32 {
 	return p.ping
 }
 
-func (p *SendPlayerListToAddPlayerPacket) GetDisplayName() string {
+func (p *SendPlayerListToAddPacket) GetDisplayName() string {
 	return p.displayName
 }
 
-func (p *SendPlayerListToAddPlayerPacket) String() string {
+func (p *SendPlayerListToAddPacket) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"uid: %s, "+
@@ -581,6 +581,45 @@ func (p *SendPlayerListToAddPlayerPacket) String() string {
 		p.gamemode,
 		p.ping,
 		p.displayName,
+	)
+}
+
+type SendPlayerListToRemovePacket struct {
+	*packet
+	uid uuid.UUID
+}
+
+func NewSendPlayerListToRemovePacket(
+	uid uuid.UUID,
+) *SendPlayerListToRemovePacket {
+	return &SendPlayerListToRemovePacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			SendPlayerListToRemovePacketID,
+		),
+		uid: uid,
+	}
+}
+
+func (p *SendPlayerListToRemovePacket) Pack() *Data {
+	data := NewData()
+	data.WriteVarInt(4)
+	data.WriteVarInt(1)
+
+	data.WriteUUID(p.uid)
+
+	return data
+}
+
+func (p *SendPlayerListToRemovePacket) GetUUID() uuid.UUID {
+	return p.uid
+}
+
+func (p *SendPlayerListToRemovePacket) String() string {
+	return fmt.Sprintf(
+		"{ uid: %s }",
+		p.uid,
 	)
 }
 
