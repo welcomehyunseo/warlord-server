@@ -1,5 +1,7 @@
 package server
 
+import "fmt"
+
 const HandshakePacketID = 0x00
 
 const RequestPacketID = 0x00
@@ -10,6 +12,7 @@ const StartLoginPacketID = 0x00
 const ConfirmTeleportPacketID = 0x00
 const TakeActionPacketID = 0x03
 const ChangeClientSettingsPacketID = 0x04
+const ConfirmKeepAlivePacketID = 0x0B
 const ChangePlayerPosPacketID = 0x0D
 const ChangePlayerPosAndLookPacketID = 0x0E
 
@@ -307,6 +310,36 @@ func (p *ChangeClientSettingsPacket) getHat() bool {
 
 func (p *ChangeClientSettingsPacket) getMainHand() int32 {
 	return p.mainHand
+}
+
+type ConfirmKeepAlivePacket struct {
+	*packet
+	payload int64
+}
+
+func NewConfirmKeepAlivePacket() *ConfirmKeepAlivePacket {
+	return &ConfirmKeepAlivePacket{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			ConfirmKeepAlivePacketID,
+		),
+	}
+}
+
+func (p *ConfirmKeepAlivePacket) Unpack(data *Data) {
+	p.payload = data.ReadInt64()
+}
+
+func (p *ConfirmKeepAlivePacket) GetPayload() int64 {
+	return p.payload
+}
+
+func (p *ConfirmKeepAlivePacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, payload: %d }",
+		p.packet, p.payload,
+	)
 }
 
 type ChangePlayerPosPacket struct {

@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
+	"math/rand"
 	"net"
 	"sort"
 	"time"
@@ -18,16 +20,22 @@ const (
 
 	MinRndDist = 2  // minimum render distance
 	MaxRndDist = 32 // maximum render distance
+
+	CheckKeepAliveTime = time.Second * 10
 )
 
 func findRect(
 	cx, cz int, // player pos
-	d int, // positive
+	d int,      // positive
 ) (int, int, int, int) {
 	return cx + d, cz + d, cx - d, cz - d
 }
 
+var DifferentKeepAlivePayloadError = errors.New("the payload of keep-alive must be same as the given")
 var OutOfRndDistRangeError = errors.New("it is out of maximum and minimum value of render distance")
+
+type ChanForError chan any
+type ChanForUpdatePlayerPosEvent chan *UpdatePlayerPosEvent
 
 type UpdatePlayerPosEvent struct {
 	x float64
@@ -55,6 +63,37 @@ func (e *UpdatePlayerPosEvent) GetY() float64 {
 
 func (e *UpdatePlayerPosEvent) GetZ() float64 {
 	return e.z
+}
+
+func (e *UpdatePlayerPosEvent) String() string {
+	return fmt.Sprintf(
+		"{ x: %f, y: %f, z: %f }",
+		e.x, e.y, e.z,
+	)
+}
+
+type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
+
+type ConfirmKeepAliveEvent struct {
+	payload int64
+}
+
+func NewConfirmKeepAliveEvent(
+	payload int64,
+) *ConfirmKeepAliveEvent {
+	return &ConfirmKeepAliveEvent{
+		payload: payload,
+	}
+}
+
+func (e *ConfirmKeepAliveEvent) GetPayload() int64 {
+	return e.payload
+}
+
+func (e *ConfirmKeepAliveEvent) String() string {
+	return fmt.Sprintf(
+		"{ payload: %d }", e.payload,
+	)
 }
 
 type Server struct {
@@ -242,11 +281,77 @@ func (s *Server) initChunks(
 	return nil
 }
 
+func (s *Server) handleConfirmKeepAliveEvent(
+	chanForEvent ChanForConfirmKeepAliveEvent,
+	cnt *Client,
+	chanForError ChanForError,
+	ctx context.Context,
+) {
+	lg := NewLogger(
+		NewLgElement("handler", "ConfirmKeepAliveEvent"),
+		NewLgElement("client", cnt),
+	)
+	lg.Debug(
+		"The handler for ConfirmKeepAliveEvent was started.",
+	)
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	flag := false
+	var payload0 int64
+
+	// TODO: update ping
+
+	stop := false
+	for {
+		select {
+		case <-time.After(CheckKeepAliveTime):
+			if flag == true {
+				break
+			}
+			payload0 = rand.Int63()
+			if err := cnt.CheckKeepAlive(lg, payload0); err != nil {
+				panic(err)
+			}
+			flag = true
+		case event := <-chanForEvent:
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			payload1 := event.GetPayload()
+
+			if payload1 != payload0 {
+				panic(DifferentKeepAlivePayloadError)
+			}
+
+			flag = false
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		case <-ctx.Done():
+			stop = true
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("The handler for ConfirmKeepAliveEvent was ended")
+}
+
 func (s *Server) handleUpdatePlayerPosEvent(
-	chanForEvent chan *UpdatePlayerPosEvent,
+	chanForEvent ChanForUpdatePlayerPosEvent,
 	cnt *Client,
 	player *Player,
-	chanForErrors chan any,
+	chanForError ChanForError,
 	ctx context.Context,
 ) {
 	lg := NewLogger(
@@ -258,21 +363,21 @@ func (s *Server) handleUpdatePlayerPosEvent(
 	)
 
 	defer func() {
-		lg.Debug("The handler for UpdatePlayerPosEvent was ended")
-
 		if err := recover(); err != nil {
 			lg.Error(err)
-			chanForErrors <- err
+			chanForError <- err
 		}
 	}()
 
 	dist := s.rndDist
 
+	stop := false
 	for {
 		select {
 		case event := <-chanForEvent:
 			lg.Debug(
 				"The event was received by the channel.",
+				NewLgElement("event", event),
 			)
 			x := event.GetX()
 			y := event.GetY()
@@ -303,12 +408,15 @@ func (s *Server) handleUpdatePlayerPosEvent(
 				"It is finished to process the event.",
 			)
 		case <-ctx.Done():
-			lg.Debug(
-				"CanCelFunc was called by the context.",
-			)
-			return
+			stop = true
+		}
+
+		if stop == true {
+			break
 		}
 	}
+
+	lg.Debug("The handler for UpdatePlayerPosEvent was ended")
 }
 
 func (s *Server) handleConnection(
@@ -323,8 +431,6 @@ func (s *Server) handleConnection(
 	lg.Debug("The handler for connection was started.")
 
 	defer func() {
-		lg.Debug("The handler for connection was finished.")
-
 		// TODO: send the Disconnect packet to the connection
 
 		if err := recover(); err != nil {
@@ -439,24 +545,34 @@ func (s *Server) handleConnection(
 		cancel()
 	}()
 
-	chanForErrors := make(chan any, 1)
+	chanForError := make(ChanForError, 1)
 
-	chanForUpdatePlayerPosEvent := make(chan *UpdatePlayerPosEvent, 1)
+	chanForUpdatePlayerPosEvent := make(ChanForUpdatePlayerPosEvent, 1)
+	chanForConfirmKeepAliveEvent := make(ChanForConfirmKeepAliveEvent, 1)
 
 	go s.handleUpdatePlayerPosEvent(
 		chanForUpdatePlayerPosEvent,
 		cnt,
 		player,
-		chanForErrors,
+		chanForError,
 		ctx,
 	)
 
+	go s.handleConfirmKeepAliveEvent(
+		chanForConfirmKeepAliveEvent,
+		cnt,
+		chanForError,
+		ctx,
+	)
+
+	stop := false
 	for {
 		select {
 		case <-time.After(1):
 			finish, err := cnt.Loop3(
 				lg,
 				chanForUpdatePlayerPosEvent,
+				chanForConfirmKeepAliveEvent,
 				state,
 			)
 			if err != nil {
@@ -465,10 +581,16 @@ func (s *Server) handleConnection(
 			if finish == false {
 				continue
 			}
-		case <-chanForErrors:
-			return
+		case <-chanForError:
+			stop = true
+		}
+
+		if stop == true {
+			break
 		}
 	}
+
+	lg.Debug("The handler for connection was finished.")
 }
 
 func (s *Server) Render() {

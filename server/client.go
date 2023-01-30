@@ -521,7 +521,8 @@ func (cnt *Client) Loop2(
 
 func (cnt *Client) Loop3(
 	lg *Logger,
-	chanForUpdatePlayerPosEvent chan *UpdatePlayerPosEvent,
+	chanForUpdatePlayerPosEvent ChanForUpdatePlayerPosEvent,
+	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 	state State,
 ) (
 	bool, // finish
@@ -540,6 +541,17 @@ func (cnt *Client) Loop3(
 	}
 
 	switch pid {
+	case ConfirmKeepAlivePacketID:
+		packet := NewConfirmKeepAlivePacket()
+		packet.Unpack(data)
+		lg.Debug(
+			"ConfirmKeepAlivePacket was created.",
+			NewLgElement("packet", packet),
+		)
+		payload := packet.GetPayload()
+		chanForConfirmKeepAliveEvent <-
+			NewConfirmKeepAliveEvent(payload)
+		break
 	case ChangePlayerPosPacketID:
 		packet := NewChangePlayerPosPacket()
 		packet.Unpack(data)
@@ -704,6 +716,24 @@ func (cnt *Client) Init(
 	return nil
 }
 
+func (cnt *Client) CheckKeepAlive(
+	lg *Logger,
+	payload int64,
+) error {
+	lg.Debug(
+		"It is started to check keep-alive of player.",
+		NewLgElement("payload", payload),
+	)
+
+	packet := NewCheckKeepAlivePacket(payload)
+	if err := cnt.writeWithComp(lg, packet); err != nil {
+		return err
+	}
+
+	lg.Debug("It is finished to check keep-alive of player.")
+	return nil
+}
+
 func (cnt *Client) LoadChunk(
 	lg *Logger,
 	overworld, init bool,
@@ -733,8 +763,8 @@ func (cnt *Client) LoadChunk(
 	if err := cnt.writeWithComp(lg, packet); err != nil {
 		return err
 	}
-	lg.Debug("It is finished to load chunk.")
 
+	lg.Debug("It is finished to load chunk.")
 	return nil
 }
 

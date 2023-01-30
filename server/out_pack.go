@@ -14,6 +14,7 @@ const CompleteLoginPacketID = 0x02
 const EnableCompressionPacketID = 0x03
 
 const UnloadChunkPacketID = 0x1D
+const CheckKeepAlivePacketID = 0x1F
 const SendChunkDataPacketID = 0x20
 const JoinGamePacketID = 0x23
 const SetPlayerAbilitiesPacketID = 0x2C
@@ -214,6 +215,42 @@ func (p *UnloadChunkPacket) GetCx() int32 {
 
 func (p *UnloadChunkPacket) GetCz() int32 {
 	return p.cz
+}
+
+type CheckKeepAlivePacket struct {
+	*packet
+	payload int64
+}
+
+func NewCheckKeepAlivePacket(
+	payload int64,
+) *CheckKeepAlivePacket {
+	return &CheckKeepAlivePacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			CheckKeepAlivePacketID,
+		),
+		payload: payload,
+	}
+}
+
+func (p *CheckKeepAlivePacket) Pack() *Data {
+	data := NewData()
+	data.WriteInt64(p.payload)
+
+	return data
+}
+
+func (p *CheckKeepAlivePacket) GetPayload() int64 {
+	return p.payload
+}
+
+func (p *CheckKeepAlivePacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, payload: %d }",
+		p.packet, p.payload,
+	)
 }
 
 type SendChunkDataPacket struct {
