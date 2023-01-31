@@ -19,6 +19,7 @@ const JoinGamePacketID = 0x23
 const SetAbilitiesPacketID = 0x2C
 const AddPlayerPacketID = 0x2E
 const RemovePlayerPacketID = 0x2E
+const UpdateLatencyPacketID = 0x2E
 const TeleportPacketID = 0x2F
 const SetSpawnPosPacketID = 0x46
 
@@ -547,7 +548,7 @@ type AddPlayerPacket struct {
 	texture     string
 	signature   string
 	gamemode    int32
-	ping        int32
+	latency     int32
 	displayName string
 }
 
@@ -557,7 +558,7 @@ func NewAddPlayerPacket(
 	texture string,
 	signature string,
 	gamemode int32,
-	ping int32,
+	latency int32,
 	displayName string,
 ) *AddPlayerPacket {
 	return &AddPlayerPacket{
@@ -571,7 +572,7 @@ func NewAddPlayerPacket(
 		texture:     texture,
 		signature:   signature,
 		gamemode:    gamemode,
-		ping:        ping,
+		latency:     latency,
 		displayName: displayName,
 	}
 }
@@ -589,7 +590,7 @@ func (p *AddPlayerPacket) Pack() *Data {
 	data.WriteBool(true)
 	data.WriteString(p.signature)
 	data.WriteVarInt(p.gamemode)
-	data.WriteVarInt(p.ping)
+	data.WriteVarInt(p.latency)
 	data.WriteBool(false)
 	//data.WriteString(p.displayName)  // TODO
 
@@ -616,8 +617,8 @@ func (p *AddPlayerPacket) GetGamemode() int32 {
 	return p.gamemode
 }
 
-func (p *AddPlayerPacket) GetPing() int32 {
-	return p.ping
+func (p *AddPlayerPacket) GetLatency() int32 {
+	return p.latency
 }
 
 func (p *AddPlayerPacket) GetDisplayName() string {
@@ -633,7 +634,7 @@ func (p *AddPlayerPacket) String() string {
 			"texture: %s, "+
 			"signature: %s, "+
 			"gamemode: %d, "+
-			"ping: %d, "+
+			"latency: %d, "+
 			"displayName: %s "+
 			"}",
 		p.packet,
@@ -642,7 +643,7 @@ func (p *AddPlayerPacket) String() string {
 		p.texture,
 		p.signature,
 		p.gamemode,
-		p.ping,
+		p.latency,
 		p.displayName,
 	)
 }
@@ -683,6 +684,53 @@ func (p *RemovePlayerPacket) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, uid: %s }",
 		p.packet, p.uid,
+	)
+}
+
+type UpdateLatencyPacket struct {
+	*packet
+	uid     uuid.UUID
+	latency int32
+}
+
+func NewUpdateLatencyPacket(
+	uid uuid.UUID,
+	latency int32,
+) *UpdateLatencyPacket {
+	return &UpdateLatencyPacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			UpdateLatencyPacketID,
+		),
+		uid:     uid,
+		latency: latency,
+	}
+}
+
+func (p *UpdateLatencyPacket) Pack() *Data {
+	data := NewData()
+	data.WriteVarInt(2)
+	data.WriteVarInt(1)
+
+	data.WriteUUID(p.uid)
+	data.WriteVarInt(p.latency)
+
+	return data
+}
+
+func (p *UpdateLatencyPacket) GetUUID() uuid.UUID {
+	return p.uid
+}
+
+func (p *UpdateLatencyPacket) GetLatency() int32 {
+	return p.latency
+}
+
+func (p *UpdateLatencyPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, uid: %s, latency: %d }",
+		p.packet, p.uid, p.latency,
 	)
 }
 

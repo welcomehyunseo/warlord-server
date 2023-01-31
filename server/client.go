@@ -826,6 +826,30 @@ func (cnt *Client) RemovePlayer(
 	return nil
 }
 
+func (cnt *Client) UpdateLatency(
+	lg *Logger,
+	uid uuid.UUID,
+	latency int32,
+) error {
+	lg.Debug(
+		"It is started to update latency",
+	)
+
+	packet := NewUpdateLatencyPacket(
+		uid,
+		latency,
+	)
+	if err := cnt.writeWithComp(lg, packet); err != nil {
+		return err
+	}
+
+	lg.Debug(
+		"It is finished to update latency",
+	)
+
+	return nil
+}
+
 func (cnt *Client) Close(
 	lg *Logger,
 ) {
