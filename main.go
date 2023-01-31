@@ -37,8 +37,8 @@ func main() {
 				}
 			}
 
-			chunk.SetChunkPart(0, part)
-			//s.AddChunk(cx, cz, chunk)
+			chunk.SetChunkPart(4, part)
+			s.AddChunk(cx, cz, chunk)
 		}
 	}
 

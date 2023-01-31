@@ -988,7 +988,7 @@ func (s *Server) loadChunk(
 	return chunk
 }
 
-func (s *Server) addChunk(
+func (s *Server) AddChunk(
 	cx, cz int,
 	chunk *Chunk,
 ) {

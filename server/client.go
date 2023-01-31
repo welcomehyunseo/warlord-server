@@ -631,12 +631,12 @@ func (cnt *Client) Init(
 
 	if err := func() error {
 		packet := NewSetAbilitiesPacket(
-			true,
-			true,
-			true,
-			true,
-			0.1,
-			0.2,
+			false,
+			false,
+			false,
+			false,
+			0,
+			0,
 		)
 		lg.Debug(
 			"SetAbilitiesPacket was created.",

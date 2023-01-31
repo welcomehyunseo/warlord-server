@@ -448,14 +448,14 @@ type SetAbilitiesPacket struct {
 	*packet
 	invulnerable bool
 	flying       bool
-	allowFlying  bool
+	canFly       bool
 	instantBreak bool
 	flyingSpeed  float32
 	fovModifier  float32
 }
 
 func NewSetAbilitiesPacket(
-	invulnerable, flying, allowFlying, instantBreak bool,
+	invulnerable, flying, canFly, instantBreak bool,
 	flyingSpeed float32,
 	fovModifier float32,
 ) *SetAbilitiesPacket {
@@ -467,7 +467,7 @@ func NewSetAbilitiesPacket(
 		),
 		invulnerable: invulnerable,
 		flying:       flying,
-		allowFlying:  allowFlying,
+		canFly:       canFly,
 		instantBreak: instantBreak,
 		flyingSpeed:  flyingSpeed,
 		fovModifier:  fovModifier,
@@ -483,7 +483,7 @@ func (p *SetAbilitiesPacket) Pack() *Data {
 	if p.flying == true {
 		bitmask |= uint8(2)
 	}
-	if p.allowFlying == true {
+	if p.canFly == true {
 		bitmask |= uint8(4)
 	}
 	if p.instantBreak == true {
@@ -504,8 +504,8 @@ func (p *SetAbilitiesPacket) GetFlying() bool {
 	return p.flying
 }
 
-func (p *SetAbilitiesPacket) GetAllowFlying() bool {
-	return p.allowFlying
+func (p *SetAbilitiesPacket) GetCanFly() bool {
+	return p.canFly
 }
 
 func (p *SetAbilitiesPacket) GetInstantBreak() bool {
@@ -526,7 +526,7 @@ func (p *SetAbilitiesPacket) String() string {
 			"packet: %+v, "+
 			"invulnerable: %v, "+
 			"flying: %v, "+
-			"allowFlying: %v, "+
+			"canFly: %v, "+
 			"instantBreak: %v, "+
 			"flyingSpeed: %f, "+
 			"fovModifier: %f "+
@@ -534,7 +534,7 @@ func (p *SetAbilitiesPacket) String() string {
 		p.packet,
 		p.invulnerable,
 		p.flying,
-		p.allowFlying,
+		p.canFly,
 		p.instantBreak,
 		p.flyingSpeed,
 		p.fovModifier,
