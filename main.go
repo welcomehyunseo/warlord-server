@@ -7,9 +7,12 @@ import (
 func main() {
 	addr := ":9999"
 	max := 20
-	favicon := ""
-	desc := "Warlord Server for Dev"
+	favicon, desc := "", "Warlord Server for Dev"
 	rndDist := 4
+	spawnX, spawnY, spawnZ :=
+		float64(0), float64(70), float64(0)
+	spawnYaw, spawnPitch :=
+		float32(0), float32(0)
 
 	s, err := server.NewServer(
 		addr,
@@ -17,6 +20,8 @@ func main() {
 		favicon,
 		desc,
 		rndDist,
+		spawnX, spawnY, spawnZ,
+		spawnYaw, spawnPitch,
 	)
 	if err != nil {
 		panic(err)
