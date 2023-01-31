@@ -9,12 +9,12 @@ const PingPacketID = 0x01
 
 const StartLoginPacketID = 0x00
 
-const ConfirmTeleportPacketID = 0x00
-const TakeActionPacketID = 0x03
-const ChangeClientSettingsPacketID = 0x04
+const FinishTeleportPacketID = 0x00
+const DemandPacketID = 0x03
+const ChangeSettingsPacketID = 0x04
 const ConfirmKeepAlivePacketID = 0x0B
-const ChangePlayerPosPacketID = 0x0D
-const ChangePlayerPosAndLookPacketID = 0x0E
+const ChangePosPacketID = 0x0D
+const ChangePosAndLookPacketID = 0x0E
 
 type InPacket interface {
 	*Packet
@@ -24,10 +24,10 @@ type InPacket interface {
 
 type HandshakePacket struct {
 	*packet
-	protocolVersion int32
-	serverAddress   string
-	serverPort      uint16
-	nextState       int32
+	version int32  // protocol version
+	addr    string // server address
+	port    uint16 // server port
+	next    int32  // next state
 }
 
 func NewHandshakePacket() *HandshakePacket {
@@ -43,26 +43,39 @@ func NewHandshakePacket() *HandshakePacket {
 func (p *HandshakePacket) Unpack(
 	data *Data,
 ) {
-	p.protocolVersion = data.ReadVarInt()
-	p.serverAddress = data.ReadString()
-	p.serverPort = data.ReadUint16()
-	p.nextState = data.ReadVarInt()
+	p.version = data.ReadVarInt()
+	p.addr = data.ReadString()
+	p.port = data.ReadUint16()
+	p.next = data.ReadVarInt()
 }
 
-func (p *HandshakePacket) GetProtocolVersion() int32 {
-	return p.protocolVersion
+func (p *HandshakePacket) GetVersion() int32 {
+	return p.version
 }
 
-func (p *HandshakePacket) GetServerAddress() string {
-	return p.serverAddress
+func (p *HandshakePacket) GetAddr() string {
+	return p.addr
 }
 
-func (p *HandshakePacket) GetServerPort() uint16 {
-	return p.serverPort
+func (p *HandshakePacket) GetPort() uint16 {
+	return p.port
 }
 
-func (p *HandshakePacket) GetNextState() int32 {
-	return p.nextState
+func (p *HandshakePacket) GetNext() int32 {
+	return p.next
+}
+
+func (p *HandshakePacket) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"version: %d, "+
+			"addr: %s, "+
+			"port: %d, "+
+			"next: %d "+
+			"} ",
+		p.packet, p.version, p.addr, p.port, p.next,
+	)
 }
 
 type RequestPacket struct {
@@ -82,6 +95,13 @@ func NewRequestPacket() *RequestPacket {
 func (p *RequestPacket) Unpack(
 	data *Data,
 ) {
+}
+
+func (p *RequestPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v }",
+		p.packet,
+	)
 }
 
 type PingPacket struct {
@@ -109,6 +129,13 @@ func (p *PingPacket) GetPayload() int64 {
 	return p.payload
 }
 
+func (p *PingPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, payload: %d }",
+		p.packet, p.payload,
+	)
+}
+
 type StartLoginPacket struct {
 	*packet
 	username string
@@ -134,46 +161,60 @@ func (p *StartLoginPacket) GetUsername() string {
 	return p.username
 }
 
-type ConfirmTeleportPacket struct {
+func (p *StartLoginPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, username: %s }",
+		p.packet, p.username,
+	)
+}
+
+type FinishTeleportPacket struct {
 	*packet
 	payload int32
 }
 
-func NewConfirmTeleportPacket() *ConfirmTeleportPacket {
-	return &ConfirmTeleportPacket{
+func NewFinishTeleportPacket() *FinishTeleportPacket {
+	return &FinishTeleportPacket{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			ConfirmTeleportPacketID,
+			FinishTeleportPacketID,
 		),
 	}
 }
 
-func (p *ConfirmTeleportPacket) Unpack(data *Data) {
+func (p *FinishTeleportPacket) Unpack(data *Data) {
 	p.payload = data.ReadVarInt()
 }
 
-func (p *ConfirmTeleportPacket) GetPayload() int32 {
+func (p *FinishTeleportPacket) GetPayload() int32 {
 	return p.payload
 }
 
-type TakeActionPacket struct {
-	*packet
-	respawn bool
-	stats   bool
+func (p *FinishTeleportPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, payload: %d }",
+		p.packet, p.payload,
+	)
 }
 
-func NewTakeActionPacket() *TakeActionPacket {
-	return &TakeActionPacket{
+type DemandPacket struct {
+	*packet
+	respawn bool // when the client is ready to complete login and respawn after death
+	stats   bool // when the client opens the statistics menu
+}
+
+func NewDemandPacket() *DemandPacket {
+	return &DemandPacket{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			TakeActionPacketID,
+			DemandPacketID,
 		),
 	}
 }
 
-func (p *TakeActionPacket) Unpack(data *Data) {
+func (p *DemandPacket) Unpack(data *Data) {
 	action := data.ReadVarInt()
 	if action == 0 {
 		p.respawn = true
@@ -184,18 +225,25 @@ func (p *TakeActionPacket) Unpack(data *Data) {
 	}
 }
 
-func (p *TakeActionPacket) GetRespawn() bool {
+func (p *DemandPacket) GetRespawn() bool {
 	return p.respawn
 }
 
-func (p *TakeActionPacket) GetStats() bool {
+func (p *DemandPacket) GetStats() bool {
 	return p.stats
 }
 
-type ChangeClientSettingsPacket struct {
+func (p *DemandPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, respawn: %v, stats: %v }",
+		p.packet, p.respawn, p.stats,
+	)
+}
+
+type ChangeSettingsPacket struct {
 	*packet
 	local       string
-	viewDist    int8
+	rndDist     int8
 	chatMode    int32
 	chatColors  bool
 	cape        bool
@@ -208,21 +256,21 @@ type ChangeClientSettingsPacket struct {
 	mainHand    int32
 }
 
-func NewChangeClientSettingsPacket() *ChangeClientSettingsPacket {
-	return &ChangeClientSettingsPacket{
+func NewChangeSettingsPacket() *ChangeSettingsPacket {
+	return &ChangeSettingsPacket{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			ChangeClientSettingsPacketID,
+			ChangeSettingsPacketID,
 		),
 	}
 }
 
-func (p *ChangeClientSettingsPacket) Unpack(
+func (p *ChangeSettingsPacket) Unpack(
 	data *Data,
 ) {
 	p.local = data.ReadString()
-	p.viewDist = data.ReadInt8()
+	p.rndDist = data.ReadInt8()
 	p.chatMode = data.ReadVarInt()
 	p.chatColors = data.ReadBool()
 	bitmask := data.ReadUint8()
@@ -264,52 +312,79 @@ func (p *ChangeClientSettingsPacket) Unpack(
 	p.mainHand = data.ReadVarInt()
 }
 
-func (p *ChangeClientSettingsPacket) getLocal() string {
+func (p *ChangeSettingsPacket) GetLocal() string {
 	return p.local
 }
 
-func (p *ChangeClientSettingsPacket) getViewDist() int8 {
-	return p.viewDist
+func (p *ChangeSettingsPacket) GetRndDist() int8 {
+	return p.rndDist
 }
 
-func (p *ChangeClientSettingsPacket) getChatMode() int32 {
+func (p *ChangeSettingsPacket) GetChatMode() int32 {
 	return p.chatMode
 }
 
-func (p *ChangeClientSettingsPacket) getChatColors() bool {
+func (p *ChangeSettingsPacket) GetChatColors() bool {
 	return p.chatColors
 }
 
-func (p *ChangeClientSettingsPacket) getCape() bool {
+func (p *ChangeSettingsPacket) GetCape() bool {
 	return p.cape
 }
 
-func (p *ChangeClientSettingsPacket) getJacket() bool {
+func (p *ChangeSettingsPacket) GetJacket() bool {
 	return p.jacket
 }
 
-func (p *ChangeClientSettingsPacket) getLeftSleeve() bool {
+func (p *ChangeSettingsPacket) GetLeftSleeve() bool {
 	return p.leftSleeve
 }
 
-func (p *ChangeClientSettingsPacket) getRightSleeve() bool {
+func (p *ChangeSettingsPacket) GetRightSleeve() bool {
 	return p.rightSleeve
 }
 
-func (p *ChangeClientSettingsPacket) getLeftPants() bool {
+func (p *ChangeSettingsPacket) GetLeftPants() bool {
 	return p.leftPants
 }
 
-func (p *ChangeClientSettingsPacket) getRightPants() bool {
+func (p *ChangeSettingsPacket) GetRightPants() bool {
 	return p.rightPants
 }
 
-func (p *ChangeClientSettingsPacket) getHat() bool {
+func (p *ChangeSettingsPacket) GetHat() bool {
 	return p.hat
 }
 
-func (p *ChangeClientSettingsPacket) getMainHand() int32 {
+func (p *ChangeSettingsPacket) GetMainHand() int32 {
 	return p.mainHand
+}
+
+func (p *ChangeSettingsPacket) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"local: %s, "+
+			"rndDist: %d, "+
+			"chatMode: %d, "+
+			"chatColors: %v, "+
+			"cape: %v, jacket: %v, "+
+			"leftSleeve: %v, rightSleeve: %v, "+
+			"leftPants: %v, rightPants: %v, "+
+			"hat: %v, "+
+			"mainHand: %d "+
+			"}",
+		p.packet,
+		p.local,
+		p.rndDist,
+		p.chatMode,
+		p.chatColors,
+		p.cape, p.jacket,
+		p.leftSleeve, p.rightSleeve,
+		p.leftPants, p.rightPants,
+		p.hat,
+		p.mainHand,
+	)
 }
 
 type ConfirmKeepAlivePacket struct {
@@ -342,98 +417,118 @@ func (p *ConfirmKeepAlivePacket) String() string {
 	)
 }
 
-type ChangePlayerPosPacket struct {
+type ChangePosPacket struct {
 	*packet
-	x        float64
-	y        float64
-	z        float64
-	onGround bool
+	x      float64
+	y      float64
+	z      float64
+	ground bool
 }
 
-func NewChangePlayerPosPacket() *ChangePlayerPosPacket {
-	return &ChangePlayerPosPacket{
+func NewChangePlayerPosPacket() *ChangePosPacket {
+	return &ChangePosPacket{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			ChangePlayerPosPacketID,
+			ChangePosPacketID,
 		),
 	}
 }
 
-func (p *ChangePlayerPosPacket) Unpack(data *Data) {
+func (p *ChangePosPacket) Unpack(data *Data) {
 	p.x = data.ReadFloat64()
 	p.y = data.ReadFloat64()
 	p.z = data.ReadFloat64()
-	p.onGround = data.ReadBool()
+	p.ground = data.ReadBool()
 }
 
-func (p *ChangePlayerPosPacket) GetX() float64 {
+func (p *ChangePosPacket) GetX() float64 {
 	return p.x
 }
 
-func (p *ChangePlayerPosPacket) GetY() float64 {
+func (p *ChangePosPacket) GetY() float64 {
 	return p.y
 }
 
-func (p *ChangePlayerPosPacket) GetZ() float64 {
+func (p *ChangePosPacket) GetZ() float64 {
 	return p.z
 }
 
-func (p *ChangePlayerPosPacket) GetOnGround() bool {
-	return p.onGround
+func (p *ChangePosPacket) GetGround() bool {
+	return p.ground
 }
 
-type ChangePlayerPosAndLookPacket struct {
+func (p *ChangePosPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, x: %f, y: %f, z: %f, ground: %v }",
+		p.packet, p.x, p.y, p.z, p.ground,
+	)
+}
+
+type ChangePosAndLookPacket struct {
 	*packet
-	x        float64
-	y        float64
-	z        float64
-	yaw      float32
-	pitch    float32
-	onGround bool
+	x      float64
+	y      float64
+	z      float64
+	yaw    float32
+	pitch  float32
+	ground bool
 }
 
-func NewChangePlayerPosAndLookPacket() *ChangePlayerPosAndLookPacket {
-	return &ChangePlayerPosAndLookPacket{
+func NewChangePosAndLookPacket() *ChangePosAndLookPacket {
+	return &ChangePosAndLookPacket{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			ChangePlayerPosAndLookPacketID,
+			ChangePosAndLookPacketID,
 		),
 	}
 }
 
-func (p *ChangePlayerPosAndLookPacket) Unpack(data *Data) {
+func (p *ChangePosAndLookPacket) Unpack(data *Data) {
 	p.x = data.ReadFloat64()
 	p.y = data.ReadFloat64()
 	p.z = data.ReadFloat64()
 	p.yaw = data.ReadFloat32()
 	p.pitch = data.ReadFloat32()
-	p.onGround = data.ReadBool()
+	p.ground = data.ReadBool()
 }
 
-func (p *ChangePlayerPosAndLookPacket) GetX() float64 {
+func (p *ChangePosAndLookPacket) GetX() float64 {
 	return p.x
 }
 
-func (p *ChangePlayerPosAndLookPacket) GetY() float64 {
+func (p *ChangePosAndLookPacket) GetY() float64 {
 	return p.y
 }
 
-func (p *ChangePlayerPosAndLookPacket) GetZ() float64 {
+func (p *ChangePosAndLookPacket) GetZ() float64 {
 	return p.z
 }
 
-func (p *ChangePlayerPosAndLookPacket) GetYaw() float32 {
+func (p *ChangePosAndLookPacket) GetYaw() float32 {
 	return p.yaw
 }
 
-func (p *ChangePlayerPosAndLookPacket) GetPitch() float32 {
+func (p *ChangePosAndLookPacket) GetPitch() float32 {
 	return p.pitch
 }
 
-func (p *ChangePlayerPosAndLookPacket) GetOnGround() bool {
-	return p.onGround
+func (p *ChangePosAndLookPacket) GetGround() bool {
+	return p.ground
 }
 
-// TODO: packet String
+func (p *ChangePosAndLookPacket) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"x: %f, y: %f, z: %f, "+
+			"yaw: %f, pitch: %f, "+
+			"ground: %v "+
+			"}",
+		p.packet,
+		p.x, p.y, p.z,
+		p.yaw, p.pitch,
+		p.ground,
+	)
+}

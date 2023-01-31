@@ -12,19 +12,17 @@ import (
 	"time"
 )
 
-const (
-	NetType = "tcp"    // network type of server
-	McName  = "1.12.2" // minecraft version name
-	ProtVer = 340      // protocol version
+const Network = "tcp"   // network type of server
+const McName = "1.12.2" // minecraft version name
+const ProtVer = 340     // protocol version
 
-	CompThold = 16 // threshold for compression
+const CompThold = 16 // threshold for compression
 
-	MinRndDist = 2  // minimum render distance
-	MaxRndDist = 32 // maximum render distance
+const MinRndDist = 2  // minimum render distance
+const MaxRndDist = 32 // maximum render distance
 
-	CheckKeepAliveTime = time.Second * 10
-	Loop3Time          = time.Millisecond * 1
-)
+const CheckKeepAliveTime = time.Millisecond * 1000
+const Loop3Time = time.Millisecond * 1
 
 func findRect(
 	cx, cz int, // player pos
@@ -37,44 +35,47 @@ var DifferentKeepAlivePayloadError = errors.New("the payload of keep-alive must 
 var OutOfRndDistRangeError = errors.New("it is out of maximum and minimum value of render distance")
 
 type ChanForError chan any
-type ChanForUpdatePlayerPosEvent chan *UpdatePlayerPosEvent
 
-type UpdatePlayerPosEvent struct {
+type ChanForUpdatePosEvent chan *UpdatePosEvent
+type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
+type ChanForAddPlayerEvent chan *AddPlayerEvent
+type ChanForRemovePlayerEvent chan *RemovePlayerEvent
+type ChanForUpdateLatencyEvent chan *UpdateLatencyEvent
+
+type UpdatePosEvent struct {
 	x float64
 	y float64
 	z float64
 }
 
-func NewUpdatePlayerPosEvent(
+func NewUpdatePosEvent(
 	x, y, z float64,
-) *UpdatePlayerPosEvent {
-	return &UpdatePlayerPosEvent{
+) *UpdatePosEvent {
+	return &UpdatePosEvent{
 		x: x,
 		y: y,
 		z: z,
 	}
 }
 
-func (e *UpdatePlayerPosEvent) GetX() float64 {
+func (e *UpdatePosEvent) GetX() float64 {
 	return e.x
 }
 
-func (e *UpdatePlayerPosEvent) GetY() float64 {
+func (e *UpdatePosEvent) GetY() float64 {
 	return e.y
 }
 
-func (e *UpdatePlayerPosEvent) GetZ() float64 {
+func (e *UpdatePosEvent) GetZ() float64 {
 	return e.z
 }
 
-func (e *UpdatePlayerPosEvent) String() string {
+func (e *UpdatePosEvent) String() string {
 	return fmt.Sprintf(
 		"{ x: %f, y: %f, z: %f }",
 		e.x, e.y, e.z,
 	)
 }
-
-type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
 
 type ConfirmKeepAliveEvent struct {
 	payload int64
@@ -98,90 +99,86 @@ func (e *ConfirmKeepAliveEvent) String() string {
 	)
 }
 
-type ChanForAddToPlayerListEvent chan *AddToPlayerListEvent
-
-type AddToPlayerListEvent struct {
+type AddPlayerEvent struct {
 	uid      uuid.UUID
 	username string
 }
 
-func NewAddToPlayerListEvent(
+func NewAddPlayerEvent(
 	uid uuid.UUID,
 	username string,
-) *AddToPlayerListEvent {
-	return &AddToPlayerListEvent{
+) *AddPlayerEvent {
+	return &AddPlayerEvent{
 		uid:      uid,
 		username: username,
 	}
 }
 
-func (p *AddToPlayerListEvent) GetUUID() uuid.UUID {
+func (p *AddPlayerEvent) GetUUID() uuid.UUID {
 	return p.uid
 }
 
-func (p *AddToPlayerListEvent) GetUsername() string {
+func (p *AddPlayerEvent) GetUsername() string {
 	return p.username
 }
 
-func (p *AddToPlayerListEvent) String() string {
+func (p *AddPlayerEvent) String() string {
 	return fmt.Sprintf(
 		"{ uid: %+v, username: %s } ",
 		p.uid, p.username,
 	)
 }
 
-type ChanForRemoveToPlayerListEvent chan *RemoveToPlayerListEvent
-
-type RemoveToPlayerListEvent struct {
+type RemovePlayerEvent struct {
 	uid uuid.UUID
 }
 
-func NewRemoveToPlayerListEvent(
+func NewRemovePlayerEvent(
 	uid uuid.UUID,
-) *RemoveToPlayerListEvent {
-	return &RemoveToPlayerListEvent{
+) *RemovePlayerEvent {
+	return &RemovePlayerEvent{
 		uid: uid,
 	}
 }
 
-func (p *RemoveToPlayerListEvent) GetUUID() uuid.UUID {
+func (p *RemovePlayerEvent) GetUUID() uuid.UUID {
 	return p.uid
 }
 
-func (p *RemoveToPlayerListEvent) String() string {
+func (p *RemovePlayerEvent) String() string {
 	return fmt.Sprintf(
 		"{ uid: %+v } ",
 		p.uid,
 	)
 }
 
-type PlayerListItem struct {
-	uid      uuid.UUID
-	username string
+type UpdateLatencyEvent struct {
+	uid     uuid.UUID
+	latency int32
 }
 
-func NewPlayerListItem(
+func NewUpdateLatencyEvent(
 	uid uuid.UUID,
-	username string,
-) *PlayerListItem {
-	return &PlayerListItem{
-		uid:      uid,
-		username: username,
+	latency int32,
+) *UpdateLatencyEvent {
+	return &UpdateLatencyEvent{
+		uid:     uid,
+		latency: latency,
 	}
 }
 
-func (i *PlayerListItem) GetUUID() uuid.UUID {
-	return i.uid
+func (p *UpdateLatencyEvent) GetUUID() uuid.UUID {
+	return p.uid
 }
 
-func (i *PlayerListItem) GetUsername() string {
-	return i.username
+func (p *UpdateLatencyEvent) GetLatency() int32 {
+	return p.latency
 }
 
-func (i *PlayerListItem) String() string {
+func (p *UpdateLatencyEvent) String() string {
 	return fmt.Sprintf(
-		"{ uid: %+v, username: %s } ",
-		i.uid, i.username,
+		"{ uid: %+v, latency: %d } ",
+		p.uid, p.latency,
 	)
 }
 
@@ -190,9 +187,9 @@ type Server struct {
 
 	max    int   // maximum number of players
 	online int   // number of online players
-	last   int32 // last number of entity
+	last   int32 // last entity ID
 
-	favicon string // web image url
+	favicon string // base64 png image string
 	desc    string // description of server
 
 	rndDist    int // render distance
@@ -208,10 +205,10 @@ type Server struct {
 	mutex1 *sync.RWMutex
 	m1     map[uuid.UUID]*Player // by player uid
 
-	mutex2                            *sync.RWMutex
-	playerList                        map[uuid.UUID]*PlayerListItem                // to player uid
-	chanMapForAddToPlayerListEvent    map[uuid.UUID]ChanForAddToPlayerListEvent    // by player uid
-	chanMapForRemoveToPlayerListEvent map[uuid.UUID]ChanForRemoveToPlayerListEvent // by player uid
+	mutex2 *sync.RWMutex
+	m2     map[uuid.UUID]ChanForAddPlayerEvent     // by player uid
+	m3     map[uuid.UUID]ChanForRemovePlayerEvent  // by player uid
+	m4     map[uuid.UUID]ChanForUpdateLatencyEvent // by player id
 }
 
 func NewServer(
@@ -233,26 +230,26 @@ func NewServer(
 	var mutex2 sync.RWMutex
 
 	return &Server{
-		addr:                              addr,
-		max:                               max,
-		online:                            0,
-		last:                              0,
-		favicon:                           favicon,
-		desc:                              desc,
-		rndDist:                           rndDist,
-		spawnX:                            spawnX,
-		spawnY:                            spawnY,
-		spawnZ:                            spawnZ,
-		spawnYaw:                          spawnYaw,
-		spawnPitch:                        spawnPitch,
-		mutex0:                            &mutex0,
-		m0:                                make(map[ChunkPosStr]*Chunk),
-		mutex1:                            &mutex1,
-		m1:                                make(map[uuid.UUID]*Player),
-		mutex2:                            &mutex2,
-		playerList:                        make(map[uuid.UUID]*PlayerListItem),
-		chanMapForAddToPlayerListEvent:    make(map[uuid.UUID]ChanForAddToPlayerListEvent),
-		chanMapForRemoveToPlayerListEvent: make(map[uuid.UUID]ChanForRemoveToPlayerListEvent),
+		addr:       addr,
+		max:        max,
+		online:     0,
+		last:       0,
+		favicon:    favicon,
+		desc:       desc,
+		rndDist:    rndDist,
+		spawnX:     spawnX,
+		spawnY:     spawnY,
+		spawnZ:     spawnZ,
+		spawnYaw:   spawnYaw,
+		spawnPitch: spawnPitch,
+		mutex0:     &mutex0,
+		m0:         make(map[ChunkPosStr]*Chunk),
+		mutex1:     &mutex1,
+		m1:         make(map[uuid.UUID]*Player),
+		mutex2:     &mutex2,
+		m2:         make(map[uuid.UUID]ChanForAddPlayerEvent),
+		m3:         make(map[uuid.UUID]ChanForRemovePlayerEvent),
+		m4:         make(map[uuid.UUID]ChanForUpdateLatencyEvent),
 	}, nil
 }
 
@@ -399,19 +396,19 @@ func (s *Server) initChunks(
 	return nil
 }
 
-func (s *Server) handleUpdatePlayerPosEvent(
-	chanForEvent ChanForUpdatePlayerPosEvent,
+func (s *Server) handleUpdatePosEvent(
+	chanForEvent ChanForUpdatePosEvent,
 	cnt *Client,
 	player *Player,
 	chanForError ChanForError,
 	ctx context.Context,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "UpdatePlayerPosEvent"),
+		NewLgElement("handler", "UpdatePosEvent"),
 		NewLgElement("client", cnt),
 	)
 	lg.Debug(
-		"The handler for UpdatePlayerPosEvent was started.",
+		"The handler for UpdatePosEvent was started.",
 	)
 
 	defer func() {
@@ -473,7 +470,7 @@ func (s *Server) handleUpdatePlayerPosEvent(
 				}
 			}
 
-			//onGround := packet.GetOnGround()
+			//ground := packet.GetOnGround()
 
 			lg.Debug(
 				"It is finished to process the event.",
@@ -487,75 +484,7 @@ func (s *Server) handleUpdatePlayerPosEvent(
 		}
 	}
 
-	lg.Debug("The handler for UpdatePlayerPosEvent was ended")
-}
-
-func (s *Server) handleConfirmKeepAliveEvent(
-	chanForEvent ChanForConfirmKeepAliveEvent,
-	cnt *Client,
-	chanForError ChanForError,
-	ctx context.Context,
-) {
-	lg := NewLogger(
-		NewLgElement("handler", "ConfirmKeepAliveEvent"),
-		NewLgElement("client", cnt),
-	)
-	lg.Debug(
-		"The handler for ConfirmKeepAliveEvent was started.",
-	)
-
-	defer func() {
-		close(chanForEvent)
-
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
-		}
-	}()
-
-	flag := false
-	var payload0 int64
-
-	// TODO: update ping
-
-	stop := false
-	for {
-		select {
-		case <-time.After(CheckKeepAliveTime):
-			if flag == true {
-				break
-			}
-			payload0 = rand.Int63()
-			if err := cnt.CheckKeepAlive(lg, payload0); err != nil {
-				panic(err)
-			}
-			flag = true
-		case event := <-chanForEvent:
-			lg.Debug(
-				"The event was received by the channel.",
-				NewLgElement("event", event),
-			)
-
-			payload1 := event.GetPayload()
-
-			if payload1 != payload0 {
-				panic(DifferentKeepAlivePayloadError)
-			}
-
-			flag = false
-			lg.Debug(
-				"It is finished to process the event.",
-			)
-		case <-ctx.Done():
-			stop = true
-		}
-
-		if stop == true {
-			break
-		}
-	}
-
-	lg.Debug("The handler for ConfirmKeepAliveEvent was ended")
+	lg.Debug("The handler for UpdatePosEvent was ended")
 }
 
 func (s *Server) handlePlayerListEvent(
@@ -584,35 +513,31 @@ func (s *Server) handlePlayerListEvent(
 	uid, username := player.GetUid(), player.GetUsername()
 
 	chanForAddEvent, chanForRemoveEvent := func() (
-		ChanForAddToPlayerListEvent,
-		ChanForRemoveToPlayerListEvent,
+		ChanForAddPlayerEvent,
+		ChanForRemovePlayerEvent,
 	) {
 		mutex := s.mutex2
 		mutex.Lock()
 		defer mutex.Unlock()
 
-		event := NewAddToPlayerListEvent(uid, username)
-		for _, item := range s.playerList {
-			uid := item.GetUUID()
-			chanForEvent := s.chanMapForAddToPlayerListEvent[uid]
+		event := NewAddPlayerEvent(uid, username)
+		for _, chanForEvent := range s.m2 {
 			chanForEvent <- event
 		}
 
-		item := NewPlayerListItem(uid, username)
-		s.playerList[uid] = item
+		for _, player := range s.m1 {
+			uid, username := player.GetUid(), player.GetUsername()
 
-		for _, item := range s.playerList {
-			uid, username := item.GetUUID(), item.GetUsername()
-			if err := cnt.AddToPlayerList(lg, uid, username); err != nil {
+			if err := cnt.AddPlayer(lg, uid, username); err != nil {
 				panic(err)
 			}
 		}
 
-		chanForAddEvent := make(ChanForAddToPlayerListEvent, 1)
-		s.chanMapForAddToPlayerListEvent[uid] = chanForAddEvent
+		chanForAddEvent := make(ChanForAddPlayerEvent, 1)
+		s.m2[uid] = chanForAddEvent
 
-		chanForRemoveEvent := make(ChanForRemoveToPlayerListEvent, 1)
-		s.chanMapForRemoveToPlayerListEvent[uid] = chanForRemoveEvent
+		chanForRemoveEvent := make(ChanForRemovePlayerEvent, 1)
+		s.m3[uid] = chanForRemoveEvent
 
 		return chanForAddEvent, chanForRemoveEvent
 	}()
@@ -622,19 +547,15 @@ func (s *Server) handlePlayerListEvent(
 		mutex.Lock()
 		defer mutex.Unlock()
 
-		delete(s.playerList, uid)
-
-		event := NewRemoveToPlayerListEvent(uid)
-		for _, item := range s.playerList {
-			uid := item.GetUUID()
-			chanForEvent := s.chanMapForRemoveToPlayerListEvent[uid]
+		event := NewRemovePlayerEvent(uid)
+		for _, chanForEvent := range s.m3 {
 			chanForEvent <- event
 		}
 
 		close(chanForAddEvent)
-		delete(s.chanMapForAddToPlayerListEvent, uid)
+		delete(s.m2, uid)
 		close(chanForRemoveEvent)
-		delete(s.chanMapForRemoveToPlayerListEvent, uid)
+		delete(s.m3, uid)
 	}()
 
 	stop := false
@@ -642,12 +563,12 @@ func (s *Server) handlePlayerListEvent(
 		select {
 		case event := <-chanForAddEvent:
 			lg.Debug(
-				"AddToPlayerListEvent was received by the channel.",
+				"AddPlayerEvent was received by the channel.",
 				NewLgElement("event", event),
 			)
 
 			uid, username := event.GetUUID(), event.GetUsername()
-			if err := cnt.AddToPlayerList(lg, uid, username); err != nil {
+			if err := cnt.AddPlayer(lg, uid, username); err != nil {
 				panic(err)
 			}
 
@@ -656,12 +577,12 @@ func (s *Server) handlePlayerListEvent(
 			)
 		case event := <-chanForRemoveEvent:
 			lg.Debug(
-				"RemoveToPlayerListEvent was received by the channel.",
+				"RemovePlayerEvent was received by the channel.",
 				NewLgElement("event", event),
 			)
 
 			uid := event.GetUUID()
-			if err := cnt.RemoveToPlayerList(lg, uid); err != nil {
+			if err := cnt.RemovePlayer(lg, uid); err != nil {
 				panic(err)
 			}
 
@@ -678,6 +599,154 @@ func (s *Server) handlePlayerListEvent(
 	}
 
 	lg.Debug("The handler for PlayerListEvent was ended")
+}
+
+func (s *Server) broadcastUpdateLatencyEvent(
+	lg *Logger,
+	uid uuid.UUID,
+	latency int32,
+) {
+	lg.Debug(
+		"It is started to broadcast UpdateLatencyEvent.",
+		NewLgElement("uid", uid),
+		NewLgElement("latency", latency),
+	)
+
+	event := NewUpdateLatencyEvent(uid, latency)
+	for _, chanForEvent := range s.m4 {
+		chanForEvent <- event
+	}
+
+	lg.Debug(
+		"It is finished to broadcast UpdateLatencyEvent.",
+	)
+}
+
+func (s *Server) handleUpdateLatencyEvent(
+	uid uuid.UUID,
+	cnt *Client,
+	chanForError ChanForError,
+	ctx context.Context,
+) {
+	lg := NewLogger(
+		NewLgElement("handler", "UpdateLatencyEvent"),
+		NewLgElement("client", cnt),
+	)
+	lg.Debug(
+		"The handler for UpdateLatencyEvent was started.",
+	)
+
+	chanForEvent := make(ChanForUpdateLatencyEvent, 1)
+	s.m4[uid] = chanForEvent
+
+	defer func() {
+		close(chanForEvent)
+
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event := <-chanForEvent:
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+			uid, latency := event.GetUUID(), event.GetLatency()
+			if err := cnt.UpdateLatency(lg, uid, latency); err != nil {
+				panic(err)
+			}
+
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		case <-ctx.Done():
+			stop = true
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("The handler for UpdateLatencyEvent was ended")
+}
+
+func (s *Server) handleConfirmKeepAliveEvent(
+	chanForEvent ChanForConfirmKeepAliveEvent,
+	uid uuid.UUID,
+	cnt *Client,
+	chanForError ChanForError,
+	ctx context.Context,
+) {
+	lg := NewLogger(
+		NewLgElement("handler", "ConfirmKeepAliveEvent"),
+		NewLgElement("uid", uid),
+		NewLgElement("client", cnt),
+	)
+	lg.Debug(
+		"The handler for ConfirmKeepAliveEvent was started.",
+	)
+
+	defer func() {
+		close(chanForEvent)
+
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	start := time.Time{}
+	var payload0 int64
+
+	// TODO: update start
+
+	stop := false
+	for {
+		select {
+		case <-time.After(CheckKeepAliveTime):
+			if start.IsZero() == false {
+				break
+			}
+			payload0 = rand.Int63()
+			if err := cnt.CheckKeepAlive(lg, payload0); err != nil {
+				panic(err)
+			}
+			start = time.Now()
+		case event := <-chanForEvent:
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			payload1 := event.GetPayload()
+			if payload1 != payload0 {
+				panic(DifferentKeepAlivePayloadError)
+			}
+			end := time.Now()
+			latency := end.Sub(start).Milliseconds()
+
+			s.broadcastUpdateLatencyEvent(lg, uid, int32(latency))
+
+			start = time.Time{}
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		case <-ctx.Done():
+			stop = true
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("The handler for ConfirmKeepAliveEvent was ended")
 }
 
 func (s *Server) handleConnection(
@@ -798,20 +867,11 @@ func (s *Server) handleConnection(
 
 	chanForError := make(ChanForError, 1)
 
-	chanForUpdatePlayerPosEvent := make(ChanForUpdatePlayerPosEvent, 1)
-	chanForConfirmKeepAliveEvent := make(ChanForConfirmKeepAliveEvent, 1)
-
-	go s.handleUpdatePlayerPosEvent(
-		chanForUpdatePlayerPosEvent,
+	chanForEvent0 := make(ChanForUpdatePosEvent, 1)
+	go s.handleUpdatePosEvent(
+		chanForEvent0,
 		cnt,
 		player,
-		chanForError,
-		ctx,
-	)
-
-	go s.handleConfirmKeepAliveEvent(
-		chanForConfirmKeepAliveEvent,
-		cnt,
 		chanForError,
 		ctx,
 	)
@@ -823,14 +883,30 @@ func (s *Server) handleConnection(
 		ctx,
 	)
 
+	go s.handleUpdateLatencyEvent(
+		uid,
+		cnt,
+		chanForError,
+		ctx,
+	)
+
+	chanForEvent1 := make(ChanForConfirmKeepAliveEvent, 1)
+	go s.handleConfirmKeepAliveEvent(
+		chanForEvent1,
+		uid,
+		cnt,
+		chanForError,
+		ctx,
+	)
+
 	stop := false
 	for {
 		select {
 		case <-time.After(Loop3Time):
 			finish, err := cnt.Loop3(
 				lg,
-				chanForUpdatePlayerPosEvent,
-				chanForConfirmKeepAliveEvent,
+				chanForEvent0,
+				chanForEvent1,
 				state,
 			)
 			if err != nil {
@@ -857,15 +933,15 @@ func (s *Server) Render() {
 	)
 
 	addr := s.addr
-	netType := NetType
+	network := Network
 
 	lg.Info(
 		"It is started to render.",
 		NewLgElement("addr", addr),
-		NewLgElement("netType", netType),
+		NewLgElement("network", network),
 	)
 
-	ln, err := net.Listen(netType, addr)
+	ln, err := net.Listen(network, addr)
 
 	if err != nil {
 		panic(err)
