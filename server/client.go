@@ -356,7 +356,7 @@ func (cnt *Client) Loop0(
 			"HandshakePacket was created.",
 			NewLgElement("packet", packet),
 		)
-		state = packet.GetNextState()
+		state = packet.GetNext()
 		break
 	}
 
@@ -503,7 +503,7 @@ func (cnt *Client) Loop2(
 
 func (cnt *Client) Loop3(
 	lg *Logger,
-	chanForUpdatePlayerPosEvent ChanForUpdatePlayerPosEvent,
+	chanForUpdatePlayerPosEvent ChanForUpdatePosEvent,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 	state State,
 ) (
@@ -542,7 +542,7 @@ func (cnt *Client) Loop3(
 		)
 		x, y, z :=
 			packet.GetX(), packet.GetY(), packet.GetZ()
-		chanForUpdatePlayerPosEvent <- NewUpdatePlayerPosEvent(
+		chanForUpdatePlayerPosEvent <- NewUpdatePosEvent(
 			x, y, z,
 		)
 		break
@@ -555,7 +555,7 @@ func (cnt *Client) Loop3(
 		)
 		x, y, z :=
 			packet.GetX(), packet.GetY(), packet.GetZ()
-		chanForUpdatePlayerPosEvent <- NewUpdatePlayerPosEvent(
+		chanForUpdatePlayerPosEvent <- NewUpdatePosEvent(
 			x, y, z,
 		)
 		break
@@ -768,13 +768,13 @@ func (cnt *Client) UnloadChunk(
 	return nil
 }
 
-func (cnt *Client) AddToPlayerList(
+func (cnt *Client) AddPlayer(
 	lg *Logger,
 	uid uuid.UUID,
 	username string,
 ) error {
 	lg.Debug(
-		"It is started to add to player list.",
+		"It is started to add player.",
 	)
 
 	textureString, signature, err := UUIDToTextureString(uid)
@@ -784,7 +784,7 @@ func (cnt *Client) AddToPlayerList(
 	gamemode := int32(0)
 	ping := int32(1000)
 	displayName := username
-	packet := NewSendPlayerListToAddPacket(
+	packet := NewAddPlayerPacket(
 		uid,
 		username,
 		textureString,
@@ -798,21 +798,21 @@ func (cnt *Client) AddToPlayerList(
 	}
 
 	lg.Debug(
-		"It is finished to add to player list.",
+		"It is finished to add player.",
 	)
 
 	return nil
 }
 
-func (cnt *Client) RemoveToPlayerList(
+func (cnt *Client) RemovePlayer(
 	lg *Logger,
 	uid uuid.UUID,
 ) error {
 	lg.Debug(
-		"It is started to remove to player list.",
+		"It is started to remove player",
 	)
 
-	packet := NewSendPlayerListToRemovePacket(
+	packet := NewRemovePlayerPacket(
 		uid,
 	)
 	if err := cnt.writeWithComp(lg, packet); err != nil {
@@ -820,7 +820,7 @@ func (cnt *Client) RemoveToPlayerList(
 	}
 
 	lg.Debug(
-		"It is finished to remove to player list.",
+		"It is finished to remove player",
 	)
 
 	return nil

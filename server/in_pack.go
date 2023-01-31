@@ -243,7 +243,7 @@ func (p *DemandPacket) String() string {
 type ChangeSettingsPacket struct {
 	*packet
 	local       string
-	dist        int8
+	rndDist     int8
 	chatMode    int32
 	chatColors  bool
 	cape        bool
@@ -270,7 +270,7 @@ func (p *ChangeSettingsPacket) Unpack(
 	data *Data,
 ) {
 	p.local = data.ReadString()
-	p.dist = data.ReadInt8()
+	p.rndDist = data.ReadInt8()
 	p.chatMode = data.ReadVarInt()
 	p.chatColors = data.ReadBool()
 	bitmask := data.ReadUint8()
@@ -316,8 +316,8 @@ func (p *ChangeSettingsPacket) GetLocal() string {
 	return p.local
 }
 
-func (p *ChangeSettingsPacket) GetDist() int8 {
-	return p.dist
+func (p *ChangeSettingsPacket) GetRndDist() int8 {
+	return p.rndDist
 }
 
 func (p *ChangeSettingsPacket) GetChatMode() int32 {
@@ -365,7 +365,7 @@ func (p *ChangeSettingsPacket) String() string {
 		"{ "+
 			"packet: %+v, "+
 			"local: %s, "+
-			"dist: %d, "+
+			"rndDist: %d, "+
 			"chatMode: %d, "+
 			"chatColors: %v, "+
 			"cape: %v, jacket: %v, "+
@@ -376,7 +376,7 @@ func (p *ChangeSettingsPacket) String() string {
 			"}",
 		p.packet,
 		p.local,
-		p.dist,
+		p.rndDist,
 		p.chatMode,
 		p.chatColors,
 		p.cape, p.jacket,

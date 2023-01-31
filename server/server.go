@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"math/rand"
 	"net"
@@ -11,19 +12,17 @@ import (
 	"time"
 )
 
-const (
-	NetType = "tcp"    // network type of server
-	McName  = "1.12.2" // minecraft version name
-	ProtVer = 340      // protocol version
+const Network = "tcp"   // network type of server
+const McName = "1.12.2" // minecraft version name
+const ProtVer = 340     // protocol version
 
-	CompThold = 16 // threshold for compression
+const CompThold = 16 // threshold for compression
 
-	MinRndDist = 2  // minimum render distance
-	MaxRndDist = 32 // maximum render distance
+const MinRndDist = 2  // minimum render distance
+const MaxRndDist = 32 // maximum render distance
 
-	CheckKeepAliveTime = time.Second * 10
-	Loop3Time          = time.Millisecond * 1
-)
+const CheckKeepAliveTime = time.Second * 10
+const Loop3Time = time.Millisecond * 1
 
 func findRect(
 	cx, cz int, // player pos
@@ -37,12 +36,127 @@ var OutOfRndDistRangeError = errors.New("it is out of maximum and minimum value 
 
 type ChanForError chan any
 
+type ChanForUpdatePosEvent chan *UpdatePosEvent
+type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
+type ChanForAddPlayerEvent chan *AddPlayerEvent
+type ChanForRemovePlayerEvent chan *RemovePlayerEvent
+
+type UpdatePosEvent struct {
+	x float64
+	y float64
+	z float64
+}
+
+func NewUpdatePosEvent(
+	x, y, z float64,
+) *UpdatePosEvent {
+	return &UpdatePosEvent{
+		x: x,
+		y: y,
+		z: z,
+	}
+}
+
+func (e *UpdatePosEvent) GetX() float64 {
+	return e.x
+}
+
+func (e *UpdatePosEvent) GetY() float64 {
+	return e.y
+}
+
+func (e *UpdatePosEvent) GetZ() float64 {
+	return e.z
+}
+
+func (e *UpdatePosEvent) String() string {
+	return fmt.Sprintf(
+		"{ x: %f, y: %f, z: %f }",
+		e.x, e.y, e.z,
+	)
+}
+
+type ConfirmKeepAliveEvent struct {
+	payload int64
+}
+
+func NewConfirmKeepAliveEvent(
+	payload int64,
+) *ConfirmKeepAliveEvent {
+	return &ConfirmKeepAliveEvent{
+		payload: payload,
+	}
+}
+
+func (e *ConfirmKeepAliveEvent) GetPayload() int64 {
+	return e.payload
+}
+
+func (e *ConfirmKeepAliveEvent) String() string {
+	return fmt.Sprintf(
+		"{ payload: %d }", e.payload,
+	)
+}
+
+type AddPlayerEvent struct {
+	uid      uuid.UUID
+	username string
+}
+
+func NewAddPlayerEvent(
+	uid uuid.UUID,
+	username string,
+) *AddPlayerEvent {
+	return &AddPlayerEvent{
+		uid:      uid,
+		username: username,
+	}
+}
+
+func (p *AddPlayerEvent) GetUUID() uuid.UUID {
+	return p.uid
+}
+
+func (p *AddPlayerEvent) GetUsername() string {
+	return p.username
+}
+
+func (p *AddPlayerEvent) String() string {
+	return fmt.Sprintf(
+		"{ uid: %+v, username: %s } ",
+		p.uid, p.username,
+	)
+}
+
+type RemovePlayerEvent struct {
+	uid uuid.UUID
+}
+
+func NewRemovePlayerEvent(
+	uid uuid.UUID,
+) *RemovePlayerEvent {
+	return &RemovePlayerEvent{
+		uid: uid,
+	}
+}
+
+func (p *RemovePlayerEvent) GetUUID() uuid.UUID {
+	return p.uid
+}
+
+func (p *RemovePlayerEvent) String() string {
+	return fmt.Sprintf(
+		"{ uid: %+v } ",
+		p.uid,
+	)
+}
+
 type Server struct {
 	addr string // address
 
 	max    int   // maximum number of players
 	online int   // number of online players
-	last   int32 // last number of entity
+	last   int32 // last entity ID
 
 	favicon string // web image url
 	desc    string // description of server
@@ -60,10 +174,9 @@ type Server struct {
 	mutex1 *sync.RWMutex
 	m1     map[uuid.UUID]*Player // by player uid
 
-	mutex2     *sync.RWMutex
-	playerList map[uuid.UUID]*PlayerListItem                // to player uid
-	m2         map[uuid.UUID]ChanForAddToPlayerListEvent    // by player uid
-	m3         map[uuid.UUID]ChanForRemoveToPlayerListEvent // by player uid
+	mutex2 *sync.RWMutex
+	m2     map[uuid.UUID]ChanForAddPlayerEvent    // by player uid
+	m3     map[uuid.UUID]ChanForRemovePlayerEvent // by player uid
 }
 
 func NewServer(
@@ -102,9 +215,8 @@ func NewServer(
 		mutex1:     &mutex1,
 		m1:         make(map[uuid.UUID]*Player),
 		mutex2:     &mutex2,
-		playerList: make(map[uuid.UUID]*PlayerListItem),
-		m2:         make(map[uuid.UUID]ChanForAddToPlayerListEvent),
-		m3:         make(map[uuid.UUID]ChanForRemoveToPlayerListEvent),
+		m2:         make(map[uuid.UUID]ChanForAddPlayerEvent),
+		m3:         make(map[uuid.UUID]ChanForRemovePlayerEvent),
 	}, nil
 }
 
@@ -251,19 +363,19 @@ func (s *Server) initChunks(
 	return nil
 }
 
-func (s *Server) handleUpdatePlayerPosEvent(
-	chanForEvent ChanForUpdatePlayerPosEvent,
+func (s *Server) handleUpdatePosEvent(
+	chanForEvent ChanForUpdatePosEvent,
 	cnt *Client,
 	player *Player,
 	chanForError ChanForError,
 	ctx context.Context,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "UpdatePlayerPosEvent"),
+		NewLgElement("handler", "UpdatePosEvent"),
 		NewLgElement("client", cnt),
 	)
 	lg.Debug(
-		"The handler for UpdatePlayerPosEvent was started.",
+		"The handler for UpdatePosEvent was started.",
 	)
 
 	defer func() {
@@ -339,7 +451,7 @@ func (s *Server) handleUpdatePlayerPosEvent(
 		}
 	}
 
-	lg.Debug("The handler for UpdatePlayerPosEvent was ended")
+	lg.Debug("The handler for UpdatePosEvent was ended")
 }
 
 func (s *Server) handleConfirmKeepAliveEvent(
@@ -436,34 +548,30 @@ func (s *Server) handlePlayerListEvent(
 	uid, username := player.GetUid(), player.GetUsername()
 
 	chanForAddEvent, chanForRemoveEvent := func() (
-		ChanForAddToPlayerListEvent,
-		ChanForRemoveToPlayerListEvent,
+		ChanForAddPlayerEvent,
+		ChanForRemovePlayerEvent,
 	) {
 		mutex := s.mutex2
 		mutex.Lock()
 		defer mutex.Unlock()
 
-		event := NewAddToPlayerListEvent(uid, username)
-		for _, item := range s.playerList {
-			uid := item.GetUUID()
-			chanForEvent := s.m2[uid]
+		event := NewAddPlayerEvent(uid, username)
+		for _, chanForEvent := range s.m2 {
 			chanForEvent <- event
 		}
 
-		item := NewPlayerListItem(uid, username)
-		s.playerList[uid] = item
+		for _, player := range s.m1 {
+			uid, username := player.GetUid(), player.GetUsername()
 
-		for _, item := range s.playerList {
-			uid, username := item.GetUUID(), item.GetUsername()
-			if err := cnt.AddToPlayerList(lg, uid, username); err != nil {
+			if err := cnt.AddPlayer(lg, uid, username); err != nil {
 				panic(err)
 			}
 		}
 
-		chanForAddEvent := make(ChanForAddToPlayerListEvent, 1)
+		chanForAddEvent := make(ChanForAddPlayerEvent, 1)
 		s.m2[uid] = chanForAddEvent
 
-		chanForRemoveEvent := make(ChanForRemoveToPlayerListEvent, 1)
+		chanForRemoveEvent := make(ChanForRemovePlayerEvent, 1)
 		s.m3[uid] = chanForRemoveEvent
 
 		return chanForAddEvent, chanForRemoveEvent
@@ -474,12 +582,8 @@ func (s *Server) handlePlayerListEvent(
 		mutex.Lock()
 		defer mutex.Unlock()
 
-		delete(s.playerList, uid)
-
-		event := NewRemoveToPlayerListEvent(uid)
-		for _, item := range s.playerList {
-			uid := item.GetUUID()
-			chanForEvent := s.m3[uid]
+		event := NewRemovePlayerEvent(uid)
+		for _, chanForEvent := range s.m3 {
 			chanForEvent <- event
 		}
 
@@ -494,12 +598,12 @@ func (s *Server) handlePlayerListEvent(
 		select {
 		case event := <-chanForAddEvent:
 			lg.Debug(
-				"AddToPlayerListEvent was received by the channel.",
+				"AddPlayerEvent was received by the channel.",
 				NewLgElement("event", event),
 			)
 
 			uid, username := event.GetUUID(), event.GetUsername()
-			if err := cnt.AddToPlayerList(lg, uid, username); err != nil {
+			if err := cnt.AddPlayer(lg, uid, username); err != nil {
 				panic(err)
 			}
 
@@ -508,12 +612,12 @@ func (s *Server) handlePlayerListEvent(
 			)
 		case event := <-chanForRemoveEvent:
 			lg.Debug(
-				"RemoveToPlayerListEvent was received by the channel.",
+				"RemovePlayerEvent was received by the channel.",
 				NewLgElement("event", event),
 			)
 
 			uid := event.GetUUID()
-			if err := cnt.RemoveToPlayerList(lg, uid); err != nil {
+			if err := cnt.RemovePlayer(lg, uid); err != nil {
 				panic(err)
 			}
 
@@ -650,10 +754,10 @@ func (s *Server) handleConnection(
 
 	chanForError := make(ChanForError, 1)
 
-	chanForUpdatePlayerPosEvent := make(ChanForUpdatePlayerPosEvent, 1)
+	chanForUpdatePlayerPosEvent := make(ChanForUpdatePosEvent, 1)
 	chanForConfirmKeepAliveEvent := make(ChanForConfirmKeepAliveEvent, 1)
 
-	go s.handleUpdatePlayerPosEvent(
+	go s.handleUpdatePosEvent(
 		chanForUpdatePlayerPosEvent,
 		cnt,
 		player,
@@ -709,15 +813,15 @@ func (s *Server) Render() {
 	)
 
 	addr := s.addr
-	netType := NetType
+	network := Network
 
 	lg.Info(
 		"It is started to render.",
 		NewLgElement("addr", addr),
-		NewLgElement("netType", netType),
+		NewLgElement("network", network),
 	)
 
-	ln, err := net.Listen(netType, addr)
+	ln, err := net.Listen(network, addr)
 
 	if err != nil {
 		panic(err)
