@@ -589,6 +589,8 @@ func (cnt *Client) Loop3(
 func (cnt *Client) Init(
 	lg *Logger,
 	eid int32,
+	spawnX, spawnY, spawnZ float64,
+	spawnYaw, spawnPitch float32,
 ) error {
 	lg.Debug(
 		"It is started to init.",
@@ -669,11 +671,8 @@ func (cnt *Client) Init(
 	payload := rand.Int31()
 	if err := func() error {
 		packet := NewSetPlayerPosAndLookPacket(
-			0,
-			0,
-			0,
-			0,
-			0,
+			spawnX, spawnY, spawnZ,
+			spawnYaw, spawnPitch,
 			payload,
 		)
 		lg.Debug(
