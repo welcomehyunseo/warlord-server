@@ -23,6 +23,7 @@ const (
 	MaxRndDist = 32 // maximum render distance
 
 	CheckKeepAliveTime = time.Second * 10
+	Loop3Time          = time.Millisecond * 1
 )
 
 func findRect(
@@ -450,9 +451,8 @@ func (s *Server) handleUpdatePlayerPosEvent(
 				"The event was received by the channel.",
 				NewLgElement("event", event),
 			)
-			x := event.GetX()
-			y := event.GetY()
-			z := event.GetZ()
+			x, y, z :=
+				event.GetX(), event.GetY(), event.GetZ()
 			player.UpdatePos(x, y, z)
 			prevX := player.GetPrevX()
 			//prevY := player.GetPrevY()
@@ -745,7 +745,10 @@ func (s *Server) handleConnection(
 	spawnYaw, spawnPitch :=
 		s.spawnYaw, s.spawnPitch
 
-	player := func() *Player {
+	uid, username := func() (
+		uuid.UUID,
+		string,
+	) {
 		for {
 			finish, uid, username, err := cnt.Loop2(lg, state)
 			if err != nil {
@@ -755,20 +758,18 @@ func (s *Server) handleConnection(
 				continue
 			}
 
-			eid := s.countEntity()
-			player := NewPlayer(
-				eid,
-				uid,
-				username,
-				spawnX, spawnY, spawnZ,
-				spawnYaw, spawnPitch,
-			)
-			return player
+			return uid, username
 		}
 	}()
 
-	eid, uid, username :=
-		player.GetEid(), player.GetUid(), player.GetUsername()
+	eid := s.countEntity()
+	player := NewPlayer(
+		eid,
+		uid,
+		username,
+		spawnX, spawnY, spawnZ,
+		spawnYaw, spawnPitch,
+	)
 	s.addPlayer(player)
 	defer func() {
 		s.removePlayer(uid)
@@ -825,7 +826,7 @@ func (s *Server) handleConnection(
 	stop := false
 	for {
 		select {
-		case <-time.After(1):
+		case <-time.After(Loop3Time):
 			finish, err := cnt.Loop3(
 				lg,
 				chanForUpdatePlayerPosEvent,
