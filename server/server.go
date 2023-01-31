@@ -206,8 +206,10 @@ type Server struct {
 	m1     map[uuid.UUID]*Player // by player uid
 
 	mutex2 *sync.RWMutex
-	m2     map[uuid.UUID]ChanForAddPlayerEvent     // by player uid
-	m3     map[uuid.UUID]ChanForRemovePlayerEvent  // by player uid
+	m2     map[uuid.UUID]ChanForAddPlayerEvent    // by player uid
+	m3     map[uuid.UUID]ChanForRemovePlayerEvent // by player uid
+
+	mutex4 *sync.RWMutex
 	m4     map[uuid.UUID]ChanForUpdateLatencyEvent // by player id
 }
 
@@ -228,6 +230,7 @@ func NewServer(
 	var mutex0 sync.RWMutex
 	var mutex1 sync.RWMutex
 	var mutex2 sync.RWMutex
+	var mutex4 sync.RWMutex
 
 	return &Server{
 		addr:       addr,
@@ -249,6 +252,7 @@ func NewServer(
 		mutex2:     &mutex2,
 		m2:         make(map[uuid.UUID]ChanForAddPlayerEvent),
 		m3:         make(map[uuid.UUID]ChanForRemovePlayerEvent),
+		mutex4:     &mutex4,
 		m4:         make(map[uuid.UUID]ChanForUpdateLatencyEvent),
 	}, nil
 }
@@ -406,6 +410,7 @@ func (s *Server) handleUpdatePosEvent(
 	lg := NewLogger(
 		NewLgElement("handler", "UpdatePosEvent"),
 		NewLgElement("client", cnt),
+		NewLgElement("player", player),
 	)
 	lg.Debug(
 		"The handler for UpdatePosEvent was started.",
@@ -484,7 +489,100 @@ func (s *Server) handleUpdatePosEvent(
 		}
 	}
 
-	lg.Debug("The handler for UpdatePosEvent was ended")
+	lg.Debug("The handler for UpdatePosEvent was ended.")
+}
+
+func (s *Server) addAllPlayers(
+	lg *Logger,
+	cnt *Client,
+) error {
+	s.mutex1.RLock()
+	defer s.mutex1.RUnlock()
+
+	lg.Debug(
+		"It is started to add all players.",
+	)
+
+	for _, player := range s.m1 {
+		uid, username := player.GetUid(), player.GetUsername()
+
+		if err := cnt.AddPlayer(lg, uid, username); err != nil {
+			return err
+		}
+	}
+
+	lg.Debug(
+		"It is finished to add all players.",
+	)
+
+	return nil
+}
+
+func (s *Server) initPlayerListEvent(
+	lg *Logger,
+	uid uuid.UUID,
+	username string,
+	cnt *Client,
+) (
+	ChanForAddPlayerEvent,
+	ChanForRemovePlayerEvent,
+	error,
+) {
+	s.mutex2.Lock()
+	defer s.mutex2.Unlock()
+
+	lg.Debug(
+		"It is started to init PlayerListEvent.",
+	)
+
+	event := NewAddPlayerEvent(uid, username)
+	for _, chanForEvent := range s.m2 {
+		chanForEvent <- event
+	}
+
+	if err := s.addAllPlayers(lg, cnt); err != nil {
+		return nil, nil, err
+	}
+
+	chanForAddEvent := make(ChanForAddPlayerEvent, 1)
+	s.m2[uid] = chanForAddEvent
+
+	chanForRemoveEvent := make(ChanForRemovePlayerEvent, 1)
+	s.m3[uid] = chanForRemoveEvent
+
+	lg.Debug(
+		"It is finished to init PlayerListEvent.",
+	)
+
+	return chanForAddEvent, chanForRemoveEvent, nil
+}
+
+func (s *Server) closePlayerListEvent(
+	lg *Logger,
+	uid uuid.UUID,
+	chanForAddEvent ChanForAddPlayerEvent,
+	chanForRemoveEvent ChanForRemovePlayerEvent,
+) {
+	s.mutex2.Lock()
+	defer s.mutex2.Unlock()
+
+	lg.Debug(
+		"It is started to close PlayerListEvent.",
+	)
+
+	event := NewRemovePlayerEvent(uid)
+	for _, chanForEvent := range s.m3 {
+		chanForEvent <- event
+	}
+
+	close(chanForAddEvent)
+	delete(s.m2, uid)
+	close(chanForRemoveEvent)
+	delete(s.m3, uid)
+
+	lg.Debug(
+		"It is finished to close PlayerListEvent.",
+	)
 }
 
 func (s *Server) handlePlayerListEvent(
@@ -512,51 +610,16 @@ func (s *Server) handlePlayerListEvent(
 
 	uid, username := player.GetUid(), player.GetUsername()
 
-	chanForAddEvent, chanForRemoveEvent := func() (
-		ChanForAddPlayerEvent,
-		ChanForRemovePlayerEvent,
-	) {
-		mutex := s.mutex2
-		mutex.Lock()
-		defer mutex.Unlock()
+	chanForAddEvent, chanForRemoveEvent, err := s.initPlayerListEvent(
+		lg, uid, username, cnt,
+	)
+	if err != nil {
+		panic(err)
+	}
 
-		event := NewAddPlayerEvent(uid, username)
-		for _, chanForEvent := range s.m2 {
-			chanForEvent <- event
-		}
-
-		for _, player := range s.m1 {
-			uid, username := player.GetUid(), player.GetUsername()
-
-			if err := cnt.AddPlayer(lg, uid, username); err != nil {
-				panic(err)
-			}
-		}
-
-		chanForAddEvent := make(ChanForAddPlayerEvent, 1)
-		s.m2[uid] = chanForAddEvent
-
-		chanForRemoveEvent := make(ChanForRemovePlayerEvent, 1)
-		s.m3[uid] = chanForRemoveEvent
-
-		return chanForAddEvent, chanForRemoveEvent
-	}()
-
-	defer func() {
-		mutex := s.mutex2
-		mutex.Lock()
-		defer mutex.Unlock()
-
-		event := NewRemovePlayerEvent(uid)
-		for _, chanForEvent := range s.m3 {
-			chanForEvent <- event
-		}
-
-		close(chanForAddEvent)
-		delete(s.m2, uid)
-		close(chanForRemoveEvent)
-		delete(s.m3, uid)
-	}()
+	defer s.closePlayerListEvent(
+		lg, uid, chanForAddEvent, chanForRemoveEvent,
+	)
 
 	stop := false
 	for {
@@ -608,9 +671,11 @@ func (s *Server) broadcastUpdateLatencyEvent(
 ) {
 	lg.Debug(
 		"It is started to broadcast UpdateLatencyEvent.",
-		NewLgElement("uid", uid),
 		NewLgElement("latency", latency),
 	)
+
+	s.mutex4.RLock()
+	defer s.mutex4.RUnlock()
 
 	event := NewUpdateLatencyEvent(uid, latency)
 	for _, chanForEvent := range s.m4 {
@@ -622,6 +687,46 @@ func (s *Server) broadcastUpdateLatencyEvent(
 	)
 }
 
+func (s *Server) initUpdateLatencyEvent(
+	lg *Logger,
+	uid uuid.UUID,
+) ChanForUpdateLatencyEvent {
+	s.mutex4.Lock()
+	defer s.mutex4.Unlock()
+
+	lg.Debug(
+		"It is started to init UpdateLatencyEvent.",
+	)
+
+	chanForEvent := make(ChanForUpdateLatencyEvent, 1)
+	s.m4[uid] = chanForEvent
+
+	lg.Debug(
+		"It is started to init UpdateLatencyEvent.",
+	)
+	return chanForEvent
+}
+
+func (s *Server) closeUpdateLatencyEvent(
+	lg *Logger,
+	uid uuid.UUID,
+	chanForEvent ChanForUpdateLatencyEvent,
+) {
+	s.mutex4.Lock()
+	defer s.mutex4.Unlock()
+
+	lg.Debug(
+		"It is started to close UpdateLatencyEvent.",
+	)
+
+	close(chanForEvent)
+	delete(s.m4, uid)
+
+	lg.Debug(
+		"It is finished to close UpdateLatencyEvent.",
+	)
+}
+
 func (s *Server) handleUpdateLatencyEvent(
 	uid uuid.UUID,
 	cnt *Client,
@@ -630,18 +735,17 @@ func (s *Server) handleUpdateLatencyEvent(
 ) {
 	lg := NewLogger(
 		NewLgElement("handler", "UpdateLatencyEvent"),
+		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
 	)
 	lg.Debug(
 		"The handler for UpdateLatencyEvent was started.",
 	)
 
-	chanForEvent := make(ChanForUpdateLatencyEvent, 1)
-	s.m4[uid] = chanForEvent
+	chanForEvent := s.initUpdateLatencyEvent(lg, uid)
 
 	defer func() {
-		close(chanForEvent)
-		delete(s.m4, uid)
+		s.closeUpdateLatencyEvent(lg, uid, chanForEvent)
 
 		if err := recover(); err != nil {
 			lg.Error(err)
