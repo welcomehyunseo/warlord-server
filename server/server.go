@@ -641,6 +641,7 @@ func (s *Server) handleUpdateLatencyEvent(
 
 	defer func() {
 		close(chanForEvent)
+		delete(s.m4, uid)
 
 		if err := recover(); err != nil {
 			lg.Error(err)
