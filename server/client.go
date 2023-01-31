@@ -371,7 +371,7 @@ func (cnt *Client) Loop1(
 	state State,
 	max int,
 	online int,
-	desc string,
+	text string,
 	favicon string,
 ) (
 	bool,
@@ -399,25 +399,7 @@ func (cnt *Client) Loop1(
 			"RequestPacket was created.",
 			NewLgElement("packet", packet0),
 		)
-
-		jsonResponse := &JsonResponse{
-			Version: &Version{
-				Name:     McName,
-				Protocol: ProtVer,
-			},
-			Players: &Players{
-				Max:    max,
-				Online: online,
-				Sample: []*Sample{},
-			},
-			Description: &Description{
-				Text: desc,
-			},
-			Favicon:            favicon,
-			PreviewsChat:       false,
-			EnforcesSecureChat: false,
-		}
-		packet1 := NewResponsePacket(jsonResponse)
+		packet1 := NewResponsePacket(max, online, text, favicon)
 		lg.Debug(
 			"ResponsePacket was created.",
 			NewLgElement("packet", packet1),
@@ -494,9 +476,9 @@ func (cnt *Client) Loop2(
 			NewLgElement("uid", uid),
 		)
 
-		packet1 := NewEnableCompressionPacket(CompThold)
+		packet1 := NewEnableCompPacket(CompThold)
 		lg.Debug(
-			"EnableCompressionPacket was created.",
+			"EnableCompPacket was created.",
 			NewLgElement("packet", packet1),
 		)
 		if err := cnt.write(lg, packet1); err != nil {
@@ -551,11 +533,11 @@ func (cnt *Client) Loop3(
 		payload := packet.GetPayload()
 		chanForConfirmKeepAliveEvent <- NewConfirmKeepAliveEvent(payload)
 		break
-	case ChangePlayerPosPacketID:
+	case ChangePosPacketID:
 		packet := NewChangePlayerPosPacket()
 		packet.Unpack(data)
 		lg.Debug(
-			"ChangePlayerPosPacket was created.",
+			"ChangePosPacket was created.",
 			NewLgElement("packet", packet),
 		)
 		x, y, z :=
@@ -564,11 +546,11 @@ func (cnt *Client) Loop3(
 			x, y, z,
 		)
 		break
-	case ChangePlayerPosAndLookPacketID:
-		packet := NewChangePlayerPosAndLookPacket()
+	case ChangePosAndLookPacketID:
+		packet := NewChangePosAndLookPacket()
 		packet.Unpack(data)
 		lg.Debug(
-			"ChangePlayerPosAndLookPacket was created.",
+			"ChangePosAndLookPacket was created.",
 			NewLgElement("packet", packet),
 		)
 		x, y, z :=
@@ -622,13 +604,13 @@ func (cnt *Client) Init(
 		if err != nil {
 			return err
 		}
-		if id != ChangeClientSettingsPacketID {
+		if id != ChangeSettingsPacketID {
 			return InvalidPacketIDError
 		}
-		packet := NewChangeClientSettingsPacket()
+		packet := NewChangeSettingsPacket()
 		packet.Unpack(data)
 		lg.Debug(
-			"ChangeClientSettingsPacket was created.",
+			"ChangeSettingsPacket was created.",
 			NewLgElement("packet", packet),
 		)
 		return nil
@@ -648,7 +630,7 @@ func (cnt *Client) Init(
 	}
 
 	if err := func() error {
-		packet := NewSetPlayerAbilitiesPacket(
+		packet := NewSetAbilitiesPacket(
 			true,
 			true,
 			true,
@@ -657,7 +639,7 @@ func (cnt *Client) Init(
 			0.2,
 		)
 		lg.Debug(
-			"SetPlayerAbilitiesPacket was created.",
+			"SetAbilitiesPacket was created.",
 			NewLgElement("packet", packet),
 		)
 		if err := cnt.writeWithComp(lg, packet); err != nil {
@@ -670,13 +652,13 @@ func (cnt *Client) Init(
 
 	payload := rand.Int31()
 	if err := func() error {
-		packet := NewSetPlayerPosAndLookPacket(
+		packet := NewTeleportPacket(
 			spawnX, spawnY, spawnZ,
 			spawnYaw, spawnPitch,
 			payload,
 		)
 		lg.Debug(
-			"SetPlayerPosAndLookPacket was created.",
+			"TeleportPacket was created.",
 			NewLgElement("packet", packet),
 		)
 		if err := cnt.writeWithComp(lg, packet); err != nil {
@@ -692,13 +674,13 @@ func (cnt *Client) Init(
 		if err != nil {
 			return err
 		}
-		if id != ConfirmTeleportPacketID {
+		if id != FinishTeleportPacketID {
 			return InvalidPacketIDError
 		}
-		packet := NewConfirmTeleportPacket()
+		packet := NewFinishTeleportPacket()
 		packet.Unpack(data)
 		lg.Debug(
-			"ConfirmTeleportPacket was created.",
+			"FinishTeleportPacket was created.",
 			NewLgElement("packet", packet),
 		)
 		payloadPrime := packet.GetPayload()

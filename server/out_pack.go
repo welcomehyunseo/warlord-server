@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
 )
@@ -9,21 +8,18 @@ import (
 const ResponsePacketID = 0x00
 const PongPacketID = 0x01
 
-const DisconnectLoginPacketID = 0x00
+const RejectLoginPacketID = 0x00
 const CompleteLoginPacketID = 0x02
-const EnableCompressionPacketID = 0x03
+const EnableCompPacketID = 0x03
 
 const UnloadChunkPacketID = 0x1D
 const CheckKeepAlivePacketID = 0x1F
 const SendChunkDataPacketID = 0x20
 const JoinGamePacketID = 0x23
-const SetPlayerAbilitiesPacketID = 0x2C
-const SendPlayerListToAddPacketID = 0x2E
-const SendPlayerListToUpdateGamemodePacketID = 0x2E
-const SendPlayerListToUpdateLatencyPacketID = 0x2E
-const SendPlayerListToUpdateDisplayNamePacketID = 0x2E
-const SendPlayerListToRemovePacketID = 0x2E
-const SetPlayerPosAndLookPacketID = 0x2F
+const SetAbilitiesPacketID = 0x2C
+const AddPlayerPacketID = 0x2E
+const RemovePlayerPacketID = 0x2E
+const TeleportPacketID = 0x2F
 const SetSpawnPosPacketID = 0x46
 
 type OutPacket interface {
@@ -32,42 +28,19 @@ type OutPacket interface {
 	Pack() *Data
 }
 
-type Version struct {
-	Name     string `json:"name"`
-	Protocol int32  `json:"protocol"`
-}
-
-type Sample struct {
-	Name string    `json:"name"`
-	Id   uuid.UUID `json:"playerID"`
-}
-
-type Players struct {
-	Max    int       `json:"max"`
-	Online int       `json:"online"`
-	Sample []*Sample `json:"sample"`
-}
-
-type Description struct {
-	Text string `json:"text"`
-}
-
-type JsonResponse struct {
-	Version            *Version     `json:"version"`
-	Players            *Players     `json:"players"`
-	Description        *Description `json:"description"`
-	Favicon            string       `json:"favicon"`
-	PreviewsChat       bool         `json:"previewsChat"`
-	EnforcesSecureChat bool         `json:"enforcesSecureChat"`
-}
-
 type ResponsePacket struct {
 	*packet
-	jsonResponse *JsonResponse
+	max     int    // maximum number of players
+	online  int    // current number of players
+	text    string // string for description
+	favicon string // a png image string that is base64 encoded
 }
 
 func NewResponsePacket(
-	jsonResponse *JsonResponse,
+	max int,
+	online int,
+	text string,
+	favicon string,
 ) *ResponsePacket {
 	return &ResponsePacket{
 		packet: newPacket(
@@ -75,20 +48,55 @@ func NewResponsePacket(
 			StatusState,
 			ResponsePacketID,
 		),
-		jsonResponse: jsonResponse,
+		max:     max,
+		online:  online,
+		text:    text,
+		favicon: favicon,
 	}
 }
 
 func (p *ResponsePacket) Pack() *Data {
 	data := NewData()
-	buf, _ := json.Marshal(p.jsonResponse)
-	data.WriteString(string(buf))
+	jsonString := fmt.Sprintf(
+		"{"+
+			"\"version\":{\"name\":\"%s\",\"protocol\":%d},"+
+			"\"players\":{\"max\":%d,\"online\":%d,\"sample\":[]},"+
+			"\"description\":{\"text\":\"%s\"},"+
+			"\"favicon\":\"%s\","+
+			"\"previewsChat\":%v,"+
+			"\"enforcesSecureChat\":%v"+
+			"}",
+		"1.12.2", 340,
+		p.max, p.online,
+		p.text, p.favicon,
+		true, true,
+	)
+	data.WriteString(jsonString)
 
 	return data
 }
 
-func (p *ResponsePacket) GetJsonResponse() *JsonResponse {
-	return p.jsonResponse
+func (p *ResponsePacket) GetMax() int {
+	return p.max
+}
+
+func (p *ResponsePacket) GetOnline() int {
+	return p.online
+}
+
+func (p *ResponsePacket) GetText() string {
+	return p.text
+}
+
+func (p *ResponsePacket) GetFavicon() string {
+	return p.favicon
+}
+
+func (p *ResponsePacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, max: %d, online: %d, text: %s, favicon: %s }",
+		p.packet, p.max, p.online, p.text, p.favicon,
+	)
 }
 
 type PongPacket struct {
@@ -120,14 +128,21 @@ func (p *PongPacket) GetPayload() int64 {
 	return p.payload
 }
 
+func (p *PongPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, payload: %d }",
+		p.packet, p.payload,
+	)
+}
+
 type CompleteLoginPacket struct {
 	*packet
-	playerID uuid.UUID
+	uid      uuid.UUID
 	username string
 }
 
 func NewCompleteLoginPacket(
-	playerID uuid.UUID,
+	uid uuid.UUID,
 	username string,
 ) *CompleteLoginPacket {
 	return &CompleteLoginPacket{
@@ -136,54 +151,68 @@ func NewCompleteLoginPacket(
 			LoginState,
 			CompleteLoginPacketID,
 		),
-		playerID: playerID,
+		uid:      uid,
 		username: username,
 	}
 }
 
 func (p *CompleteLoginPacket) Pack() *Data {
 	data := NewData()
-	data.WriteString(p.playerID.String())
+	data.WriteString(p.uid.String())
 	data.WriteString(p.username)
 
 	return data
 }
 
-func (p *CompleteLoginPacket) GetPlayerID() uuid.UUID {
-	return p.playerID
+func (p *CompleteLoginPacket) GetUUID() uuid.UUID {
+	return p.uid
 }
 
 func (p *CompleteLoginPacket) GetUsername() string {
 	return p.username
 }
 
-type EnableCompressionPacket struct {
+func (p *CompleteLoginPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, uid: %s, username: %s }",
+		p.packet, p.uid, p.username,
+	)
+}
+
+type EnableCompPacket struct {
 	*packet
 	threshold int32
 }
 
-func NewEnableCompressionPacket(
+func NewEnableCompPacket(
 	threshold int32,
-) *EnableCompressionPacket {
-	return &EnableCompressionPacket{
+) *EnableCompPacket {
+	return &EnableCompPacket{
 		packet: newPacket(
 			Outbound,
 			LoginState,
-			EnableCompressionPacketID,
+			EnableCompPacketID,
 		),
 		threshold: threshold,
 	}
 }
 
-func (p *EnableCompressionPacket) Pack() *Data {
+func (p *EnableCompPacket) Pack() *Data {
 	data := NewData()
 	data.WriteVarInt(p.threshold)
 
 	return data
 }
 
-func (p *EnableCompressionPacket) GetThreshold() int32 {
+func (p *EnableCompPacket) GetThreshold() int32 {
 	return p.threshold
+}
+
+func (p *EnableCompPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, threshold: %d }",
+		p.packet, p.threshold,
+	)
 }
 
 type UnloadChunkPacket struct {
@@ -220,6 +249,13 @@ func (p *UnloadChunkPacket) GetCx() int32 {
 
 func (p *UnloadChunkPacket) GetCz() int32 {
 	return p.cz
+}
+
+func (p *UnloadChunkPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, cx: %d, cz: %d }",
+		p.packet, p.cx, p.cz,
+	)
 }
 
 type CheckKeepAlivePacket struct {
@@ -400,7 +436,14 @@ func (p *JoinGamePacket) GetDebug() bool {
 	return p.debug
 }
 
-type SetPlayerAbilitiesPacket struct {
+func (p *JoinGamePacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, eid: %d, gamemode: %d, dimension: %d, difficulty: %d, level: %s, debug: %v }",
+		p.packet, p.eid, p.gamemode, p.dimension, p.difficulty, p.level, p.debug,
+	)
+}
+
+type SetAbilitiesPacket struct {
 	*packet
 	invulnerable bool
 	flying       bool
@@ -410,19 +453,16 @@ type SetPlayerAbilitiesPacket struct {
 	fovModifier  float32
 }
 
-func NewSetPlayerAbilitiesPacket(
-	invulnerable,
-	flying,
-	allowFlying,
-	instantBreak bool,
+func NewSetAbilitiesPacket(
+	invulnerable, flying, allowFlying, instantBreak bool,
 	flyingSpeed float32,
 	fovModifier float32,
-) *SetPlayerAbilitiesPacket {
-	return &SetPlayerAbilitiesPacket{
+) *SetAbilitiesPacket {
+	return &SetAbilitiesPacket{
 		packet: newPacket(
 			Outbound,
 			PlayState,
-			SetPlayerAbilitiesPacketID,
+			SetAbilitiesPacketID,
 		),
 		invulnerable: invulnerable,
 		flying:       flying,
@@ -433,7 +473,7 @@ func NewSetPlayerAbilitiesPacket(
 	}
 }
 
-func (p *SetPlayerAbilitiesPacket) Pack() *Data {
+func (p *SetAbilitiesPacket) Pack() *Data {
 	data := NewData()
 	bitmask := uint8(0)
 	if p.invulnerable == true {
@@ -455,67 +495,88 @@ func (p *SetPlayerAbilitiesPacket) Pack() *Data {
 	return data
 }
 
-func (p *SetPlayerAbilitiesPacket) GetInvulnerable() bool {
+func (p *SetAbilitiesPacket) GetInvulnerable() bool {
 	return p.invulnerable
 }
 
-func (p *SetPlayerAbilitiesPacket) GetFlying() bool {
+func (p *SetAbilitiesPacket) GetFlying() bool {
 	return p.flying
 }
 
-func (p *SetPlayerAbilitiesPacket) GetAllowFlying() bool {
+func (p *SetAbilitiesPacket) GetAllowFlying() bool {
 	return p.allowFlying
 }
 
-func (p *SetPlayerAbilitiesPacket) GetInstantBreak() bool {
+func (p *SetAbilitiesPacket) GetInstantBreak() bool {
 	return p.instantBreak
 }
 
-func (p *SetPlayerAbilitiesPacket) GetFlyingSpeed() float32 {
+func (p *SetAbilitiesPacket) GetFlyingSpeed() float32 {
 	return p.flyingSpeed
 }
 
-func (p *SetPlayerAbilitiesPacket) GetFovModifier() float32 {
+func (p *SetAbilitiesPacket) GetFovModifier() float32 {
 	return p.fovModifier
 }
 
-type SendPlayerListToAddPacket struct {
-	*packet
-	uid           uuid.UUID
-	username      string
-	textureString string
-	signature     string
-	gamemode      int32
-	ping          int32
-	displayName   string
+func (p *SetAbilitiesPacket) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"invulnerable: %v, "+
+			"flying: %v, "+
+			"allowFlying: %v, "+
+			"instantBreak: %v, "+
+			"flyingSpeed: %f, "+
+			"fovModifier: %f "+
+			"}",
+		p.packet,
+		p.invulnerable,
+		p.flying,
+		p.allowFlying,
+		p.instantBreak,
+		p.flyingSpeed,
+		p.fovModifier,
+	)
 }
 
-func NewSendPlayerListToAddPacket(
+type AddPlayerPacket struct {
+	*packet
+	uid         uuid.UUID
+	username    string
+	texture     string
+	signature   string
+	gamemode    int32
+	ping        int32
+	displayName string
+}
+
+func NewAddPlayerPacket(
 	uid uuid.UUID,
 	username string,
-	textureString string,
+	texture string,
 	signature string,
 	gamemode int32,
 	ping int32,
 	displayName string,
-) *SendPlayerListToAddPacket {
-	return &SendPlayerListToAddPacket{
+) *AddPlayerPacket {
+	return &AddPlayerPacket{
 		packet: newPacket(
 			Outbound,
 			PlayState,
-			SendPlayerListToAddPacketID,
+			AddPlayerPacketID,
 		),
-		uid:           uid,
-		username:      username,
-		textureString: textureString,
-		signature:     signature,
-		gamemode:      gamemode,
-		ping:          ping,
-		displayName:   displayName,
+		uid:         uid,
+		username:    username,
+		texture:     texture,
+		signature:   signature,
+		gamemode:    gamemode,
+		ping:        ping,
+		displayName: displayName,
 	}
 }
 
-func (p *SendPlayerListToAddPacket) Pack() *Data {
+func (p *AddPlayerPacket) Pack() *Data {
 	data := NewData()
 	data.WriteVarInt(0)
 	data.WriteVarInt(1)
@@ -524,59 +585,61 @@ func (p *SendPlayerListToAddPacket) Pack() *Data {
 	data.WriteString(p.username)
 	data.WriteVarInt(1)
 	data.WriteString("texture")
-	data.WriteString(p.textureString)
+	data.WriteString(p.texture)
 	data.WriteBool(true)
 	data.WriteString(p.signature)
 	data.WriteVarInt(p.gamemode)
 	data.WriteVarInt(p.ping)
 	data.WriteBool(false)
-	//data.WriteString(p.displayName)
+	//data.WriteString(p.displayName)  // TODO
 
 	return data
 }
 
-func (p *SendPlayerListToAddPacket) GetUid() uuid.UUID {
+func (p *AddPlayerPacket) GetUid() uuid.UUID {
 	return p.uid
 }
 
-func (p *SendPlayerListToAddPacket) GetUsername() string {
+func (p *AddPlayerPacket) GetUsername() string {
 	return p.username
 }
 
-func (p *SendPlayerListToAddPacket) GetTextureString() string {
-	return p.textureString
+func (p *AddPlayerPacket) GetTexture() string {
+	return p.texture
 }
 
-func (p *SendPlayerListToAddPacket) GetSignature() string {
+func (p *AddPlayerPacket) GetSignature() string {
 	return p.signature
 }
 
-func (p *SendPlayerListToAddPacket) GetGamemode() int32 {
+func (p *AddPlayerPacket) GetGamemode() int32 {
 	return p.gamemode
 }
 
-func (p *SendPlayerListToAddPacket) GetPing() int32 {
+func (p *AddPlayerPacket) GetPing() int32 {
 	return p.ping
 }
 
-func (p *SendPlayerListToAddPacket) GetDisplayName() string {
+func (p *AddPlayerPacket) GetDisplayName() string {
 	return p.displayName
 }
 
-func (p *SendPlayerListToAddPacket) String() string {
+func (p *AddPlayerPacket) String() string {
 	return fmt.Sprintf(
 		"{ "+
+			"packet: %+v, "+
 			"uid: %s, "+
 			"username: %s, "+
-			"textureString: %s, "+
+			"texture: %s, "+
 			"signature: %s, "+
 			"gamemode: %d, "+
 			"ping: %d, "+
 			"displayName: %s "+
 			"}",
+		p.packet,
 		p.uid,
 		p.username,
-		p.textureString,
+		p.texture,
 		p.signature,
 		p.gamemode,
 		p.ping,
@@ -584,25 +647,25 @@ func (p *SendPlayerListToAddPacket) String() string {
 	)
 }
 
-type SendPlayerListToRemovePacket struct {
+type RemovePlayerPacket struct {
 	*packet
 	uid uuid.UUID
 }
 
-func NewSendPlayerListToRemovePacket(
+func NewRemovePlayerPacket(
 	uid uuid.UUID,
-) *SendPlayerListToRemovePacket {
-	return &SendPlayerListToRemovePacket{
+) *RemovePlayerPacket {
+	return &RemovePlayerPacket{
 		packet: newPacket(
 			Outbound,
 			PlayState,
-			SendPlayerListToRemovePacketID,
+			RemovePlayerPacketID,
 		),
 		uid: uid,
 	}
 }
 
-func (p *SendPlayerListToRemovePacket) Pack() *Data {
+func (p *RemovePlayerPacket) Pack() *Data {
 	data := NewData()
 	data.WriteVarInt(4)
 	data.WriteVarInt(1)
@@ -612,18 +675,18 @@ func (p *SendPlayerListToRemovePacket) Pack() *Data {
 	return data
 }
 
-func (p *SendPlayerListToRemovePacket) GetUUID() uuid.UUID {
+func (p *RemovePlayerPacket) GetUUID() uuid.UUID {
 	return p.uid
 }
 
-func (p *SendPlayerListToRemovePacket) String() string {
+func (p *RemovePlayerPacket) String() string {
 	return fmt.Sprintf(
-		"{ uid: %s }",
-		p.uid,
+		"{ packet: %+v, uid: %s }",
+		p.packet, p.uid,
 	)
 }
 
-type SetPlayerPosAndLookPacket struct {
+type TeleportPacket struct {
 	*packet
 	x       float64
 	y       float64
@@ -633,19 +696,16 @@ type SetPlayerPosAndLookPacket struct {
 	payload int32
 }
 
-func NewSetPlayerPosAndLookPacket(
-	x float64,
-	y float64,
-	z float64,
-	yaw float32,
-	pitch float32,
+func NewTeleportPacket(
+	x, y, z float64,
+	yaw, pitch float32,
 	payload int32,
-) *SetPlayerPosAndLookPacket {
-	return &SetPlayerPosAndLookPacket{
+) *TeleportPacket {
+	return &TeleportPacket{
 		packet: newPacket(
 			Outbound,
 			PlayState,
-			SetPlayerPosAndLookPacketID,
+			TeleportPacketID,
 		),
 		x:       x,
 		y:       y,
@@ -656,7 +716,7 @@ func NewSetPlayerPosAndLookPacket(
 	}
 }
 
-func (p *SetPlayerPosAndLookPacket) Pack() *Data {
+func (p *TeleportPacket) Pack() *Data {
 	data := NewData()
 	data.WriteFloat64(p.x)
 	data.WriteFloat64(p.y)
@@ -669,28 +729,43 @@ func (p *SetPlayerPosAndLookPacket) Pack() *Data {
 	return data
 }
 
-func (p *SetPlayerPosAndLookPacket) GetX() float64 {
+func (p *TeleportPacket) GetX() float64 {
 	return p.x
 }
 
-func (p *SetPlayerPosAndLookPacket) GetY() float64 {
+func (p *TeleportPacket) GetY() float64 {
 	return p.y
 }
 
-func (p *SetPlayerPosAndLookPacket) GetZ() float64 {
+func (p *TeleportPacket) GetZ() float64 {
 	return p.z
 }
 
-func (p *SetPlayerPosAndLookPacket) GetYaw() float32 {
+func (p *TeleportPacket) GetYaw() float32 {
 	return p.yaw
 }
 
-func (p *SetPlayerPosAndLookPacket) GetPitch() float32 {
+func (p *TeleportPacket) GetPitch() float32 {
 	return p.pitch
 }
 
-func (p *SetPlayerPosAndLookPacket) GetPayload() int32 {
+func (p *TeleportPacket) GetPayload() int32 {
 	return p.payload
+}
+
+func (p *TeleportPacket) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"x: %f, y: %f, z: %f, "+
+			"yaw: %f, pitch: %f, "+
+			"payload: %d "+
+			"}",
+		p.packet,
+		p.x, p.y, p.z,
+		p.yaw, p.pitch,
+		p.payload,
+	)
 }
 
 type SetSpawnPosPacket struct {
@@ -736,4 +811,9 @@ func (p *SetSpawnPosPacket) GetZ() int {
 	return p.z
 }
 
-// TODO: packet String
+func (p *SetSpawnPosPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, x: %d, y: %d, z: %d }",
+		p.packet, p.x, p.y, p.z,
+	)
+}

@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/google/uuid"
 	"math/rand"
 	"net"
@@ -37,153 +36,6 @@ var DifferentKeepAlivePayloadError = errors.New("the payload of keep-alive must 
 var OutOfRndDistRangeError = errors.New("it is out of maximum and minimum value of render distance")
 
 type ChanForError chan any
-type ChanForUpdatePlayerPosEvent chan *UpdatePlayerPosEvent
-
-type UpdatePlayerPosEvent struct {
-	x float64
-	y float64
-	z float64
-}
-
-func NewUpdatePlayerPosEvent(
-	x, y, z float64,
-) *UpdatePlayerPosEvent {
-	return &UpdatePlayerPosEvent{
-		x: x,
-		y: y,
-		z: z,
-	}
-}
-
-func (e *UpdatePlayerPosEvent) GetX() float64 {
-	return e.x
-}
-
-func (e *UpdatePlayerPosEvent) GetY() float64 {
-	return e.y
-}
-
-func (e *UpdatePlayerPosEvent) GetZ() float64 {
-	return e.z
-}
-
-func (e *UpdatePlayerPosEvent) String() string {
-	return fmt.Sprintf(
-		"{ x: %f, y: %f, z: %f }",
-		e.x, e.y, e.z,
-	)
-}
-
-type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
-
-type ConfirmKeepAliveEvent struct {
-	payload int64
-}
-
-func NewConfirmKeepAliveEvent(
-	payload int64,
-) *ConfirmKeepAliveEvent {
-	return &ConfirmKeepAliveEvent{
-		payload: payload,
-	}
-}
-
-func (e *ConfirmKeepAliveEvent) GetPayload() int64 {
-	return e.payload
-}
-
-func (e *ConfirmKeepAliveEvent) String() string {
-	return fmt.Sprintf(
-		"{ payload: %d }", e.payload,
-	)
-}
-
-type ChanForAddToPlayerListEvent chan *AddToPlayerListEvent
-
-type AddToPlayerListEvent struct {
-	uid      uuid.UUID
-	username string
-}
-
-func NewAddToPlayerListEvent(
-	uid uuid.UUID,
-	username string,
-) *AddToPlayerListEvent {
-	return &AddToPlayerListEvent{
-		uid:      uid,
-		username: username,
-	}
-}
-
-func (p *AddToPlayerListEvent) GetUUID() uuid.UUID {
-	return p.uid
-}
-
-func (p *AddToPlayerListEvent) GetUsername() string {
-	return p.username
-}
-
-func (p *AddToPlayerListEvent) String() string {
-	return fmt.Sprintf(
-		"{ uid: %+v, username: %s } ",
-		p.uid, p.username,
-	)
-}
-
-type ChanForRemoveToPlayerListEvent chan *RemoveToPlayerListEvent
-
-type RemoveToPlayerListEvent struct {
-	uid uuid.UUID
-}
-
-func NewRemoveToPlayerListEvent(
-	uid uuid.UUID,
-) *RemoveToPlayerListEvent {
-	return &RemoveToPlayerListEvent{
-		uid: uid,
-	}
-}
-
-func (p *RemoveToPlayerListEvent) GetUUID() uuid.UUID {
-	return p.uid
-}
-
-func (p *RemoveToPlayerListEvent) String() string {
-	return fmt.Sprintf(
-		"{ uid: %+v } ",
-		p.uid,
-	)
-}
-
-type PlayerListItem struct {
-	uid      uuid.UUID
-	username string
-}
-
-func NewPlayerListItem(
-	uid uuid.UUID,
-	username string,
-) *PlayerListItem {
-	return &PlayerListItem{
-		uid:      uid,
-		username: username,
-	}
-}
-
-func (i *PlayerListItem) GetUUID() uuid.UUID {
-	return i.uid
-}
-
-func (i *PlayerListItem) GetUsername() string {
-	return i.username
-}
-
-func (i *PlayerListItem) String() string {
-	return fmt.Sprintf(
-		"{ uid: %+v, username: %s } ",
-		i.uid, i.username,
-	)
-}
 
 type Server struct {
 	addr string // address
@@ -208,10 +60,10 @@ type Server struct {
 	mutex1 *sync.RWMutex
 	m1     map[uuid.UUID]*Player // by player uid
 
-	mutex2                            *sync.RWMutex
-	playerList                        map[uuid.UUID]*PlayerListItem                // to player uid
-	chanMapForAddToPlayerListEvent    map[uuid.UUID]ChanForAddToPlayerListEvent    // by player uid
-	chanMapForRemoveToPlayerListEvent map[uuid.UUID]ChanForRemoveToPlayerListEvent // by player uid
+	mutex2     *sync.RWMutex
+	playerList map[uuid.UUID]*PlayerListItem                // to player uid
+	m2         map[uuid.UUID]ChanForAddToPlayerListEvent    // by player uid
+	m3         map[uuid.UUID]ChanForRemoveToPlayerListEvent // by player uid
 }
 
 func NewServer(
@@ -233,26 +85,26 @@ func NewServer(
 	var mutex2 sync.RWMutex
 
 	return &Server{
-		addr:                              addr,
-		max:                               max,
-		online:                            0,
-		last:                              0,
-		favicon:                           favicon,
-		desc:                              desc,
-		rndDist:                           rndDist,
-		spawnX:                            spawnX,
-		spawnY:                            spawnY,
-		spawnZ:                            spawnZ,
-		spawnYaw:                          spawnYaw,
-		spawnPitch:                        spawnPitch,
-		mutex0:                            &mutex0,
-		m0:                                make(map[ChunkPosStr]*Chunk),
-		mutex1:                            &mutex1,
-		m1:                                make(map[uuid.UUID]*Player),
-		mutex2:                            &mutex2,
-		playerList:                        make(map[uuid.UUID]*PlayerListItem),
-		chanMapForAddToPlayerListEvent:    make(map[uuid.UUID]ChanForAddToPlayerListEvent),
-		chanMapForRemoveToPlayerListEvent: make(map[uuid.UUID]ChanForRemoveToPlayerListEvent),
+		addr:       addr,
+		max:        max,
+		online:     0,
+		last:       0,
+		favicon:    favicon,
+		desc:       desc,
+		rndDist:    rndDist,
+		spawnX:     spawnX,
+		spawnY:     spawnY,
+		spawnZ:     spawnZ,
+		spawnYaw:   spawnYaw,
+		spawnPitch: spawnPitch,
+		mutex0:     &mutex0,
+		m0:         make(map[ChunkPosStr]*Chunk),
+		mutex1:     &mutex1,
+		m1:         make(map[uuid.UUID]*Player),
+		mutex2:     &mutex2,
+		playerList: make(map[uuid.UUID]*PlayerListItem),
+		m2:         make(map[uuid.UUID]ChanForAddToPlayerListEvent),
+		m3:         make(map[uuid.UUID]ChanForRemoveToPlayerListEvent),
 	}, nil
 }
 
@@ -473,7 +325,7 @@ func (s *Server) handleUpdatePlayerPosEvent(
 				}
 			}
 
-			//onGround := packet.GetOnGround()
+			//ground := packet.GetOnGround()
 
 			lg.Debug(
 				"It is finished to process the event.",
@@ -594,7 +446,7 @@ func (s *Server) handlePlayerListEvent(
 		event := NewAddToPlayerListEvent(uid, username)
 		for _, item := range s.playerList {
 			uid := item.GetUUID()
-			chanForEvent := s.chanMapForAddToPlayerListEvent[uid]
+			chanForEvent := s.m2[uid]
 			chanForEvent <- event
 		}
 
@@ -609,10 +461,10 @@ func (s *Server) handlePlayerListEvent(
 		}
 
 		chanForAddEvent := make(ChanForAddToPlayerListEvent, 1)
-		s.chanMapForAddToPlayerListEvent[uid] = chanForAddEvent
+		s.m2[uid] = chanForAddEvent
 
 		chanForRemoveEvent := make(ChanForRemoveToPlayerListEvent, 1)
-		s.chanMapForRemoveToPlayerListEvent[uid] = chanForRemoveEvent
+		s.m3[uid] = chanForRemoveEvent
 
 		return chanForAddEvent, chanForRemoveEvent
 	}()
@@ -627,14 +479,14 @@ func (s *Server) handlePlayerListEvent(
 		event := NewRemoveToPlayerListEvent(uid)
 		for _, item := range s.playerList {
 			uid := item.GetUUID()
-			chanForEvent := s.chanMapForRemoveToPlayerListEvent[uid]
+			chanForEvent := s.m3[uid]
 			chanForEvent <- event
 		}
 
 		close(chanForAddEvent)
-		delete(s.chanMapForAddToPlayerListEvent, uid)
+		delete(s.m2, uid)
 		close(chanForRemoveEvent)
-		delete(s.chanMapForRemoveToPlayerListEvent, uid)
+		delete(s.m3, uid)
 	}()
 
 	stop := false
