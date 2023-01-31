@@ -172,10 +172,10 @@ type Server struct {
 	mutex1 *sync.RWMutex
 	m1     map[uuid.UUID]*Player // by player uid
 
-	mutexForAddToPlayerList     *sync.RWMutex
-	eventsForAddToPlayerList    map[uuid.UUID]ChanForAddToPlayerListEvent // by player uid
-	mutexForRemoveToPlayerList  *sync.RWMutex
-	eventsForRemoveToPlayerList map[uuid.UUID]ChanForRemoveToPlayerListEvent // by player uid
+	mutexForAddToPlayerListEvent    *sync.RWMutex
+	chansForAddToPlayerListEvent    map[uuid.UUID]ChanForAddToPlayerListEvent // by player uid
+	mutexForRemoveToPlayerListEvent *sync.RWMutex
+	chansForRemoveToPlayerListEvent map[uuid.UUID]ChanForRemoveToPlayerListEvent // by player uid
 }
 
 func NewServer(
@@ -197,21 +197,21 @@ func NewServer(
 	var mutexForRemoveToPlayerList sync.RWMutex
 
 	return &Server{
-		addr:                        addr,
-		max:                         max,
-		online:                      0,
-		last:                        0,
-		favicon:                     favicon,
-		desc:                        desc,
-		rndDist:                     rndDist,
-		mutex0:                      &mutex0,
-		m0:                          make(map[ChunkPosStr]*Chunk),
-		mutex1:                      &mutex1,
-		m1:                          make(map[uuid.UUID]*Player),
-		mutexForAddToPlayerList:     &mutexForAddToPlayerList,
-		eventsForAddToPlayerList:    make(map[uuid.UUID]ChanForAddToPlayerListEvent),
-		mutexForRemoveToPlayerList:  &mutexForRemoveToPlayerList,
-		eventsForRemoveToPlayerList: make(map[uuid.UUID]ChanForRemoveToPlayerListEvent),
+		addr:                            addr,
+		max:                             max,
+		online:                          0,
+		last:                            0,
+		favicon:                         favicon,
+		desc:                            desc,
+		rndDist:                         rndDist,
+		mutex0:                          &mutex0,
+		m0:                              make(map[ChunkPosStr]*Chunk),
+		mutex1:                          &mutex1,
+		m1:                              make(map[uuid.UUID]*Player),
+		mutexForAddToPlayerListEvent:    &mutexForAddToPlayerList,
+		chansForAddToPlayerListEvent:    make(map[uuid.UUID]ChanForAddToPlayerListEvent),
+		mutexForRemoveToPlayerListEvent: &mutexForRemoveToPlayerList,
+		chansForRemoveToPlayerListEvent: make(map[uuid.UUID]ChanForRemoveToPlayerListEvent),
 	}, nil
 }
 
@@ -367,10 +367,10 @@ func (s *Server) closeAddToPlayerListEvent(
 		NewLgElement("uid", uid),
 	)
 
-	s.mutexForAddToPlayerList.Lock()
-	defer s.mutexForAddToPlayerList.Unlock()
+	s.mutexForAddToPlayerListEvent.Lock()
+	defer s.mutexForAddToPlayerListEvent.Unlock()
 
-	delete(s.eventsForAddToPlayerList, uid)
+	delete(s.chansForAddToPlayerListEvent, uid)
 
 	lg.Debug(
 		"It is finished to close AddToPlayerListEvent.",
@@ -382,8 +382,8 @@ func (s *Server) openAddToPlayerListEvent(
 	player *Player,
 	cnt *Client,
 ) error {
-	s.mutexForAddToPlayerList.Lock()
-	defer s.mutexForAddToPlayerList.Unlock()
+	s.mutexForAddToPlayerListEvent.Lock()
+	defer s.mutexForAddToPlayerListEvent.Unlock()
 
 	lg.Debug(
 		"It is started to open AddToPlayerListEvent.",
@@ -403,11 +403,11 @@ func (s *Server) openAddToPlayerListEvent(
 	uid, username := player.GetUid(), player.GetUsername()
 
 	event := NewAddToPlayerListEvent(uid, username)
-	for _, chanForEvent := range s.eventsForAddToPlayerList {
+	for _, chanForEvent := range s.chansForAddToPlayerListEvent {
 		chanForEvent <- event
 	}
 
-	s.eventsForAddToPlayerList[uid] = make(ChanForAddToPlayerListEvent, 1)
+	s.chansForAddToPlayerListEvent[uid] = make(ChanForAddToPlayerListEvent, 1)
 
 	lg.Debug(
 		"It is finished to open AddToPlayerListEvent.",
@@ -420,18 +420,18 @@ func (s *Server) closeRemoveToPlayerListEvent(
 	lg *Logger,
 	uid uuid.UUID,
 ) {
-	s.mutexForRemoveToPlayerList.Lock()
-	defer s.mutexForRemoveToPlayerList.Unlock()
+	s.mutexForRemoveToPlayerListEvent.Lock()
+	defer s.mutexForRemoveToPlayerListEvent.Unlock()
 
 	lg.Debug(
 		"It is started to close RemoveToPlayerListEvent.",
 		NewLgElement("uid", uid),
 	)
 
-	s.mutexForAddToPlayerList.Lock()
-	defer s.mutexForAddToPlayerList.Unlock()
+	s.mutexForAddToPlayerListEvent.Lock()
+	defer s.mutexForAddToPlayerListEvent.Unlock()
 
-	delete(s.eventsForRemoveToPlayerList, uid)
+	delete(s.chansForRemoveToPlayerListEvent, uid)
 
 	lg.Debug(
 		"It is finished to close RemoveToPlayerListEvent.",
@@ -442,8 +442,8 @@ func (s *Server) openRemoveToPlayerListEvent(
 	lg *Logger,
 	player *Player,
 ) error {
-	s.mutexForRemoveToPlayerList.Lock()
-	defer s.mutexForRemoveToPlayerList.Unlock()
+	s.mutexForRemoveToPlayerListEvent.Lock()
+	defer s.mutexForRemoveToPlayerListEvent.Unlock()
 
 	lg.Debug(
 		"It is started to open RemoveToPlayerListEvent.",
@@ -451,7 +451,7 @@ func (s *Server) openRemoveToPlayerListEvent(
 	)
 
 	uid := player.GetUid()
-	s.eventsForRemoveToPlayerList[uid] = make(ChanForRemoveToPlayerListEvent, 1)
+	s.chansForRemoveToPlayerListEvent[uid] = make(ChanForRemoveToPlayerListEvent, 1)
 
 	lg.Debug(
 		"It is finished to open RemoveToPlayerListEvent.",
@@ -463,8 +463,8 @@ func (s *Server) broadcastRemoveToPlayerListEvent(
 	lg *Logger,
 	uid uuid.UUID,
 ) {
-	s.mutexForRemoveToPlayerList.Lock()
-	defer s.mutexForRemoveToPlayerList.Unlock()
+	s.mutexForRemoveToPlayerListEvent.Lock()
+	defer s.mutexForRemoveToPlayerListEvent.Unlock()
 
 	lg.Debug(
 		"It is started to broadcast RemoveToPlayerListEvent.",
@@ -472,7 +472,7 @@ func (s *Server) broadcastRemoveToPlayerListEvent(
 	)
 
 	event := NewRemoveToPlayerListEvent(uid)
-	for _, chanForEvent := range s.eventsForRemoveToPlayerList {
+	for _, chanForEvent := range s.chansForRemoveToPlayerListEvent {
 		chanForEvent <- event
 	}
 
@@ -481,7 +481,7 @@ func (s *Server) broadcastRemoveToPlayerListEvent(
 	)
 }
 
-func (s *Server) handleRemovePlayerToPlayerListEvent(
+func (s *Server) handleRemoveToPlayerListEvent(
 	chanForEvent ChanForRemoveToPlayerListEvent,
 	cnt *Client,
 	chanForError ChanForError,
@@ -496,6 +496,8 @@ func (s *Server) handleRemovePlayerToPlayerListEvent(
 	)
 
 	defer func() {
+		close(chanForEvent)
+
 		if err := recover(); err != nil {
 			lg.Error(err)
 			chanForError <- err
@@ -531,7 +533,7 @@ func (s *Server) handleRemovePlayerToPlayerListEvent(
 	lg.Debug("The handler for RemoveToPlayerListEvent was ended")
 }
 
-func (s *Server) handleAddPlayerToPlayerListEvent(
+func (s *Server) handleAddToPlayerListEvent(
 	chanForEvent ChanForAddToPlayerListEvent,
 	cnt *Client,
 	chanForError ChanForError,
@@ -546,6 +548,8 @@ func (s *Server) handleAddPlayerToPlayerListEvent(
 	)
 
 	defer func() {
+		close(chanForEvent)
+
 		if err := recover(); err != nil {
 			lg.Error(err)
 			chanForError <- err
@@ -596,6 +600,8 @@ func (s *Server) handleConfirmKeepAliveEvent(
 	)
 
 	defer func() {
+		close(chanForEvent)
+
 		if err := recover(); err != nil {
 			lg.Error(err)
 			chanForError <- err
@@ -663,6 +669,8 @@ func (s *Server) handleUpdatePlayerPosEvent(
 	)
 
 	defer func() {
+		close(chanForEvent)
+
 		if err := recover(); err != nil {
 			lg.Error(err)
 			chanForError <- err
@@ -871,8 +879,8 @@ func (s *Server) handleConnection(
 
 	chanForUpdatePlayerPosEvent := make(ChanForUpdatePlayerPosEvent, 1)
 	chanForConfirmKeepAliveEvent := make(ChanForConfirmKeepAliveEvent, 1)
-	chanForAddPlayerToPlayerListEvent := s.eventsForAddToPlayerList[uid]
-	chanForRemovePlayerToPlayerListEvent := s.eventsForRemoveToPlayerList[uid]
+	chanForAddPlayerToPlayerListEvent := s.chansForAddToPlayerListEvent[uid]
+	chanForRemovePlayerToPlayerListEvent := s.chansForRemoveToPlayerListEvent[uid]
 
 	go s.handleUpdatePlayerPosEvent(
 		chanForUpdatePlayerPosEvent,
@@ -889,14 +897,14 @@ func (s *Server) handleConnection(
 		ctx,
 	)
 
-	go s.handleAddPlayerToPlayerListEvent(
+	go s.handleAddToPlayerListEvent(
 		chanForAddPlayerToPlayerListEvent,
 		cnt,
 		chanForError,
 		ctx,
 	)
 
-	go s.handleRemovePlayerToPlayerListEvent(
+	go s.handleRemoveToPlayerListEvent(
 		chanForRemovePlayerToPlayerListEvent,
 		cnt,
 		chanForError,
