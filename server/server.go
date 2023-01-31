@@ -23,6 +23,7 @@ const (
 	MaxRndDist = 32 // maximum render distance
 
 	CheckKeepAliveTime = time.Second * 10
+	Loop3Time          = time.Millisecond * 1
 )
 
 func findRect(
@@ -450,9 +451,8 @@ func (s *Server) handleUpdatePlayerPosEvent(
 				"The event was received by the channel.",
 				NewLgElement("event", event),
 			)
-			x := event.GetX()
-			y := event.GetY()
-			z := event.GetZ()
+			x, y, z :=
+				event.GetX(), event.GetY(), event.GetZ()
 			player.UpdatePos(x, y, z)
 			prevX := player.GetPrevX()
 			//prevY := player.GetPrevY()
@@ -826,7 +826,7 @@ func (s *Server) handleConnection(
 	stop := false
 	for {
 		select {
-		case <-time.After(1):
+		case <-time.After(Loop3Time):
 			finish, err := cnt.Loop3(
 				lg,
 				chanForUpdatePlayerPosEvent,
