@@ -745,7 +745,10 @@ func (s *Server) handleConnection(
 	spawnYaw, spawnPitch :=
 		s.spawnYaw, s.spawnPitch
 
-	player := func() *Player {
+	uid, username := func() (
+		uuid.UUID,
+		string,
+	) {
 		for {
 			finish, uid, username, err := cnt.Loop2(lg, state)
 			if err != nil {
@@ -755,20 +758,18 @@ func (s *Server) handleConnection(
 				continue
 			}
 
-			eid := s.countEntity()
-			player := NewPlayer(
-				eid,
-				uid,
-				username,
-				spawnX, spawnY, spawnZ,
-				spawnYaw, spawnPitch,
-			)
-			return player
+			return uid, username
 		}
 	}()
 
-	eid, uid, username :=
-		player.GetEid(), player.GetUid(), player.GetUsername()
+	eid := s.countEntity()
+	player := NewPlayer(
+		eid,
+		uid,
+		username,
+		spawnX, spawnY, spawnZ,
+		spawnYaw, spawnPitch,
+	)
 	s.addPlayer(player)
 	defer func() {
 		s.removePlayer(uid)
