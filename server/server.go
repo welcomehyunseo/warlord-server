@@ -211,6 +211,9 @@ type Server struct {
 
 	mutex4 *sync.RWMutex
 	m4     map[uuid.UUID]ChanForUpdateLatencyEvent // by player id
+
+	mutex5 *sync.RWMutex
+	m5     map[ChunkPosStr]map[uuid.UUID]struct{}
 }
 
 func NewServer(
@@ -231,6 +234,7 @@ func NewServer(
 	var mutex1 sync.RWMutex
 	var mutex2 sync.RWMutex
 	var mutex4 sync.RWMutex
+	var mutex5 sync.RWMutex
 
 	return &Server{
 		addr:       addr,
@@ -254,6 +258,8 @@ func NewServer(
 		m3:         make(map[uuid.UUID]ChanForRemovePlayerEvent),
 		mutex4:     &mutex4,
 		m4:         make(map[uuid.UUID]ChanForUpdateLatencyEvent),
+		mutex5:     &mutex5,
+		m5:         make(map[ChunkPosStr]map[uuid.UUID]struct{}),
 	}, nil
 }
 
