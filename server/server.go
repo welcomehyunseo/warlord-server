@@ -1256,6 +1256,187 @@ func (s *Server) handleRelativeMoveEvent(
 	lg.Debug("The handler for RelativeMoveEvent was ended")
 }
 
+func (s *Server) initConnection(
+	lg *Logger,
+	eid int32,
+	uid uuid.UUID,
+	username string,
+	cnt *Client,
+	chanForError ChanForError,
+	ctx context.Context,
+) (
+	ChanForUpdatePosEvent,
+	ChanForConfirmKeepAliveEvent,
+	ChanForAddPlayerEvent,
+	ChanForRemovePlayerEvent,
+	ChanForUpdateLatencyEvent,
+	ChanForSpawnPlayerEvent,
+	ChanForDespawnEntityEvent,
+	ChanForRelativeMoveEvent,
+	error,
+) {
+	s.globalMutex.Lock()
+	defer s.globalMutex.Unlock()
+
+	lg.Debug(
+		"It is started to init Connection.",
+	)
+
+	spawnX, spawnY, spawnZ :=
+		s.spawnX, s.spawnY, s.spawnZ
+	spawnYaw, spawnPitch :=
+		s.spawnYaw, s.spawnPitch
+
+	player := NewPlayer(
+		eid,
+		uid,
+		username,
+		spawnX, spawnY, spawnZ,
+		spawnYaw, spawnPitch,
+	)
+	s.addPlayer(player)
+
+	if err := cnt.Init(
+		lg, eid,
+		spawnX, spawnY, spawnZ,
+		spawnYaw, spawnPitch,
+	); err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
+	}
+
+	chanForUpdatePosEvent, err := s.initUpdatePosEvent(
+		lg, uid, cnt,
+	)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
+	}
+	go s.handleUpdatePosEvent(
+		chanForUpdatePosEvent,
+		cnt,
+		player,
+		chanForError,
+		ctx,
+	)
+
+	s.broadcastAddPlayerEvent(lg, uid, username)
+	chanForAddPlayerEvent, err := s.initAddPlayerEvent(
+		lg, uid, cnt,
+	)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
+	}
+	go s.handleAddPlayerEvent(
+		chanForAddPlayerEvent,
+		player,
+		cnt,
+		chanForError,
+		ctx,
+	)
+
+	chanForRemovePlayerEvent, err := s.initRemovePlayerEvent(
+		lg, uid,
+	)
+	go s.handleRemovePlayerEvent(
+		chanForRemovePlayerEvent,
+		player,
+		cnt,
+		chanForError,
+		ctx,
+	)
+
+	chanForUpdateLatencyEvent := s.initUpdateLatencyEvent(lg, uid)
+	go s.handleUpdateLatencyEvent(
+		uid,
+		chanForUpdateLatencyEvent,
+		cnt,
+		chanForError,
+		ctx,
+	)
+
+	chanForConfirmKeepAliveEvent := s.initConfirmKeepAliveEvent(
+		lg,
+	)
+	go s.handleConfirmKeepAliveEvent(
+		chanForConfirmKeepAliveEvent,
+		uid,
+		cnt,
+		chanForError,
+		ctx,
+	)
+
+	chanForSpawnPlayerEvent := s.initSpawnPlayerEvent(
+		lg, uid,
+	)
+	go s.handleSpawnPlayerEvent(
+		chanForSpawnPlayerEvent,
+		uid,
+		cnt,
+		chanForError,
+		ctx,
+	)
+
+	chanForDespawnEntityEvent := s.initDespawnEntityEvent(
+		lg, uid,
+	)
+	go s.handleDespawnEntityEvent(
+		chanForDespawnEntityEvent,
+		uid,
+		cnt,
+		chanForError,
+		ctx,
+	)
+
+	chanForRelativeMoveEvent := s.initRelativeMoveEvent(
+		lg, uid,
+	)
+	go s.handleRelativeMoveEvent(
+		chanForRelativeMoveEvent,
+		uid,
+		cnt,
+		chanForError,
+		ctx,
+	)
+
+	lg.Debug(
+		"It is finished to init Connection.",
+	)
+	return chanForUpdatePosEvent,
+		chanForConfirmKeepAliveEvent,
+		chanForAddPlayerEvent,
+		chanForRemovePlayerEvent,
+		chanForUpdateLatencyEvent,
+		chanForSpawnPlayerEvent,
+		chanForDespawnEntityEvent,
+		chanForRelativeMoveEvent,
+		nil
+}
+
+func (s *Server) closeConnection(
+	lg *Logger,
+	uid uuid.UUID,
+	chanForUpdatePosEvent ChanForUpdatePosEvent,
+	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
+	chanForAddPlayerEvent ChanForAddPlayerEvent,
+	chanForRemovePlayerEvent ChanForRemovePlayerEvent,
+	chanForUpdateLatencyEvent ChanForUpdateLatencyEvent,
+	chanForSpawnPlayerEvent ChanForSpawnPlayerEvent,
+	chanForDespawnEntityEvent ChanForDespawnEntityEvent,
+	chanForRelativeMoveEvent ChanForRelativeMoveEvent,
+) {
+	s.globalMutex.Lock()
+	defer s.globalMutex.Unlock()
+
+	s.removePlayer(uid)
+	s.closeUpdatePosEvent(lg, chanForUpdatePosEvent)
+	s.closeConfirmKeepAliveEvent(lg, chanForConfirmKeepAliveEvent)
+	s.closeAddPlayerEvent(lg, uid, chanForAddPlayerEvent)
+	s.closeRemovePlayerEvent(lg, uid, chanForRemovePlayerEvent)
+	s.closeUpdateLatencyEvent(lg, uid, chanForUpdateLatencyEvent)
+	s.closeSpawnPlayerEvent(lg, uid, chanForSpawnPlayerEvent)
+	s.closeDespawnEntityEvent(lg, uid, chanForDespawnEntityEvent)
+	s.closeRelativeMoveEvent(lg, uid, chanForRelativeMoveEvent)
+}
+
 func (s *Server) handleConnection(
 	conn net.Conn,
 ) {
@@ -1357,160 +1538,16 @@ func (s *Server) handleConnection(
 		chanForSpawnPlayerEvent,
 		chanForDespawnEntityEvent,
 		chanForRelativeMoveEvent,
-		err := func(
-		lg *Logger,
-		uid uuid.UUID, username string,
-		chanForError ChanForError,
-	) (
-		ChanForUpdatePosEvent,
-		ChanForConfirmKeepAliveEvent,
-		ChanForAddPlayerEvent,
-		ChanForRemovePlayerEvent,
-		ChanForUpdateLatencyEvent,
-		ChanForSpawnPlayerEvent,
-		ChanForDespawnEntityEvent,
-		ChanForRelativeMoveEvent,
-		error,
-	) {
-		s.globalMutex.Lock()
-		defer s.globalMutex.Unlock()
-
-		lg.Debug(
-			"It is started to init Connection.",
-		)
-
-		spawnX, spawnY, spawnZ :=
-			s.spawnX, s.spawnY, s.spawnZ
-		spawnYaw, spawnPitch :=
-			s.spawnYaw, s.spawnPitch
-
-		player := NewPlayer(
+		err :=
+		s.initConnection(
+			lg,
 			eid,
 			uid,
 			username,
-			spawnX, spawnY, spawnZ,
-			spawnYaw, spawnPitch,
-		)
-		s.addPlayer(player)
-
-		if err := cnt.Init(
-			lg, eid,
-			spawnX, spawnY, spawnZ,
-			spawnYaw, spawnPitch,
-		); err != nil {
-			return nil, nil, nil, nil, nil, nil, nil, nil, err
-		}
-
-		chanForUpdatePosEvent, err := s.initUpdatePosEvent(
-			lg, uid, cnt,
-		)
-		if err != nil {
-			return nil, nil, nil, nil, nil, nil, nil, nil, err
-		}
-		go s.handleUpdatePosEvent(
-			chanForUpdatePosEvent,
-			cnt,
-			player,
-			chanForError,
-			ctx,
-		)
-
-		s.broadcastAddPlayerEvent(lg, uid, username)
-		chanForAddPlayerEvent, err := s.initAddPlayerEvent(
-			lg, uid, cnt,
-		)
-		if err != nil {
-			return nil, nil, nil, nil, nil, nil, nil, nil, err
-		}
-		go s.handleAddPlayerEvent(
-			chanForAddPlayerEvent,
-			player,
 			cnt,
 			chanForError,
 			ctx,
 		)
-
-		chanForRemovePlayerEvent, err := s.initRemovePlayerEvent(
-			lg, uid,
-		)
-		go s.handleRemovePlayerEvent(
-			chanForRemovePlayerEvent,
-			player,
-			cnt,
-			chanForError,
-			ctx,
-		)
-
-		chanForUpdateLatencyEvent := s.initUpdateLatencyEvent(lg, uid)
-		go s.handleUpdateLatencyEvent(
-			uid,
-			chanForUpdateLatencyEvent,
-			cnt,
-			chanForError,
-			ctx,
-		)
-
-		chanForConfirmKeepAliveEvent := s.initConfirmKeepAliveEvent(
-			lg,
-		)
-		go s.handleConfirmKeepAliveEvent(
-			chanForConfirmKeepAliveEvent,
-			uid,
-			cnt,
-			chanForError,
-			ctx,
-		)
-
-		chanForSpawnPlayerEvent := s.initSpawnPlayerEvent(
-			lg, uid,
-		)
-		go s.handleSpawnPlayerEvent(
-			chanForSpawnPlayerEvent,
-			uid,
-			cnt,
-			chanForError,
-			ctx,
-		)
-
-		chanForDespawnEntityEvent := s.initDespawnEntityEvent(
-			lg, uid,
-		)
-		go s.handleDespawnEntityEvent(
-			chanForDespawnEntityEvent,
-			uid,
-			cnt,
-			chanForError,
-			ctx,
-		)
-
-		chanForRelativeMoveEvent := s.initRelativeMoveEvent(
-			lg, uid,
-		)
-		go s.handleRelativeMoveEvent(
-			chanForRelativeMoveEvent,
-			uid,
-			cnt,
-			chanForError,
-			ctx,
-		)
-
-		lg.Debug(
-			"It is finished to init Connection.",
-		)
-		return chanForUpdatePosEvent,
-			chanForConfirmKeepAliveEvent,
-			chanForAddPlayerEvent,
-			chanForRemovePlayerEvent,
-			chanForUpdateLatencyEvent,
-			chanForSpawnPlayerEvent,
-			chanForDespawnEntityEvent,
-			chanForRelativeMoveEvent,
-			nil
-	}(
-		lg,
-		uid, username,
-		chanForError,
-	)
 	if err != nil {
 		panic(err)
 	}
@@ -1519,20 +1556,17 @@ func (s *Server) handleConnection(
 		s.broadcastRemovePlayerEvent(lg, uid)
 	}()
 
-	defer func() {
-		s.globalMutex.Lock()
-		defer s.globalMutex.Unlock()
-
-		s.removePlayer(uid)
-		s.closeUpdatePosEvent(lg, chanForUpdatePosEvent)
-		s.closeConfirmKeepAliveEvent(lg, chanForConfirmKeepAliveEvent)
-		s.closeAddPlayerEvent(lg, uid, chanForAddPlayerEvent)
-		s.closeRemovePlayerEvent(lg, uid, chanForRemovePlayerEvent)
-		s.closeUpdateLatencyEvent(lg, uid, chanForUpdateLatencyEvent)
-		s.closeSpawnPlayerEvent(lg, uid, chanForSpawnPlayerEvent)
-		s.closeDespawnEntityEvent(lg, uid, chanForDespawnEntityEvent)
-		s.closeRelativeMoveEvent(lg, uid, chanForRelativeMoveEvent)
-	}()
+	defer s.closeConnection(
+		lg, uid,
+		chanForUpdatePosEvent,
+		chanForConfirmKeepAliveEvent,
+		chanForAddPlayerEvent,
+		chanForRemovePlayerEvent,
+		chanForUpdateLatencyEvent,
+		chanForSpawnPlayerEvent,
+		chanForDespawnEntityEvent,
+		chanForRelativeMoveEvent,
+	)
 
 	stop := false
 	for {
