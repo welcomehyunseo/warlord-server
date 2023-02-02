@@ -611,7 +611,6 @@ func (s *Server) addAllPlayers(
 	lg.Debug(
 		"It is finished to add all players.",
 	)
-
 	return nil
 }
 
@@ -1318,7 +1317,6 @@ func (s *Server) initConnection(
 		ctx,
 	)
 
-	s.broadcastAddPlayerEvent(lg, uid, username)
 	chanForAddPlayerEvent, err := s.initAddPlayerEvent(
 		lg, uid, cnt,
 	)
@@ -1530,6 +1528,11 @@ func (s *Server) handleConnection(
 		cancel()
 	}()
 
+	s.broadcastAddPlayerEvent(lg, uid, username)
+	defer func() {
+		s.broadcastRemovePlayerEvent(lg, uid)
+	}()
+
 	chanForUpdatePosEvent,
 		chanForConfirmKeepAliveEvent,
 		chanForAddPlayerEvent,
@@ -1551,11 +1554,6 @@ func (s *Server) handleConnection(
 	if err != nil {
 		panic(err)
 	}
-
-	defer func() {
-		s.broadcastRemovePlayerEvent(lg, uid)
-	}()
-
 	defer s.closeConnection(
 		lg, uid,
 		chanForUpdatePosEvent,
