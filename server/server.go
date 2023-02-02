@@ -79,8 +79,8 @@ type Server struct {
 	mutex7 *sync.RWMutex
 	m7     map[uuid.UUID]ChanForDespawnEntityEvent
 
-	mutex9 *sync.RWMutex
-	m9     map[uuid.UUID]ChanForRelativeMoveEvent
+	mutex8 *sync.RWMutex
+	m8     map[uuid.UUID]ChanForRelativeMoveEvent
 }
 
 func NewServer(
@@ -104,6 +104,9 @@ func NewServer(
 	var mutex3 sync.RWMutex
 	var mutex4 sync.RWMutex
 	var mutex5 sync.RWMutex
+	var mutex6 sync.RWMutex
+	var mutex7 sync.RWMutex
+	var mutex8 sync.RWMutex
 
 	return &Server{
 		addr:        addr,
@@ -131,6 +134,12 @@ func NewServer(
 		m4:          make(map[uuid.UUID]ChanForUpdateLatencyEvent),
 		mutex5:      &mutex5,
 		m5:          make(map[ChunkPosStr]map[uuid.UUID]types.Nil),
+		mutex6:      &mutex6,
+		m6:          make(map[uuid.UUID]ChanForSpawnPlayerEvent),
+		mutex7:      &mutex7,
+		m7:          make(map[uuid.UUID]ChanForDespawnEntityEvent),
+		mutex8:      &mutex8,
+		m8:          make(map[uuid.UUID]ChanForRelativeMoveEvent),
 	}, nil
 }
 
@@ -478,6 +487,108 @@ func (s *Server) handleUpdatePosEvent(
 	lg.Debug("The handler for UpdatePosEvent was ended.")
 }
 
+func (s *Server) initConfirmKeepAliveEvent(
+	lg *Logger,
+) ChanForConfirmKeepAliveEvent {
+	lg.Debug(
+		"It is started to init ConfirmKeepAliveEvent.",
+	)
+
+	chanForEvent := make(ChanForConfirmKeepAliveEvent, 1)
+
+	lg.Debug(
+		"It is finished to init ConfirmKeepAliveEvent.",
+	)
+	return chanForEvent
+}
+
+func (s *Server) closeConfirmKeepAliveEvent(
+	lg *Logger,
+	chanForEvent ChanForConfirmKeepAliveEvent,
+) ChanForConfirmKeepAliveEvent {
+	lg.Debug(
+		"It is started to close ConfirmKeepAliveEvent.",
+	)
+
+	close(chanForEvent)
+
+	lg.Debug(
+		"It is started to close ConfirmKeepAliveEvent.",
+	)
+	return chanForEvent
+}
+
+func (s *Server) handleConfirmKeepAliveEvent(
+	chanForEvent ChanForConfirmKeepAliveEvent,
+	uid uuid.UUID,
+	cnt *Client,
+	chanForError ChanForError,
+	ctx context.Context,
+) {
+	lg := NewLogger(
+		NewLgElement("handler", "ConfirmKeepAliveEvent"),
+		NewLgElement("uid", uid),
+		NewLgElement("client", cnt),
+	)
+	lg.Debug(
+		"The handler for ConfirmKeepAliveEvent was started.",
+	)
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	start := time.Time{}
+	var payload0 int64
+
+	// TODO: update start
+
+	stop := false
+	for {
+		select {
+		case <-time.After(CheckKeepAliveTime):
+			if start.IsZero() == false {
+				break
+			}
+			payload0 = rand.Int63()
+			if err := cnt.CheckKeepAlive(lg, payload0); err != nil {
+				panic(err)
+			}
+			start = time.Now()
+		case event := <-chanForEvent:
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			payload1 := event.GetPayload()
+			if payload1 != payload0 {
+				panic(DifferentKeepAlivePayloadError)
+			}
+			end := time.Now()
+			latency := end.Sub(start).Milliseconds()
+
+			s.broadcastUpdateLatencyEvent(lg, uid, int32(latency))
+
+			start = time.Time{}
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		case <-ctx.Done():
+			stop = true
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("The handler for ConfirmKeepAliveEvent was ended")
+}
+
 func (s *Server) addAllPlayers(
 	lg *Logger,
 	cnt *Client,
@@ -576,14 +687,14 @@ func (s *Server) closeAddPlayerEvent(
 }
 
 func (s *Server) handleAddPlayerEvent(
-	player *Player,
 	chanForEvent ChanForAddPlayerEvent,
+	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 	ctx context.Context,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "PlayerListEvent"),
+		NewLgElement("handler", "AddPlayerEvent"),
 		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
@@ -701,7 +812,7 @@ func (s *Server) handleRemovePlayerEvent(
 	ctx context.Context,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "PlayerListEvent"),
+		NewLgElement("handler", "RemovePlayerEvent"),
 		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
@@ -784,7 +895,7 @@ func (s *Server) initUpdateLatencyEvent(
 	s.m4[uid] = chanForEvent
 
 	lg.Debug(
-		"It is started to init UpdateLatencyEvent.",
+		"It is finished to init UpdateLatencyEvent.",
 	)
 	return chanForEvent
 }
@@ -901,6 +1012,7 @@ func (s *Server) closeSpawnPlayerEvent(
 }
 
 func (s *Server) handleSpawnPlayerEvent(
+	chanForEvent ChanForSpawnPlayerEvent,
 	uid uuid.UUID,
 	cnt *Client,
 	chanForError ChanForError,
@@ -915,11 +1027,7 @@ func (s *Server) handleSpawnPlayerEvent(
 		"The handler for SpawnPlayerEvent was started.",
 	)
 
-	chanForEvent := s.initSpawnPlayerEvent(lg, uid)
-
 	defer func() {
-		s.closeSpawnPlayerEvent(lg, uid, chanForEvent)
-
 		if err := recover(); err != nil {
 			lg.Error(err)
 			chanForError <- err
@@ -1004,6 +1112,7 @@ func (s *Server) closeDespawnEntityEvent(
 }
 
 func (s *Server) handleDespawnEntityEvent(
+	chanForEvent ChanForDespawnEntityEvent,
 	uid uuid.UUID,
 	cnt *Client,
 	chanForError ChanForError,
@@ -1018,10 +1127,7 @@ func (s *Server) handleDespawnEntityEvent(
 		"The handler for DespawnEntityEvent was started.",
 	)
 
-	chanForEvent := s.initDespawnEntityEvent(lg, uid)
-
 	defer func() {
-		s.closeDespawnEntityEvent(lg, uid, chanForEvent)
 
 		if err := recover(); err != nil {
 			lg.Error(err)
@@ -1060,93 +1166,81 @@ func (s *Server) handleDespawnEntityEvent(
 	lg.Debug("The handler for DespawnEntityEvent was ended")
 }
 
-func (s *Server) initConfirmKeepAliveEvent(
+func (s *Server) initRelativeMoveEvent(
 	lg *Logger,
-) ChanForConfirmKeepAliveEvent {
+	uid uuid.UUID,
+) ChanForRelativeMoveEvent {
+	s.mutex8.Lock()
+	defer s.mutex8.Unlock()
+
 	lg.Debug(
-		"It is started to init ConfirmKeepAliveEvent.",
+		"It is started to init RelativeMoveEvent.",
 	)
 
-	chanForEvent := make(ChanForConfirmKeepAliveEvent, 1)
+	chanForEvent := make(ChanForRelativeMoveEvent, 1)
+	s.m8[uid] = chanForEvent
 
 	lg.Debug(
-		"It is started to init ConfirmKeepAliveEvent.",
+		"It is started to init RelativeMoveEvent.",
 	)
 	return chanForEvent
 }
 
-func (s *Server) closeConfirmKeepAliveEvent(
+func (s *Server) closeRelativeMoveEvent(
 	lg *Logger,
-	chanForEvent ChanForConfirmKeepAliveEvent,
-) ChanForConfirmKeepAliveEvent {
+	uid uuid.UUID,
+	chanForEvent ChanForRelativeMoveEvent,
+) {
+	s.mutex8.Lock()
+	defer s.mutex8.Unlock()
+
 	lg.Debug(
-		"It is started to close ConfirmKeepAliveEvent.",
+		"It is started to close RelativeMoveEvent.",
 	)
 
 	close(chanForEvent)
+	delete(s.m8, uid)
 
 	lg.Debug(
-		"It is started to close ConfirmKeepAliveEvent.",
+		"It is finished to close RelativeMoveEvent.",
 	)
-	return chanForEvent
 }
 
-func (s *Server) handleConfirmKeepAliveEvent(
-	chanForEvent ChanForConfirmKeepAliveEvent,
+func (s *Server) handleRelativeMoveEvent(
+	chanForEvent ChanForRelativeMoveEvent,
 	uid uuid.UUID,
 	cnt *Client,
 	chanForError ChanForError,
 	ctx context.Context,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "ConfirmKeepAliveEvent"),
+		NewLgElement("handler", "RelativeMoveEvent"),
 		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
 	)
 	lg.Debug(
-		"The handler for ConfirmKeepAliveEvent was started.",
+		"The handler for RelativeMoveEvent was started.",
 	)
 
 	defer func() {
+
 		if err := recover(); err != nil {
 			lg.Error(err)
 			chanForError <- err
 		}
 	}()
 
-	start := time.Time{}
-	var payload0 int64
-
-	// TODO: update start
-
 	stop := false
 	for {
 		select {
-		case <-time.After(CheckKeepAliveTime):
-			if start.IsZero() == false {
-				break
-			}
-			payload0 = rand.Int63()
-			if err := cnt.CheckKeepAlive(lg, payload0); err != nil {
-				panic(err)
-			}
-			start = time.Now()
 		case event := <-chanForEvent:
 			lg.Debug(
 				"The event was received by the channel.",
 				NewLgElement("event", event),
 			)
 
-			payload1 := event.GetPayload()
-			if payload1 != payload0 {
-				panic(DifferentKeepAlivePayloadError)
-			}
-			end := time.Now()
-			latency := end.Sub(start).Milliseconds()
+			// TODO
 
-			s.broadcastUpdateLatencyEvent(lg, uid, int32(latency))
-
-			start = time.Time{}
 			lg.Debug(
 				"It is finished to process the event.",
 			)
@@ -1159,7 +1253,7 @@ func (s *Server) handleConfirmKeepAliveEvent(
 		}
 	}
 
-	lg.Debug("The handler for ConfirmKeepAliveEvent was ended")
+	lg.Debug("The handler for RelativeMoveEvent was ended")
 }
 
 func (s *Server) handleConnection(
@@ -1260,6 +1354,9 @@ func (s *Server) handleConnection(
 		chanForAddPlayerEvent,
 		chanForRemovePlayerEvent,
 		chanForUpdateLatencyEvent,
+		chanForSpawnPlayerEvent,
+		chanForDespawnEntityEvent,
+		chanForRelativeMoveEvent,
 		err := func(
 		lg *Logger,
 		uid uuid.UUID, username string,
@@ -1270,6 +1367,9 @@ func (s *Server) handleConnection(
 		ChanForAddPlayerEvent,
 		ChanForRemovePlayerEvent,
 		ChanForUpdateLatencyEvent,
+		ChanForSpawnPlayerEvent,
+		ChanForDespawnEntityEvent,
+		ChanForRelativeMoveEvent,
 		error,
 	) {
 		s.globalMutex.Lock()
@@ -1298,14 +1398,14 @@ func (s *Server) handleConnection(
 			spawnX, spawnY, spawnZ,
 			spawnYaw, spawnPitch,
 		); err != nil {
-			return nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
 
 		chanForUpdatePosEvent, err := s.initUpdatePosEvent(
 			lg, uid, cnt,
 		)
 		if err != nil {
-			return nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
 		go s.handleUpdatePosEvent(
 			chanForUpdatePosEvent,
@@ -1315,16 +1415,16 @@ func (s *Server) handleConnection(
 			ctx,
 		)
 
+		s.broadcastAddPlayerEvent(lg, uid, username)
 		chanForAddPlayerEvent, err := s.initAddPlayerEvent(
 			lg, uid, cnt,
 		)
-		s.broadcastAddPlayerEvent(lg, uid, username)
 		if err != nil {
-			return nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
 		go s.handleAddPlayerEvent(
-			player,
 			chanForAddPlayerEvent,
+			player,
 			cnt,
 			chanForError,
 			ctx,
@@ -1361,6 +1461,39 @@ func (s *Server) handleConnection(
 			ctx,
 		)
 
+		chanForSpawnPlayerEvent := s.initSpawnPlayerEvent(
+			lg, uid,
+		)
+		go s.handleSpawnPlayerEvent(
+			chanForSpawnPlayerEvent,
+			uid,
+			cnt,
+			chanForError,
+			ctx,
+		)
+
+		chanForDespawnEntityEvent := s.initDespawnEntityEvent(
+			lg, uid,
+		)
+		go s.handleDespawnEntityEvent(
+			chanForDespawnEntityEvent,
+			uid,
+			cnt,
+			chanForError,
+			ctx,
+		)
+
+		chanForRelativeMoveEvent := s.initRelativeMoveEvent(
+			lg, uid,
+		)
+		go s.handleRelativeMoveEvent(
+			chanForRelativeMoveEvent,
+			uid,
+			cnt,
+			chanForError,
+			ctx,
+		)
+
 		lg.Debug(
 			"It is finished to init Connection.",
 		)
@@ -1369,6 +1502,9 @@ func (s *Server) handleConnection(
 			chanForAddPlayerEvent,
 			chanForRemovePlayerEvent,
 			chanForUpdateLatencyEvent,
+			chanForSpawnPlayerEvent,
+			chanForDespawnEntityEvent,
+			chanForRelativeMoveEvent,
 			nil
 	}(
 		lg,
@@ -1393,6 +1529,9 @@ func (s *Server) handleConnection(
 		s.closeAddPlayerEvent(lg, uid, chanForAddPlayerEvent)
 		s.closeRemovePlayerEvent(lg, uid, chanForRemovePlayerEvent)
 		s.closeUpdateLatencyEvent(lg, uid, chanForUpdateLatencyEvent)
+		s.closeSpawnPlayerEvent(lg, uid, chanForSpawnPlayerEvent)
+		s.closeDespawnEntityEvent(lg, uid, chanForDespawnEntityEvent)
+		s.closeRelativeMoveEvent(lg, uid, chanForRelativeMoveEvent)
 	}()
 
 	stop := false
