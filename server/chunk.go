@@ -355,7 +355,7 @@ func (p *ChunkPart) SetBlock(
 
 func (p *ChunkPart) String() string {
 	return fmt.Sprintf(
-		"{ palette: %+v, ids: [...] m0: %+v }",
+		"{ palette: %+v, ids: [...], m0: %+v }",
 		p.palette, p.m0,
 	)
 }

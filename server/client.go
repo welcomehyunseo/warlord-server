@@ -503,7 +503,7 @@ func (cnt *Client) Loop2(
 
 func (cnt *Client) Loop3(
 	lg *Logger,
-	chanForUpdatePlayerPosEvent ChanForUpdatePosEvent,
+	chanForUpdatePosEvent ChanForUpdatePosEvent,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 	state State,
 ) (
@@ -542,7 +542,7 @@ func (cnt *Client) Loop3(
 		)
 		x, y, z :=
 			packet.GetX(), packet.GetY(), packet.GetZ()
-		chanForUpdatePlayerPosEvent <- NewUpdatePosEvent(
+		chanForUpdatePosEvent <- NewUpdatePosEvent(
 			x, y, z,
 		)
 		break
@@ -555,7 +555,7 @@ func (cnt *Client) Loop3(
 		)
 		x, y, z :=
 			packet.GetX(), packet.GetY(), packet.GetZ()
-		chanForUpdatePlayerPosEvent <- NewUpdatePosEvent(
+		chanForUpdatePosEvent <- NewUpdatePosEvent(
 			x, y, z,
 		)
 		break
@@ -845,6 +845,79 @@ func (cnt *Client) UpdateLatency(
 
 	lg.Debug(
 		"It is finished to update latency",
+	)
+
+	return nil
+}
+
+func (cnt *Client) SpawnPlayer(
+	lg *Logger,
+	eid int32,
+	uid uuid.UUID,
+	x, y, z float64,
+	yaw, pitch float32,
+) error {
+	lg.Debug(
+		"It is started to spawn player",
+	)
+
+	packet := NewSpawnPlayerPacket(
+		eid, uid,
+		x, y, z,
+		yaw, pitch,
+	)
+	if err := cnt.writeWithComp(lg, packet); err != nil {
+		return err
+	}
+
+	lg.Debug(
+		"It is finished to spawn player",
+	)
+
+	return nil
+}
+
+func (cnt *Client) RelativeMove(
+	lg *Logger,
+	eid int32,
+	deltaX, deltaY, deltaZ int16,
+	ground bool,
+) error {
+	lg.Debug(
+		"It is started to move relatively.",
+	)
+
+	packet := NewRelativeMovePacket(
+		eid,
+		deltaX, deltaY, deltaZ,
+		ground,
+	)
+	if err := cnt.writeWithComp(lg, packet); err != nil {
+		return err
+	}
+
+	lg.Debug(
+		"It is finished to move relatively.",
+	)
+
+	return nil
+}
+
+func (cnt *Client) DespawnEntity(
+	lg *Logger,
+	eid int32,
+) error {
+	lg.Debug(
+		"It is started to despawn player",
+	)
+
+	packet := NewDespawnEntityPacket(eid)
+	if err := cnt.writeWithComp(lg, packet); err != nil {
+		return err
+	}
+
+	lg.Debug(
+		"It is finished to despawn player",
 	)
 
 	return nil

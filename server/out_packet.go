@@ -12,15 +12,18 @@ const RejectLoginPacketID = 0x00
 const CompleteLoginPacketID = 0x02
 const EnableCompPacketID = 0x03
 
+const SpawnPlayerPacketID = 0x05
 const UnloadChunkPacketID = 0x1D
 const CheckKeepAlivePacketID = 0x1F
 const SendChunkDataPacketID = 0x20
 const JoinGamePacketID = 0x23
+const RelativeMovePacketID = 0x26
 const SetAbilitiesPacketID = 0x2C
 const AddPlayerPacketID = 0x2E
 const RemovePlayerPacketID = 0x2E
 const UpdateLatencyPacketID = 0x2E
 const TeleportPacketID = 0x2F
+const DespawnEntityPacketID = 0x32
 const SetSpawnPosPacketID = 0x46
 
 type OutPacket interface {
@@ -213,6 +216,105 @@ func (p *EnableCompPacket) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, threshold: %d }",
 		p.packet, p.threshold,
+	)
+}
+
+type SpawnPlayerPacket struct {
+	*packet
+	eid   int32
+	uid   uuid.UUID
+	x     float64
+	y     float64
+	z     float64
+	yaw   float32
+	pitch float32
+	//metadata
+}
+
+func NewSpawnPlayerPacket(
+	eid int32,
+	uid uuid.UUID,
+	x, y, z float64,
+	yaw, pitch float32,
+) *SpawnPlayerPacket {
+	return &SpawnPlayerPacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			SpawnPlayerPacketID,
+		),
+		eid:   eid,
+		uid:   uid,
+		x:     x,
+		y:     y,
+		z:     z,
+		yaw:   yaw,
+		pitch: pitch,
+	}
+}
+
+func (p *SpawnPlayerPacket) Pack() *Data {
+	data := NewData()
+	data.WriteVarInt(p.eid)
+	data.WriteUUID(p.uid)
+	data.WriteFloat64(p.x)
+	data.WriteFloat64(p.y)
+	data.WriteFloat64(p.z)
+	data.WriteFloat32(p.yaw)
+	data.WriteFloat32(p.pitch)
+	data.WriteUint8(0xff)
+
+	return data
+}
+
+func (p *SpawnPlayerPacket) GetEID() int32 {
+	return p.eid
+}
+
+func (p *SpawnPlayerPacket) GetUUID() uuid.UUID {
+	return p.uid
+}
+
+func (p *SpawnPlayerPacket) GetX() float64 {
+	return p.x
+}
+
+func (p *SpawnPlayerPacket) GetY() float64 {
+	return p.y
+}
+
+func (p *SpawnPlayerPacket) GetZ() float64 {
+	return p.z
+}
+
+func (p *SpawnPlayerPacket) GetYaw() float32 {
+	return p.yaw
+}
+
+func (p *SpawnPlayerPacket) GetPitch() float32 {
+	return p.pitch
+}
+
+func (p *SpawnPlayerPacket) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"eid: %d, "+
+			"uid: %s, "+
+			"x: %f, "+
+			"y: %f, "+
+			"z: %f, "+
+			"yaw: %f, "+
+			"pitch: %f "+
+			"}",
+		p.packet,
+		p.eid,
+		p.uid,
+		p.x,
+		p.y,
+		p.z,
+		p.yaw,
+		p.pitch,
 	)
 }
 
@@ -441,6 +543,84 @@ func (p *JoinGamePacket) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, eid: %d, gamemode: %d, dimension: %d, difficulty: %d, level: %s, debug: %v }",
 		p.packet, p.eid, p.gamemode, p.dimension, p.difficulty, p.level, p.debug,
+	)
+}
+
+type RelativeMovePacket struct {
+	*packet
+	eid    int32
+	deltaX int16
+	deltaY int16
+	deltaZ int16
+	ground bool
+}
+
+func NewRelativeMovePacket(
+	eid int32,
+	deltaX, deltaY, deltaZ int16,
+	ground bool,
+) *RelativeMovePacket {
+	return &RelativeMovePacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			RelativeMovePacketID,
+		),
+		eid:    eid,
+		deltaX: deltaX,
+		deltaY: deltaY,
+		deltaZ: deltaZ,
+		ground: ground,
+	}
+}
+
+func (p *RelativeMovePacket) Pack() *Data {
+	data := NewData()
+	data.WriteVarInt(p.eid)
+	data.WriteInt16(p.deltaX)
+	data.WriteInt16(p.deltaY)
+	data.WriteInt16(p.deltaZ)
+	data.WriteBool(p.ground)
+
+	return data
+}
+
+func (p *RelativeMovePacket) GetEID() int32 {
+	return p.eid
+}
+
+func (p *RelativeMovePacket) GetDeltaX() int16 {
+	return p.deltaX
+}
+
+func (p *RelativeMovePacket) GetDeltaY() int16 {
+	return p.deltaY
+}
+
+func (p *RelativeMovePacket) GetDeltaZ() int16 {
+	return p.deltaZ
+}
+
+func (p *RelativeMovePacket) GetGround() bool {
+	return p.ground
+}
+
+func (p *RelativeMovePacket) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"eid: %d, "+
+			"deltaX: %d, "+
+			"deltaY: %d, "+
+			"deltaZ: %d, "+
+			"ground: %v "+
+			"}",
+		p.packet,
+		p.eid,
+		p.deltaX,
+		p.deltaY,
+		p.deltaZ,
+		p.ground,
 	)
 }
 
@@ -813,6 +993,43 @@ func (p *TeleportPacket) String() string {
 		p.x, p.y, p.z,
 		p.yaw, p.pitch,
 		p.payload,
+	)
+}
+
+type DespawnEntityPacket struct {
+	*packet
+	eid int32
+}
+
+func NewDespawnEntityPacket(
+	eid int32,
+) *DespawnEntityPacket {
+	return &DespawnEntityPacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			DespawnEntityPacketID,
+		),
+		eid: eid,
+	}
+}
+
+func (p *DespawnEntityPacket) Pack() *Data {
+	data := NewData()
+	data.WriteVarInt(1)
+	data.WriteVarInt(p.eid)
+
+	return data
+}
+
+func (p *DespawnEntityPacket) GetEID() int32 {
+	return p.eid
+}
+
+func (p *DespawnEntityPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, eid: %d }",
+		p.packet, p.eid,
 	)
 }
 
