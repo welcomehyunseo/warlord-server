@@ -26,7 +26,7 @@ const Loop3Time = time.Millisecond * 1
 
 func findRect(
 	cx, cz int, // player pos
-	d int, // positive
+	d int,      // positive
 ) (int, int, int, int) {
 	return cx + d, cz + d, cx - d, cz - d
 }
@@ -1331,6 +1331,7 @@ func (s *Server) initConnection(
 		ctx,
 	)
 
+	s.broadcastAddPlayerEvent(lg, uid, username)
 	chanForRemovePlayerEvent, err := s.initRemovePlayerEvent(
 		lg, uid,
 	)
@@ -1428,6 +1429,7 @@ func (s *Server) closeConnection(
 	s.closeUpdatePosEvent(lg, chanForUpdatePosEvent)
 	s.closeConfirmKeepAliveEvent(lg, chanForConfirmKeepAliveEvent)
 	s.closeAddPlayerEvent(lg, uid, chanForAddPlayerEvent)
+	s.broadcastRemovePlayerEvent(lg, uid)
 	s.closeRemovePlayerEvent(lg, uid, chanForRemovePlayerEvent)
 	s.closeUpdateLatencyEvent(lg, uid, chanForUpdateLatencyEvent)
 	s.closeSpawnPlayerEvent(lg, uid, chanForSpawnPlayerEvent)
@@ -1526,11 +1528,6 @@ func (s *Server) handleConnection(
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
 		cancel()
-	}()
-
-	s.broadcastAddPlayerEvent(lg, uid, username)
-	defer func() {
-		s.broadcastRemovePlayerEvent(lg, uid)
 	}()
 
 	chanForUpdatePosEvent,
