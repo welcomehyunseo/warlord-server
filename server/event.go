@@ -74,22 +74,18 @@ func (e *ConfirmKeepAliveEvent) String() string {
 type AddPlayerEvent struct {
 	uid      uuid.UUID
 	username string
-	finish   chan bool
+	ctx      chan bool
 }
 
 func NewAddPlayerEvent(
 	uid uuid.UUID,
 	username string,
-) (
-	*AddPlayerEvent,
-	chan bool,
-) {
-	finish := make(chan bool, 1)
+) *AddPlayerEvent {
 	return &AddPlayerEvent{
 		uid:      uid,
 		username: username,
-		finish:   finish,
-	}, finish
+		ctx:      make(chan bool, 1),
+	}
 }
 
 func (p *AddPlayerEvent) GetUUID() uuid.UUID {
@@ -100,8 +96,17 @@ func (p *AddPlayerEvent) GetUsername() string {
 	return p.username
 }
 
-func (p *AddPlayerEvent) GetFinish() chan bool {
-	return p.finish
+func (p *AddPlayerEvent) Done() {
+	p.ctx <- true
+}
+
+func (p *AddPlayerEvent) Fail() {
+	p.ctx <- false
+}
+
+func (p *AddPlayerEvent) Wait() {
+	<-p.ctx
+	close(p.ctx)
 }
 
 func (p *AddPlayerEvent) String() string {

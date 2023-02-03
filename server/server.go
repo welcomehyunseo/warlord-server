@@ -644,10 +644,10 @@ func (s *Server) broadcastAddPlayerEvent(
 		"It is started to broadcast AddPlayerEvent.",
 	)
 
-	event, finish := NewAddPlayerEvent(uid, username)
+	event := NewAddPlayerEvent(uid, username)
 	for _, chanForEvent := range s.m2 {
 		chanForEvent <- event
-		<-finish
+		event.Wait()
 	}
 
 	lg.Debug(
@@ -733,13 +733,12 @@ func (s *Server) handleAddPlayerEvent(
 			)
 
 			uid, username := event.GetUUID(), event.GetUsername()
-			finish := event.GetFinish()
 			if err := cnt.AddPlayer(lg, uid, username); err != nil {
-				finish <- false
+				event.Fail()
 				panic(err)
 			}
 
-			finish <- true
+			event.Done()
 
 			lg.Debug(
 				"It is finished to process the event.",
