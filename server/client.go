@@ -15,6 +15,8 @@ var InvalidPayloadError = errors.New("payload does not match to given")
 var UnknownPacketIDError = errors.New("current packet ID was unknown")
 var LessThanThresholdError = errors.New("length of uncompressed id and data of packet is less than the threshold that set")
 
+type CID = uuid.UUID
+
 func readVarInt(
 	r io.Reader,
 ) (
@@ -775,6 +777,8 @@ func (cnt *Client) AddPlayer(
 ) error {
 	lg.Debug(
 		"It is started to add player.",
+		NewLgElement("uid", uid),
+		NewLgElement("username", username),
 	)
 
 	textureString, signature, err := UUIDToTextureString(uid)
@@ -858,7 +862,14 @@ func (cnt *Client) SpawnPlayer(
 	yaw, pitch float32,
 ) error {
 	lg.Debug(
-		"It is started to spawn player",
+		"It is started to spawn player.",
+		NewLgElement("eid", eid),
+		NewLgElement("uid", uid),
+		NewLgElement("x", x),
+		NewLgElement("y", y),
+		NewLgElement("z", z),
+		NewLgElement("yaw", yaw),
+		NewLgElement("pitch", pitch),
 	)
 
 	packet := NewSpawnPlayerPacket(
@@ -871,7 +882,7 @@ func (cnt *Client) SpawnPlayer(
 	}
 
 	lg.Debug(
-		"It is finished to spawn player",
+		"It is finished to spawn player.",
 	)
 
 	return nil
@@ -931,7 +942,7 @@ func (cnt *Client) Close(
 	_ = cnt.conn.Close()
 }
 
-func (cnt *Client) GetCID() uuid.UUID {
+func (cnt *Client) GetCID() CID {
 	return cnt.cid
 }
 
