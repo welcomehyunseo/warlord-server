@@ -75,7 +75,7 @@ type Server struct {
 	globalMutex *sync.RWMutex
 
 	mutex0 *sync.RWMutex
-	m0     map[ChunkPosStr]*Chunk // by string of chunk position
+	m0     map[ChunkPosStr]*Chunk
 
 	mutex1 *sync.RWMutex
 	m1     map[CID]*Player
@@ -274,7 +274,7 @@ func (s *Server) unloadChunks(
 	return nil
 }
 
-func (s *Server) initChunks(
+func (s *Server) loadChunks(
 	lg *Logger,
 	maxCx, maxCz, minCx, minCz int,
 	cnt *Client,
@@ -313,7 +313,7 @@ func (s *Server) initChunks(
 	return nil
 }
 
-func (s *Server) updateCidToChunkPos(
+func (s *Server) updateCidByChunkPos(
 	lg *Logger,
 	cid CID,
 	currCx, currCz, prevCx, prevCz int,
@@ -347,7 +347,7 @@ func (s *Server) updateCidToChunkPos(
 	)
 }
 
-func (s *Server) registerCidToChunkPos(
+func (s *Server) registerCidByChunkPos(
 	lg *Logger,
 	cid CID,
 	centerCx, centerCz int,
@@ -422,7 +422,6 @@ func (s *Server) handleUpdatePosEvent(
 	)
 
 	defer func() {
-
 		if err := recover(); err != nil {
 			lg.Error(err)
 			chanForError <- err
@@ -444,9 +443,40 @@ func (s *Server) handleUpdatePosEvent(
 				event.GetX(), event.GetY(), event.GetZ()
 			player.UpdatePos(x, y, z)
 			prevX := player.GetPrevX()
-			//prevY := player.GetPrevY()
+			prevY := player.GetPrevY()
 			prevZ := player.GetPrevZ()
-			//ground := packet.GetOnGround()
+
+			func() {
+				s.mutex6.RLock()
+				defer s.mutex6.RUnlock()
+				s.mutex9.RLock()
+				defer s.mutex9.RUnlock()
+
+				deltaX, deltaY, deltaZ :=
+					int16(((x*32)-(prevX*32))*128),
+					int16(((y*32)-(prevY*32))*128),
+					int16(((z*32)-(prevZ*32))*128)
+
+				eid := player.GetEid()
+
+				event := NewRelativeMoveEvent(
+					eid,
+					deltaX, deltaY, deltaZ,
+					true,
+				)
+
+				m0, has0 := s.m6[cid]
+				if has0 == false {
+					m1 := make(map[CID]types.Nil)
+					s.m6[cid] = m1
+					m0 = m1
+				}
+
+				for cid1, _ := range m0 {
+					ch := s.m9[cid1]
+					ch <- event
+				}
+			}()
 
 			currCx, currCz := toChunkPos(x, z)
 			prevCx, prevCz := toChunkPos(prevX, prevZ)
@@ -473,12 +503,128 @@ func (s *Server) handleUpdatePosEvent(
 				panic(err)
 			}
 
-			s.updateCidToChunkPos(
+			s.updateCidByChunkPos(
 				lg,
 				cid,
 				currCx, currCz,
 				prevCx, prevCz,
 			)
+
+			func() {
+				s.mutex6.Lock()
+				defer s.mutex6.Unlock()
+				s.mutex1.RLock()
+				defer s.mutex1.RUnlock()
+				s.mutex5.RLock()
+				defer s.mutex5.RUnlock()
+				s.mutex7.RLock()
+				defer s.mutex7.RUnlock()
+				s.mutex8.RLock()
+				defer s.mutex8.RUnlock()
+
+				m0, has0 := s.m6[cid]
+				if has0 == false {
+					m1 := make(map[CID]types.Nil)
+					s.m6[cid] = m1
+					m0 = m1
+				}
+
+				eid, uid := player.GetEid(), player.GetUid()
+				yaw, pitch := player.GetYaw(), player.GetPitch()
+				chanForEvent0 := s.m7[cid]
+				event0 := NewSpawnPlayerEvent(
+					eid, uid,
+					x, y, z,
+					yaw, pitch,
+				)
+
+				for cz := maxCurrCz; cz >= minCurrCz; cz-- {
+					for cx := maxCurrCx; cx >= minCurrCx; cx-- {
+						if minSubCx <= cx && cx <= maxSubCx &&
+							minSubCz <= cz && cz <= maxSubCz {
+							continue
+						}
+
+						chunkPosStr := toChunkPosStr(cx, cz)
+						m1, has1 := s.m5[chunkPosStr]
+						if has1 == false {
+							continue
+						}
+
+						for cid1, _ := range m1 {
+							chanForEvent1 := s.m7[cid1]
+							chanForEvent1 <- event0
+
+							p1 := s.m1[cid1]
+							eid1, uid1 :=
+								p1.GetEid(), p1.GetUid()
+							x1, y1, z1 :=
+								p1.GetX(), p1.GetY(), p1.GetZ()
+							yaw1, pitch1 :=
+								p1.GetYaw(), p1.GetPitch()
+							event1 := NewSpawnPlayerEvent(
+								eid1, uid1,
+								x1, y1, z1,
+								yaw1, pitch1,
+							)
+							chanForEvent0 <- event1
+
+							m1, has1 := s.m6[cid1]
+							if has1 == false {
+								m2 := make(map[CID]types.Nil)
+								s.m6[cid1] = m2
+								m1 = m2
+							}
+							m0[cid1] = types.Nil{}
+							m1[cid] = types.Nil{}
+						}
+
+						// TODO: spawn
+					}
+				}
+
+				chanForEvent1 := s.m8[cid]
+				event1 := NewDespawnEntityEvent(
+					eid,
+				)
+
+				for cz := maxPrevCz; cz >= minPrevCz; cz-- {
+					for cx := maxPrevCx; cx >= minPrevCx; cx-- {
+						if minSubCx <= cx && cx <= maxSubCx &&
+							minSubCz <= cz && cz <= maxSubCz {
+							continue
+						}
+
+						chunkPosStr := toChunkPosStr(cx, cz)
+						m1, has1 := s.m5[chunkPosStr]
+						if has1 == false {
+							continue
+						}
+
+						for cid1, _ := range m1 {
+							chanForEvent2 := s.m8[cid1]
+							chanForEvent2 <- event1
+
+							p1 := s.m1[cid1]
+							eid1 := p1.GetEid()
+							event2 := NewDespawnEntityEvent(
+								eid1,
+							)
+							chanForEvent1 <- event2
+
+							m1, has1 := s.m6[cid1]
+							if has1 == false {
+								m2 := make(map[CID]types.Nil)
+								s.m6[cid1] = m2
+								m1 = m2
+							}
+							delete(m0, cid1)
+							delete(m1, cid)
+						}
+
+					}
+				}
+			}()
 
 			lg.Debug(
 				"It is finished to process the event.",
@@ -612,7 +758,8 @@ func (s *Server) addAllPlayers(
 
 	for _, player := range s.m1 {
 		uid, username :=
-			player.GetUid(), player.GetUsername()
+			player.GetUid(),
+			player.GetUsername()
 
 		if err := cnt.AddPlayer(
 			lg, uid, username,
@@ -632,8 +779,8 @@ func (s *Server) broadcastAddPlayerEvent(
 	uid uuid.UUID,
 	username string,
 ) {
-	s.mutex2.Lock()
-	defer s.mutex2.Unlock()
+	s.mutex2.RLock()
+	defer s.mutex2.RUnlock()
 
 	lg.Debug(
 		"It is started to broadcast AddPlayerEvent.",
@@ -653,10 +800,7 @@ func (s *Server) broadcastAddPlayerEvent(
 func (s *Server) initAddPlayerEvent(
 	lg *Logger,
 	cid uuid.UUID,
-) (
-	ChanForAddPlayerEvent,
-	error,
-) {
+) ChanForAddPlayerEvent {
 	s.mutex2.Lock()
 	defer s.mutex2.Unlock()
 
@@ -671,7 +815,7 @@ func (s *Server) initAddPlayerEvent(
 		"It is finished to init AddPlayerEvent.",
 	)
 
-	return chanForEvent, nil
+	return chanForEvent
 }
 
 func (s *Server) closeAddPlayerEvent(
@@ -774,10 +918,7 @@ func (s *Server) broadcastRemovePlayerEvent(
 func (s *Server) initRemovePlayerEvent(
 	lg *Logger,
 	cid uuid.UUID,
-) (
-	ChanForRemovePlayerEvent,
-	error,
-) {
+) ChanForRemovePlayerEvent {
 	s.mutex3.Lock()
 	defer s.mutex3.Unlock()
 
@@ -792,7 +933,7 @@ func (s *Server) initRemovePlayerEvent(
 		"It is finished to init RemovePlayerEvent.",
 	)
 
-	return chanFoRemoveEvent, nil
+	return chanFoRemoveEvent
 }
 
 func (s *Server) closeRemovePlayerEvent(
@@ -1287,6 +1428,7 @@ func (s *Server) initConnection(
 	chanForError ChanForError,
 	ctx context.Context,
 ) (
+	*Player,
 	ChanForUpdatePosEvent,
 	ChanForConfirmKeepAliveEvent,
 	ChanForAddPlayerEvent,
@@ -1328,17 +1470,17 @@ func (s *Server) initConnection(
 		spawnX, spawnY, spawnZ,
 		spawnYaw, spawnPitch,
 	); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 
-	if err := s.initChunks(
+	if err := s.loadChunks(
 		lg,
 		maxCx, maxCz, minCx, minCz,
 		cnt,
 	); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
-	s.registerCidToChunkPos(
+	s.registerCidByChunkPos(
 		lg,
 		cid,
 		centerCx, centerCz,
@@ -1366,15 +1508,12 @@ func (s *Server) initConnection(
 	)
 
 	if err := s.addAllPlayers(lg, cnt); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 	s.broadcastAddPlayerEvent(lg, uid, username)
-	chanForAddPlayerEvent, err := s.initAddPlayerEvent(
+	chanForAddPlayerEvent := s.initAddPlayerEvent(
 		lg, cid,
 	)
-	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, err
-	}
 	go s.handleAddPlayerEvent(
 		chanForAddPlayerEvent,
 		player,
@@ -1383,7 +1522,7 @@ func (s *Server) initConnection(
 		ctx,
 	)
 
-	chanForRemovePlayerEvent, err := s.initRemovePlayerEvent(
+	chanForRemovePlayerEvent := s.initRemovePlayerEvent(
 		lg, cid,
 	)
 	go s.handleRemovePlayerEvent(
@@ -1438,10 +1577,88 @@ func (s *Server) initConnection(
 		ctx,
 	)
 
+	func(
+		p0 *Player, cid0 uuid.UUID,
+		chanForEvent0 ChanForSpawnPlayerEvent,
+	) {
+
+		s.mutex6.Lock()
+		defer s.mutex6.Unlock()
+		s.mutex5.RLock()
+		defer s.mutex5.RUnlock()
+		s.mutex7.RLock()
+		defer s.mutex7.RUnlock()
+		s.mutex1.RLock()
+		defer s.mutex1.RUnlock()
+
+		m0, has0 := s.m6[cid0]
+		if has0 == false {
+			m1 := make(map[CID]types.Nil)
+			s.m6[cid0] = m1
+			m0 = m1
+		}
+
+		eid0, uid0 := p0.GetEid(), p0.GetUid()
+		x0, y0, z0 :=
+			p0.GetX(), p0.GetY(), p0.GetZ()
+		yaw0, pitch0 :=
+			p0.GetYaw(), p0.GetPitch()
+
+		event0 := NewSpawnPlayerEvent(
+			eid0, uid0,
+			x0, y0, z0,
+			yaw0, pitch0,
+		)
+
+		for cz := maxCz; cz >= minCz; cz-- {
+			for cx := maxCx; cx >= minCx; cx-- {
+				chunkPosStr := toChunkPosStr(cx, cz)
+				m1, has1 := s.m5[chunkPosStr]
+				if has1 == false {
+					continue
+				}
+				for cid1, _ := range m1 {
+					if cid0 == cid1 {
+						continue
+					}
+					chanForEvent1 := s.m7[cid1]
+					chanForEvent1 <- event0
+
+					p1 := s.m1[cid1]
+					eid1, uid1 :=
+						p1.GetEid(), p1.GetUid()
+					x1, y1, z1 :=
+						p1.GetX(), p1.GetY(), p1.GetZ()
+					yaw1, pitch1 :=
+						p1.GetYaw(), p1.GetPitch()
+					event1 := NewSpawnPlayerEvent(
+						eid1, uid1,
+						x1, y1, z1,
+						yaw1, pitch1,
+					)
+					chanForEvent0 <- event1
+
+					m1, has1 := s.m6[cid1]
+					if has1 == false {
+						m2 := make(map[CID]types.Nil)
+						s.m6[cid1] = m2
+						m1 = m2
+					}
+					m1[cid0] = types.Nil{}
+					m0[cid1] = types.Nil{}
+				}
+			}
+		}
+	}(
+		player, cid,
+		chanForSpawnPlayerEvent,
+	)
+
 	lg.Debug(
 		"It is finished to init Connection.",
 	)
-	return chanForUpdatePosEvent,
+	return player,
+		chanForUpdatePosEvent,
 		chanForConfirmKeepAliveEvent,
 		chanForAddPlayerEvent,
 		chanForRemovePlayerEvent,
@@ -1454,7 +1671,7 @@ func (s *Server) initConnection(
 
 func (s *Server) closeConnection(
 	lg *Logger,
-	uid uuid.UUID, cid uuid.UUID,
+	player *Player, cid uuid.UUID,
 	chanForUpdatePosEvent ChanForUpdatePosEvent,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 	chanForAddPlayerEvent ChanForAddPlayerEvent,
@@ -1466,6 +1683,8 @@ func (s *Server) closeConnection(
 ) {
 	s.globalMutex.Lock()
 	defer s.globalMutex.Unlock()
+
+	uid := player.GetUid()
 
 	s.removePlayer(cid)
 	s.closeUpdatePosEvent(
@@ -1495,6 +1714,21 @@ func (s *Server) closeConnection(
 	s.closeRelativeMoveEvent(
 		lg, cid, chanForRelativeMoveEvent,
 	)
+
+	x, z := player.GetX(), player.GetZ()
+	cx, cz := toChunkPos(x, z)
+	chunkPosStr := toChunkPosStr(cx, cz)
+
+	func() {
+		s.mutex6.Lock()
+		defer s.mutex6.Unlock()
+		s.mutex5.Lock()
+		defer s.mutex5.Unlock()
+		// clear m5 and m6
+		m0 := s.m5[chunkPosStr]
+		delete(m0, cid)
+		delete(s.m6, cid)
+	}()
 }
 
 func (s *Server) handleConnection(
@@ -1590,7 +1824,8 @@ func (s *Server) handleConnection(
 		cancel()
 	}()
 
-	chanForUpdatePosEvent,
+	player,
+		chanForUpdatePosEvent,
 		chanForConfirmKeepAliveEvent,
 		chanForAddPlayerEvent,
 		chanForRemovePlayerEvent,
@@ -1613,7 +1848,7 @@ func (s *Server) handleConnection(
 	}
 	defer s.closeConnection(
 		lg,
-		uid, cid,
+		player, cid,
 		chanForUpdatePosEvent,
 		chanForConfirmKeepAliveEvent,
 		chanForAddPlayerEvent,
