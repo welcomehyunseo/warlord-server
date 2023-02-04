@@ -263,9 +263,9 @@ func (p *SpawnPlayerPacket) Pack() *Data {
 	data.WriteFloat32(p.yaw)
 	data.WriteFloat32(p.pitch)
 	//
-	data.WriteUint8(0)
-	data.WriteVarInt(0) // byte
-	data.WriteInt8(0)
+	//data.WriteUint8(0)
+	//data.WriteVarInt(0) // byte
+	//data.WriteInt8(0)
 
 	//data.WriteUint8(1)
 	//data.WriteVarInt(1) // varint
@@ -287,9 +287,9 @@ func (p *SpawnPlayerPacket) Pack() *Data {
 	//data.WriteVarInt(0) // byte
 	//data.WriteInt8(0x01)
 	//
-	data.WriteUint8(7)
-	data.WriteVarInt(2) // float
-	data.WriteFloat32(20.0)
+	//data.WriteUint8(7)
+	//data.WriteVarInt(2) // float
+	//data.WriteFloat32(20.0)
 
 	data.WriteUint8(0xff)
 
