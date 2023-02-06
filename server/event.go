@@ -5,7 +5,9 @@ import (
 	"github.com/google/uuid"
 )
 
-type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
+type ChanForAddPlayerEvent chan *AddPlayerEvent
+type ChanForRemovePlayerEvent chan *RemovePlayerEvent
+type ChanForUpdateLatencyEvent chan *UpdateLatencyEvent
 
 type ChanForDespawnEntityEvent chan *DespawnEntityEvent
 type ChanForSpawnPlayerEvent chan *SpawnPlayerEvent
@@ -14,29 +16,103 @@ type ChanForUpdateChunkPosEvent chan *UpdateChunkPosEvent
 type ChanForRelativeMoveEvent chan *RelativeMoveEvent
 type ChanForUpdatePosEvent chan *UpdatePosEvent
 
-type ChanForAddPlayerEvent chan *AddPlayerEvent
-type ChanForRemovePlayerEvent chan *RemovePlayerEvent
-type ChanForUpdateLatencyEvent chan *UpdateLatencyEvent
+type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
 
-type ConfirmKeepAliveEvent struct {
-	payload int64
+type AddPlayerEvent struct {
+	uid      uuid.UUID
+	username string
+	ctx      chan bool
 }
 
-func NewConfirmKeepAliveEvent(
-	payload int64,
-) *ConfirmKeepAliveEvent {
-	return &ConfirmKeepAliveEvent{
-		payload: payload,
+func NewAddPlayerEvent(
+	uid uuid.UUID,
+	username string,
+) *AddPlayerEvent {
+	return &AddPlayerEvent{
+		uid:      uid,
+		username: username,
+		ctx:      make(chan bool, 1),
 	}
 }
 
-func (e *ConfirmKeepAliveEvent) GetPayload() int64 {
-	return e.payload
+func (p *AddPlayerEvent) GetUUID() uuid.UUID {
+	return p.uid
 }
 
-func (e *ConfirmKeepAliveEvent) String() string {
+func (p *AddPlayerEvent) GetUsername() string {
+	return p.username
+}
+
+func (p *AddPlayerEvent) Done() {
+	p.ctx <- true
+}
+
+func (p *AddPlayerEvent) Fail() {
+	p.ctx <- false
+}
+
+func (p *AddPlayerEvent) Wait() {
+	<-p.ctx
+	close(p.ctx)
+}
+
+func (p *AddPlayerEvent) String() string {
 	return fmt.Sprintf(
-		"{ payload: %d }", e.payload,
+		"{ uid: %+v, username: %s } ",
+		p.uid, p.username,
+	)
+}
+
+type RemovePlayerEvent struct {
+	uid uuid.UUID
+}
+
+func NewRemovePlayerEvent(
+	uid uuid.UUID,
+) *RemovePlayerEvent {
+	return &RemovePlayerEvent{
+		uid: uid,
+	}
+}
+
+func (p *RemovePlayerEvent) GetUUID() uuid.UUID {
+	return p.uid
+}
+
+func (p *RemovePlayerEvent) String() string {
+	return fmt.Sprintf(
+		"{ uid: %+v } ",
+		p.uid,
+	)
+}
+
+type UpdateLatencyEvent struct {
+	uid     uuid.UUID
+	latency int32
+}
+
+func NewUpdateLatencyEvent(
+	uid uuid.UUID,
+	latency int32,
+) *UpdateLatencyEvent {
+	return &UpdateLatencyEvent{
+		uid:     uid,
+		latency: latency,
+	}
+}
+
+func (p *UpdateLatencyEvent) GetUUID() uuid.UUID {
+	return p.uid
+}
+
+func (p *UpdateLatencyEvent) GetLatency() int32 {
+	return p.latency
+}
+
+func (p *UpdateLatencyEvent) String() string {
+	return fmt.Sprintf(
+		"{ uid: %+v, latency: %d } ",
+		p.uid, p.latency,
 	)
 }
 
@@ -286,100 +362,24 @@ func (e *UpdatePosEvent) String() string {
 	)
 }
 
-type AddPlayerEvent struct {
-	uid      uuid.UUID
-	username string
-	ctx      chan bool
+type ConfirmKeepAliveEvent struct {
+	payload int64
 }
 
-func NewAddPlayerEvent(
-	uid uuid.UUID,
-	username string,
-) *AddPlayerEvent {
-	return &AddPlayerEvent{
-		uid:      uid,
-		username: username,
-		ctx:      make(chan bool, 1),
+func NewConfirmKeepAliveEvent(
+	payload int64,
+) *ConfirmKeepAliveEvent {
+	return &ConfirmKeepAliveEvent{
+		payload: payload,
 	}
 }
 
-func (p *AddPlayerEvent) GetUUID() uuid.UUID {
-	return p.uid
+func (e *ConfirmKeepAliveEvent) GetPayload() int64 {
+	return e.payload
 }
 
-func (p *AddPlayerEvent) GetUsername() string {
-	return p.username
-}
-
-func (p *AddPlayerEvent) Done() {
-	p.ctx <- true
-}
-
-func (p *AddPlayerEvent) Fail() {
-	p.ctx <- false
-}
-
-func (p *AddPlayerEvent) Wait() {
-	<-p.ctx
-	close(p.ctx)
-}
-
-func (p *AddPlayerEvent) String() string {
+func (e *ConfirmKeepAliveEvent) String() string {
 	return fmt.Sprintf(
-		"{ uid: %+v, username: %s } ",
-		p.uid, p.username,
-	)
-}
-
-type RemovePlayerEvent struct {
-	uid uuid.UUID
-}
-
-func NewRemovePlayerEvent(
-	uid uuid.UUID,
-) *RemovePlayerEvent {
-	return &RemovePlayerEvent{
-		uid: uid,
-	}
-}
-
-func (p *RemovePlayerEvent) GetUUID() uuid.UUID {
-	return p.uid
-}
-
-func (p *RemovePlayerEvent) String() string {
-	return fmt.Sprintf(
-		"{ uid: %+v } ",
-		p.uid,
-	)
-}
-
-type UpdateLatencyEvent struct {
-	uid     uuid.UUID
-	latency int32
-}
-
-func NewUpdateLatencyEvent(
-	uid uuid.UUID,
-	latency int32,
-) *UpdateLatencyEvent {
-	return &UpdateLatencyEvent{
-		uid:     uid,
-		latency: latency,
-	}
-}
-
-func (p *UpdateLatencyEvent) GetUUID() uuid.UUID {
-	return p.uid
-}
-
-func (p *UpdateLatencyEvent) GetLatency() int32 {
-	return p.latency
-}
-
-func (p *UpdateLatencyEvent) String() string {
-	return fmt.Sprintf(
-		"{ uid: %+v, latency: %d } ",
-		p.uid, p.latency,
+		"{ payload: %d }", e.payload,
 	)
 }

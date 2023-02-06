@@ -41,6 +41,5 @@ func main() {
 			s.AddChunk(cx, cz, chunk)
 		}
 	}
-
 	s.Render()
 }
