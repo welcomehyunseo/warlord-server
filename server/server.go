@@ -157,45 +157,81 @@ func (s *Server) countEID() int32 {
 	return eid
 }
 
-func (s *Server) handleConfirmKeepAliveEvent(
-	chanForEvent ChanForConfirmKeepAliveEvent,
+func (s *Server) addAllPlayers(
+	lg *Logger,
+	cnt *Client,
+) error {
+	s.mutex1.RLock()
+	defer s.mutex1.RUnlock()
+
+	lg.Debug(
+		"It is started to add all players.",
+	)
+
+	for _, player := range s.m1 {
+		uid, username :=
+			player.GetUid(),
+			player.GetUsername()
+
+		if err := cnt.AddPlayer(
+			lg, uid, username,
+		); err != nil {
+			return err
+		}
+	}
+
+	lg.Debug(
+		"It is finished to add all players.",
+	)
+	return nil
+}
+
+func (s *Server) broadcastAddPlayerEvent(
+	lg *Logger,
 	uid uuid.UUID,
+	username string,
+) {
+	lg.Debug(
+		"It is started to broadcast AddPlayerEvent.",
+	)
+
+	event := NewAddPlayerEvent(uid, username)
+	for _, chanForEvent := range s.m2 {
+		chanForEvent <- event
+		event.Wait()
+	}
+
+	lg.Debug(
+		"It is finished to broadcast AddPlayerEvent.",
+	)
+}
+
+func (s *Server) handleAddPlayerEvent(
+	chanForEvent ChanForAddPlayerEvent,
+	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "ConfirmKeepAliveEvent"),
-		NewLgElement("uid", uid),
+		NewLgElement("handler", "AddPlayerEvent"),
+		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
 	lg.Debug(
-		"The handler for ConfirmKeepAliveEvent was started.",
+		"The handler for AddPlayerEvent was started.",
 	)
 
 	defer func() {
+
 		if err := recover(); err != nil {
 			lg.Error(err)
 			chanForError <- err
 		}
 	}()
 
-	start := time.Time{}
-	var payload0 int64
-
-	// TODO: update start
-
 	stop := false
 	for {
 		select {
-		case <-time.After(CheckKeepAliveTime):
-			if start.IsZero() == false {
-				break
-			}
-			payload0 = rand.Int63()
-			if err := cnt.CheckKeepAlive(lg, payload0); err != nil {
-				panic(err)
-			}
-			start = time.Now()
 		case event, ok := <-chanForEvent:
 			if ok == false {
 				stop = true
@@ -206,16 +242,14 @@ func (s *Server) handleConfirmKeepAliveEvent(
 				NewLgElement("event", event),
 			)
 
-			payload1 := event.GetPayload()
-			if payload1 != payload0 {
-				panic(DifferentKeepAlivePayloadError)
+			uid, username := event.GetUUID(), event.GetUsername()
+			if err := cnt.AddPlayer(lg, uid, username); err != nil {
+				event.Fail()
+				panic(err)
 			}
-			end := time.Now()
-			latency := end.Sub(start).Milliseconds()
 
-			s.broadcastUpdateLatencyEvent(lg, uid, int32(latency))
+			event.Done()
 
-			start = time.Time{}
 			lg.Debug(
 				"It is finished to process the event.",
 			)
@@ -226,9 +260,152 @@ func (s *Server) handleConfirmKeepAliveEvent(
 		}
 	}
 
+	lg.Debug("The handler for AddPlayerEvent was ended")
+}
+
+func (s *Server) broadcastRemovePlayerEvent(
+	lg *Logger,
+	uid uuid.UUID,
+) {
 	lg.Debug(
-		"The handler for ConfirmKeepAliveEvent was ended",
+		"It is started to broadcast RemovePlayerEvent.",
+		NewLgElement("uid", uid),
 	)
+
+	event := NewRemovePlayerEvent(uid)
+	for _, chanForEvent := range s.m3 {
+		chanForEvent <- event
+	}
+
+	lg.Debug(
+		"It is finished to broadcast RemovePlayerEvent.",
+	)
+}
+
+func (s *Server) handleRemovePlayerEvent(
+	chanForEvent ChanForRemovePlayerEvent,
+	player *Player,
+	cnt *Client,
+	chanForError ChanForError,
+) {
+	lg := NewLogger(
+		NewLgElement("handler", "RemovePlayerEvent"),
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
+	)
+	lg.Debug(
+		"The handler for RemovePlayerEvent was started.",
+	)
+
+	defer func() {
+
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			uid := event.GetUUID()
+			if err := cnt.RemovePlayer(lg, uid); err != nil {
+				panic(err)
+			}
+
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("The handler for RemovePlayerEvent was ended")
+}
+
+func (s *Server) broadcastUpdateLatencyEvent(
+	lg *Logger,
+	uid uuid.UUID,
+	latency int32,
+) {
+	lg.Debug(
+		"It is started to broadcast UpdateLatencyEvent.",
+		NewLgElement("latency", latency),
+	)
+
+	event := NewUpdateLatencyEvent(uid, latency)
+	for _, chanForEvent := range s.m4 {
+		chanForEvent <- event
+	}
+
+	lg.Debug(
+		"It is finished to broadcast UpdateLatencyEvent.",
+	)
+}
+
+func (s *Server) handleUpdateLatencyEvent(
+	uid uuid.UUID,
+	chanForEvent ChanForUpdateLatencyEvent,
+	cnt *Client,
+	chanForError ChanForError,
+) {
+	lg := NewLogger(
+		NewLgElement("handler", "UpdateLatencyEvent"),
+		NewLgElement("uid", uid),
+		NewLgElement("client", cnt),
+	)
+	lg.Debug(
+		"The handler for UpdateLatencyEvent was started.",
+	)
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+			uid, latency := event.GetUUID(), event.GetLatency()
+			if err := cnt.UpdateLatency(lg, uid, latency); err != nil {
+				panic(err)
+			}
+
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("The handler for UpdateLatencyEvent was ended")
 }
 
 func (s *Server) initChunks(
@@ -574,7 +751,7 @@ func (s *Server) handleUpdateChunkPosEvent(
 	lg.Debug("It is finished to handle UpdateChunkPosEvent.")
 }
 
-func (s *Server) broadcastSpawnEntityEvent(
+func (s *Server) broadcastSpawnPlayerEvent(
 	lg *Logger,
 	cid CID,
 	eid int32, uid uuid.UUID,
@@ -919,218 +1096,19 @@ func (s *Server) handleUpdatePosEvent(
 	lg.Debug("The handler for UpdatePosEvent was ended.")
 }
 
-func (s *Server) addAllPlayers(
-	lg *Logger,
-	cnt *Client,
-) error {
-	s.mutex1.RLock()
-	defer s.mutex1.RUnlock()
-
-	lg.Debug(
-		"It is started to add all players.",
-	)
-
-	for _, player := range s.m1 {
-		uid, username :=
-			player.GetUid(),
-			player.GetUsername()
-
-		if err := cnt.AddPlayer(
-			lg, uid, username,
-		); err != nil {
-			return err
-		}
-	}
-
-	lg.Debug(
-		"It is finished to add all players.",
-	)
-	return nil
-}
-
-func (s *Server) broadcastAddPlayerEvent(
-	lg *Logger,
+func (s *Server) handleConfirmKeepAliveEvent(
+	chanForEvent ChanForConfirmKeepAliveEvent,
 	uid uuid.UUID,
-	username string,
-) {
-	lg.Debug(
-		"It is started to broadcast AddPlayerEvent.",
-	)
-
-	event := NewAddPlayerEvent(uid, username)
-	for _, chanForEvent := range s.m2 {
-		chanForEvent <- event
-		event.Wait()
-	}
-
-	lg.Debug(
-		"It is finished to broadcast AddPlayerEvent.",
-	)
-}
-
-func (s *Server) handleAddPlayerEvent(
-	chanForEvent ChanForAddPlayerEvent,
-	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "AddPlayerEvent"),
-		NewLgElement("player", player),
-		NewLgElement("client", cnt),
-	)
-	lg.Debug(
-		"The handler for AddPlayerEvent was started.",
-	)
-
-	defer func() {
-
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
-		}
-	}()
-
-	stop := false
-	for {
-		select {
-		case event, ok := <-chanForEvent:
-			if ok == false {
-				stop = true
-				break
-			}
-			lg.Debug(
-				"The event was received by the channel.",
-				NewLgElement("event", event),
-			)
-
-			uid, username := event.GetUUID(), event.GetUsername()
-			if err := cnt.AddPlayer(lg, uid, username); err != nil {
-				event.Fail()
-				panic(err)
-			}
-
-			event.Done()
-
-			lg.Debug(
-				"It is finished to process the event.",
-			)
-		}
-
-		if stop == true {
-			break
-		}
-	}
-
-	lg.Debug("The handler for AddPlayerEvent was ended")
-}
-
-func (s *Server) broadcastRemovePlayerEvent(
-	lg *Logger,
-	uid uuid.UUID,
-) {
-	lg.Debug(
-		"It is started to broadcast RemovePlayerEvent.",
-		NewLgElement("uid", uid),
-	)
-
-	event := NewRemovePlayerEvent(uid)
-	for _, chanForEvent := range s.m3 {
-		chanForEvent <- event
-	}
-
-	lg.Debug(
-		"It is finished to broadcast RemovePlayerEvent.",
-	)
-}
-
-func (s *Server) handleRemovePlayerEvent(
-	chanForEvent ChanForRemovePlayerEvent,
-	player *Player,
-	cnt *Client,
-	chanForError ChanForError,
-) {
-	lg := NewLogger(
-		NewLgElement("handler", "RemovePlayerEvent"),
-		NewLgElement("player", player),
-		NewLgElement("client", cnt),
-	)
-	lg.Debug(
-		"The handler for RemovePlayerEvent was started.",
-	)
-
-	defer func() {
-
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
-		}
-	}()
-
-	stop := false
-	for {
-		select {
-		case event, ok := <-chanForEvent:
-			if ok == false {
-				stop = true
-				break
-			}
-			lg.Debug(
-				"The event was received by the channel.",
-				NewLgElement("event", event),
-			)
-
-			uid := event.GetUUID()
-			if err := cnt.RemovePlayer(lg, uid); err != nil {
-				panic(err)
-			}
-
-			lg.Debug(
-				"It is finished to process the event.",
-			)
-		}
-
-		if stop == true {
-			break
-		}
-	}
-
-	lg.Debug("The handler for RemovePlayerEvent was ended")
-}
-
-func (s *Server) broadcastUpdateLatencyEvent(
-	lg *Logger,
-	uid uuid.UUID,
-	latency int32,
-) {
-	lg.Debug(
-		"It is started to broadcast UpdateLatencyEvent.",
-		NewLgElement("latency", latency),
-	)
-
-	event := NewUpdateLatencyEvent(uid, latency)
-	for _, chanForEvent := range s.m4 {
-		chanForEvent <- event
-	}
-
-	lg.Debug(
-		"It is finished to broadcast UpdateLatencyEvent.",
-	)
-}
-
-func (s *Server) handleUpdateLatencyEvent(
-	uid uuid.UUID,
-	chanForEvent ChanForUpdateLatencyEvent,
-	cnt *Client,
-	chanForError ChanForError,
-) {
-	lg := NewLogger(
-		NewLgElement("handler", "UpdateLatencyEvent"),
+		NewLgElement("handler", "ConfirmKeepAliveEvent"),
 		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
 	)
 	lg.Debug(
-		"The handler for UpdateLatencyEvent was started.",
+		"The handler for ConfirmKeepAliveEvent was started.",
 	)
 
 	defer func() {
@@ -1140,9 +1118,23 @@ func (s *Server) handleUpdateLatencyEvent(
 		}
 	}()
 
+	start := time.Time{}
+	var payload0 int64
+
+	// TODO: update start
+
 	stop := false
 	for {
 		select {
+		case <-time.After(CheckKeepAliveTime):
+			if start.IsZero() == false {
+				break
+			}
+			payload0 = rand.Int63()
+			if err := cnt.CheckKeepAlive(lg, payload0); err != nil {
+				panic(err)
+			}
+			start = time.Now()
 		case event, ok := <-chanForEvent:
 			if ok == false {
 				stop = true
@@ -1152,11 +1144,17 @@ func (s *Server) handleUpdateLatencyEvent(
 				"The event was received by the channel.",
 				NewLgElement("event", event),
 			)
-			uid, latency := event.GetUUID(), event.GetLatency()
-			if err := cnt.UpdateLatency(lg, uid, latency); err != nil {
-				panic(err)
-			}
 
+			payload1 := event.GetPayload()
+			if payload1 != payload0 {
+				panic(DifferentKeepAlivePayloadError)
+			}
+			end := time.Now()
+			latency := end.Sub(start).Milliseconds()
+
+			s.broadcastUpdateLatencyEvent(lg, uid, int32(latency))
+
+			start = time.Time{}
 			lg.Debug(
 				"It is finished to process the event.",
 			)
@@ -1167,7 +1165,9 @@ func (s *Server) handleUpdateLatencyEvent(
 		}
 	}
 
-	lg.Debug("The handler for UpdateLatencyEvent was ended")
+	lg.Debug(
+		"The handler for ConfirmKeepAliveEvent was ended",
+	)
 }
 
 func (s *Server) initConnection(
