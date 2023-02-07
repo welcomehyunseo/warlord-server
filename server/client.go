@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"sync"
 )
 
 var InvalidPacketIDError = errors.New("current packet ID was invalid")
@@ -125,6 +126,8 @@ type Client struct {
 	addr net.Addr
 
 	conn net.Conn
+
+	mutex0 *sync.Mutex
 }
 
 func NewClient(
@@ -133,10 +136,13 @@ func NewClient(
 ) *Client {
 	addr := conn.RemoteAddr()
 
+	var mutex0 sync.Mutex
+
 	return &Client{
-		cid:  cid,
-		addr: addr,
-		conn: conn,
+		cid:    cid,
+		addr:   addr,
+		conn:   conn,
+		mutex0: &mutex0,
 	}
 }
 
@@ -227,6 +233,9 @@ func (cnt *Client) write(
 	lg *Logger,
 	packet OutPacket,
 ) error {
+	cnt.mutex0.Lock()
+	defer cnt.mutex0.Unlock()
+
 	lg.Debug(
 		"It is started to generateData the packet.",
 		NewLgElement("packet", packet),
@@ -260,6 +269,9 @@ func (cnt *Client) writeWithComp(
 	lg *Logger,
 	packet OutPacket,
 ) error {
+	cnt.mutex0.Lock()
+	defer cnt.mutex0.Unlock()
+	
 	lg.Debug(
 		"It is started to generateData the packet with compression.",
 		NewLgElement("packet", packet),
