@@ -786,7 +786,7 @@ func TestReadAngle(
 		{0x00},
 		{0xFE},
 	}
-	yValues := []float64{
+	yValues := []float32{
 		0,
 		358.5882352941176,
 	}
@@ -806,7 +806,7 @@ func TestReadAngle(
 func TestWriteAngle(
 	t *testing.T,
 ) {
-	xValues := []float64{
+	xValues := []float32{
 		0,
 		358.5882352941176,
 	}

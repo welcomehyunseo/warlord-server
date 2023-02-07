@@ -506,6 +506,7 @@ func (cnt *Client) Loop2(
 func (cnt *Client) Loop3(
 	lg *Logger,
 	chanForUpdatePosEvent ChanForUpdatePosEvent,
+	chanForUpdateLookEvent ChanForUpdateLookEvent,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 	state State,
 ) (
@@ -542,10 +543,13 @@ func (cnt *Client) Loop3(
 			"ChangePosPacket was created.",
 			NewLgElement("packet", packet),
 		)
+
 		x, y, z :=
 			packet.GetX(), packet.GetY(), packet.GetZ()
+		ground := packet.GetGround()
 		chanForUpdatePosEvent <- NewUpdatePosEvent(
 			x, y, z,
+			ground,
 		)
 		break
 	case ChangePosAndLookPacketID:
@@ -557,8 +561,29 @@ func (cnt *Client) Loop3(
 		)
 		x, y, z :=
 			packet.GetX(), packet.GetY(), packet.GetZ()
+		ground := packet.GetGround()
 		chanForUpdatePosEvent <- NewUpdatePosEvent(
 			x, y, z,
+			ground,
+		)
+		yaw, pitch := packet.GetYaw(), packet.GetPitch()
+		chanForUpdateLookEvent <- NewUpdateLookEvent(
+			yaw, pitch,
+			ground,
+		)
+		break
+	case ChangeLookPacketID:
+		packet := NewChangeLookPacket()
+		packet.Unpack(data)
+		lg.Debug(
+			"ChangeLookPacket was created.",
+			NewLgElement("packet", packet),
+		)
+		yaw, pitch := packet.GetYaw(), packet.GetPitch()
+		ground := packet.GetGround()
+		chanForUpdateLookEvent <- NewUpdateLookEvent(
+			yaw, pitch,
+			ground,
 		)
 		break
 	}
@@ -888,17 +913,51 @@ func (cnt *Client) SpawnPlayer(
 	return nil
 }
 
-func (cnt *Client) RelativeMove(
+func (cnt *Client) SetEntityLook(
+	lg *Logger,
+	eid int32,
+	yaw, pitch float32,
+	ground bool,
+) error {
+	lg.Debug(
+		"It is started to set entity look.",
+	)
+
+	packet0 := NewSetEntityLookPacket(
+		eid,
+		yaw, pitch,
+		ground,
+	)
+	if err := cnt.writeWithComp(lg, packet0); err != nil {
+		return err
+	}
+
+	packet1 := NewSetEntityHeadLookPacket(
+		eid,
+		yaw,
+	)
+	if err := cnt.writeWithComp(lg, packet1); err != nil {
+		return err
+	}
+
+	lg.Debug(
+		"It is finished to set entity look.",
+	)
+
+	return nil
+}
+
+func (cnt *Client) SetEntityRelativePos(
 	lg *Logger,
 	eid int32,
 	deltaX, deltaY, deltaZ int16,
 	ground bool,
 ) error {
 	lg.Debug(
-		"It is started to move relatively.",
+		"It is started to set entity relative pos.",
 	)
 
-	packet := NewRelativeMovePacket(
+	packet := NewSetEntityRelativePosPacket(
 		eid,
 		deltaX, deltaY, deltaZ,
 		ground,
@@ -908,7 +967,7 @@ func (cnt *Client) RelativeMove(
 	}
 
 	lg.Debug(
-		"It is finished to move relatively.",
+		"It is finished to set entity relative pos.",
 	)
 
 	return nil

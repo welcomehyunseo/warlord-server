@@ -13,7 +13,9 @@ type ChanForDespawnEntityEvent chan *DespawnEntityEvent
 type ChanForSpawnPlayerEvent chan *SpawnPlayerEvent
 type ChanForUpdateChunkPosEvent chan *UpdateChunkPosEvent
 
-type ChanForRelativeMoveEvent chan *RelativeMoveEvent
+type ChanForSetEntityLookEvent chan *SetEntityLookEvent
+type ChanForUpdateLookEvent chan *UpdateLookEvent
+type ChanForSetEntityRelativePosEvent chan *SetEntityRelativePosEvent
 type ChanForUpdatePosEvent chan *UpdatePosEvent
 
 type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
@@ -35,31 +37,31 @@ func NewAddPlayerEvent(
 	}
 }
 
-func (p *AddPlayerEvent) GetUUID() uuid.UUID {
-	return p.uid
+func (e *AddPlayerEvent) GetUUID() uuid.UUID {
+	return e.uid
 }
 
-func (p *AddPlayerEvent) GetUsername() string {
-	return p.username
+func (e *AddPlayerEvent) GetUsername() string {
+	return e.username
 }
 
-func (p *AddPlayerEvent) Done() {
-	p.ctx <- true
+func (e *AddPlayerEvent) Done() {
+	e.ctx <- true
 }
 
-func (p *AddPlayerEvent) Fail() {
-	p.ctx <- false
+func (e *AddPlayerEvent) Fail() {
+	e.ctx <- false
 }
 
-func (p *AddPlayerEvent) Wait() {
-	<-p.ctx
-	close(p.ctx)
+func (e *AddPlayerEvent) Wait() {
+	<-e.ctx
+	close(e.ctx)
 }
 
-func (p *AddPlayerEvent) String() string {
+func (e *AddPlayerEvent) String() string {
 	return fmt.Sprintf(
 		"{ uid: %+v, username: %s } ",
-		p.uid, p.username,
+		e.uid, e.username,
 	)
 }
 
@@ -75,14 +77,14 @@ func NewRemovePlayerEvent(
 	}
 }
 
-func (p *RemovePlayerEvent) GetUUID() uuid.UUID {
-	return p.uid
+func (e *RemovePlayerEvent) GetUUID() uuid.UUID {
+	return e.uid
 }
 
-func (p *RemovePlayerEvent) String() string {
+func (e *RemovePlayerEvent) String() string {
 	return fmt.Sprintf(
 		"{ uid: %+v } ",
-		p.uid,
+		e.uid,
 	)
 }
 
@@ -101,18 +103,18 @@ func NewUpdateLatencyEvent(
 	}
 }
 
-func (p *UpdateLatencyEvent) GetUUID() uuid.UUID {
-	return p.uid
+func (e *UpdateLatencyEvent) GetUUID() uuid.UUID {
+	return e.uid
 }
 
-func (p *UpdateLatencyEvent) GetLatency() int32 {
-	return p.latency
+func (e *UpdateLatencyEvent) GetLatency() int32 {
+	return e.latency
 }
 
-func (p *UpdateLatencyEvent) String() string {
+func (e *UpdateLatencyEvent) String() string {
 	return fmt.Sprintf(
 		"{ uid: %+v, latency: %d } ",
-		p.uid, p.latency,
+		e.uid, e.latency,
 	)
 }
 
@@ -128,14 +130,14 @@ func NewDespawnEntityEvent(
 	}
 }
 
-func (p *DespawnEntityEvent) GetEID() int32 {
-	return p.eid
+func (e *DespawnEntityEvent) GetEID() int32 {
+	return e.eid
 }
 
-func (p *DespawnEntityEvent) String() string {
+func (e *DespawnEntityEvent) String() string {
 	return fmt.Sprintf(
 		"{ eid: %d }",
-		p.eid,
+		e.eid,
 	)
 }
 
@@ -257,7 +259,100 @@ func (e *UpdateChunkPosEvent) String() string {
 	)
 }
 
-type RelativeMoveEvent struct {
+type SetEntityLookEvent struct {
+	eid    int32
+	yaw    float32
+	pitch  float32
+	ground bool
+}
+
+func NewSetEntityLookEvent(
+	eid int32,
+	yaw, pitch float32,
+	ground bool,
+) *SetEntityLookEvent {
+	return &SetEntityLookEvent{
+		eid:    eid,
+		yaw:    yaw,
+		pitch:  pitch,
+		ground: ground,
+	}
+}
+
+func (e *SetEntityLookEvent) GetEID() int32 {
+	return e.eid
+}
+
+func (e *SetEntityLookEvent) GetYaw() float32 {
+	return e.yaw
+}
+
+func (e *SetEntityLookEvent) GetPitch() float32 {
+	return e.pitch
+}
+
+func (e *SetEntityLookEvent) GetGround() bool {
+	return e.ground
+}
+
+func (e *SetEntityLookEvent) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"eid: %d, "+
+			"yaw: %f, "+
+			"pitch: %f, "+
+			"ground: %v "+
+			"}",
+		e.eid,
+		e.yaw,
+		e.pitch,
+		e.ground,
+	)
+}
+
+type UpdateLookEvent struct {
+	yaw    float32
+	pitch  float32
+	ground bool
+}
+
+func NewUpdateLookEvent(
+	yaw, pitch float32,
+	ground bool,
+) *UpdateLookEvent {
+	return &UpdateLookEvent{
+		yaw:    yaw,
+		pitch:  pitch,
+		ground: ground,
+	}
+}
+
+func (e *UpdateLookEvent) GetYaw() float32 {
+	return e.yaw
+}
+
+func (e *UpdateLookEvent) GetPitch() float32 {
+	return e.pitch
+}
+
+func (e *UpdateLookEvent) GetGround() bool {
+	return e.ground
+}
+
+func (e *UpdateLookEvent) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"yaw: %f, "+
+			"pitch: %f, "+
+			"ground: %v "+
+			"}",
+		e.yaw,
+		e.pitch,
+		e.ground,
+	)
+}
+
+type SetEntityRelativePosEvent struct {
 	eid    int32
 	deltaX int16
 	deltaY int16
@@ -265,12 +360,12 @@ type RelativeMoveEvent struct {
 	ground bool
 }
 
-func NewRelativeMoveEvent(
+func NewSetEntityRelativePosEvent(
 	eid int32,
 	deltaX, deltaY, deltaZ int16,
 	ground bool,
-) *RelativeMoveEvent {
-	return &RelativeMoveEvent{
+) *SetEntityRelativePosEvent {
+	return &SetEntityRelativePosEvent{
 		eid:    eid,
 		deltaX: deltaX,
 		deltaY: deltaY,
@@ -279,38 +374,27 @@ func NewRelativeMoveEvent(
 	}
 }
 
-func (p *RelativeMoveEvent) Pack() *Data {
-	data := NewData()
-	data.WriteVarInt(p.eid)
-	data.WriteInt16(p.deltaX)
-	data.WriteInt16(p.deltaY)
-	data.WriteInt16(p.deltaZ)
-	data.WriteBool(p.ground)
-
-	return data
+func (e *SetEntityRelativePosEvent) GetEID() int32 {
+	return e.eid
 }
 
-func (p *RelativeMoveEvent) GetEID() int32 {
-	return p.eid
+func (e *SetEntityRelativePosEvent) GetDeltaX() int16 {
+	return e.deltaX
 }
 
-func (p *RelativeMoveEvent) GetDeltaX() int16 {
-	return p.deltaX
+func (e *SetEntityRelativePosEvent) GetDeltaY() int16 {
+	return e.deltaY
 }
 
-func (p *RelativeMoveEvent) GetDeltaY() int16 {
-	return p.deltaY
+func (e *SetEntityRelativePosEvent) GetDeltaZ() int16 {
+	return e.deltaZ
 }
 
-func (p *RelativeMoveEvent) GetDeltaZ() int16 {
-	return p.deltaZ
+func (e *SetEntityRelativePosEvent) GetGround() bool {
+	return e.ground
 }
 
-func (p *RelativeMoveEvent) GetGround() bool {
-	return p.ground
-}
-
-func (p *RelativeMoveEvent) String() string {
+func (e *SetEntityRelativePosEvent) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"eid: %d, "+
@@ -319,27 +403,30 @@ func (p *RelativeMoveEvent) String() string {
 			"deltaZ: %d, "+
 			"ground: %v "+
 			"}",
-		p.eid,
-		p.deltaX,
-		p.deltaY,
-		p.deltaZ,
-		p.ground,
+		e.eid,
+		e.deltaX,
+		e.deltaY,
+		e.deltaZ,
+		e.ground,
 	)
 }
 
 type UpdatePosEvent struct {
-	x float64
-	y float64
-	z float64
+	x      float64
+	y      float64
+	z      float64
+	ground bool
 }
 
 func NewUpdatePosEvent(
 	x, y, z float64,
+	ground bool,
 ) *UpdatePosEvent {
 	return &UpdatePosEvent{
-		x: x,
-		y: y,
-		z: z,
+		x:      x,
+		y:      y,
+		z:      z,
+		ground: ground,
 	}
 }
 
@@ -353,6 +440,10 @@ func (e *UpdatePosEvent) GetY() float64 {
 
 func (e *UpdatePosEvent) GetZ() float64 {
 	return e.z
+}
+
+func (e *UpdatePosEvent) GetGround() bool {
+	return e.ground
 }
 
 func (e *UpdatePosEvent) String() string {

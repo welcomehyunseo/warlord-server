@@ -17,13 +17,15 @@ const UnloadChunkPacketID = 0x1D
 const CheckKeepAlivePacketID = 0x1F
 const SendChunkDataPacketID = 0x20
 const JoinGamePacketID = 0x23
-const RelativeMovePacketID = 0x26
+const SetEntityRelativePosPacketID = 0x26
+const SetEntityLookPacketID = 0x28
 const SetAbilitiesPacketID = 0x2C
 const AddPlayerPacketID = 0x2E
 const RemovePlayerPacketID = 0x2E
 const UpdateLatencyPacketID = 0x2E
 const TeleportPacketID = 0x2F
 const DespawnEntityPacketID = 0x32
+const SetEntityHeadLookPacketID = 0x36
 const SetSpawnPosPacketID = 0x46
 
 type OutPacket interface {
@@ -575,7 +577,7 @@ func (p *JoinGamePacket) String() string {
 	)
 }
 
-type RelativeMovePacket struct {
+type SetEntityRelativePosPacket struct {
 	*packet
 	eid    int32
 	deltaX int16
@@ -584,16 +586,16 @@ type RelativeMovePacket struct {
 	ground bool
 }
 
-func NewRelativeMovePacket(
+func NewSetEntityRelativePosPacket(
 	eid int32,
 	deltaX, deltaY, deltaZ int16,
 	ground bool,
-) *RelativeMovePacket {
-	return &RelativeMovePacket{
+) *SetEntityRelativePosPacket {
+	return &SetEntityRelativePosPacket{
 		packet: newPacket(
 			Outbound,
 			PlayState,
-			RelativeMovePacketID,
+			SetEntityRelativePosPacketID,
 		),
 		eid:    eid,
 		deltaX: deltaX,
@@ -603,7 +605,7 @@ func NewRelativeMovePacket(
 	}
 }
 
-func (p *RelativeMovePacket) Pack() *Data {
+func (p *SetEntityRelativePosPacket) Pack() *Data {
 	data := NewData()
 	data.WriteVarInt(p.eid)
 	data.WriteInt16(p.deltaX)
@@ -614,27 +616,27 @@ func (p *RelativeMovePacket) Pack() *Data {
 	return data
 }
 
-func (p *RelativeMovePacket) GetEID() int32 {
+func (p *SetEntityRelativePosPacket) GetEID() int32 {
 	return p.eid
 }
 
-func (p *RelativeMovePacket) GetDeltaX() int16 {
+func (p *SetEntityRelativePosPacket) GetDeltaX() int16 {
 	return p.deltaX
 }
 
-func (p *RelativeMovePacket) GetDeltaY() int16 {
+func (p *SetEntityRelativePosPacket) GetDeltaY() int16 {
 	return p.deltaY
 }
 
-func (p *RelativeMovePacket) GetDeltaZ() int16 {
+func (p *SetEntityRelativePosPacket) GetDeltaZ() int16 {
 	return p.deltaZ
 }
 
-func (p *RelativeMovePacket) GetGround() bool {
+func (p *SetEntityRelativePosPacket) GetGround() bool {
 	return p.ground
 }
 
-func (p *RelativeMovePacket) String() string {
+func (p *SetEntityRelativePosPacket) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"packet: %+v, "+
@@ -649,6 +651,75 @@ func (p *RelativeMovePacket) String() string {
 		p.deltaX,
 		p.deltaY,
 		p.deltaZ,
+		p.ground,
+	)
+}
+
+type SetEntityLookPacket struct {
+	*packet
+	eid    int32
+	yaw    float32
+	pitch  float32
+	ground bool
+}
+
+func NewSetEntityLookPacket(
+	eid int32,
+	yaw, pitch float32,
+	ground bool,
+) *SetEntityLookPacket {
+	return &SetEntityLookPacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			SetEntityLookPacketID,
+		),
+		eid:    eid,
+		yaw:    yaw,
+		pitch:  pitch,
+		ground: ground,
+	}
+}
+
+func (p *SetEntityLookPacket) Pack() *Data {
+	data := NewData()
+	data.WriteVarInt(p.eid)
+	data.WriteAngle(p.yaw)
+	data.WriteAngle(p.pitch)
+	data.WriteBool(p.ground)
+
+	return data
+}
+
+func (p *SetEntityLookPacket) GetEID() int32 {
+	return p.eid
+}
+
+func (p *SetEntityLookPacket) GetYaw() float32 {
+	return p.yaw
+}
+
+func (p *SetEntityLookPacket) GetPitch() float32 {
+	return p.pitch
+}
+
+func (p *SetEntityLookPacket) GetGround() bool {
+	return p.ground
+}
+
+func (p *SetEntityLookPacket) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"eid: %d, "+
+			"yaw: %f, "+
+			"pitch: %f, "+
+			"ground: %v "+
+			"}",
+		p.packet,
+		p.eid,
+		p.yaw,
+		p.pitch,
 		p.ground,
 	)
 }
@@ -1059,6 +1130,50 @@ func (p *DespawnEntityPacket) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, eid: %d }",
 		p.packet, p.eid,
+	)
+}
+
+type SetEntityHeadLookPacket struct {
+	*packet
+	eid int32
+	yaw float32
+}
+
+func NewSetEntityHeadLookPacket(
+	eid int32,
+	yaw float32,
+) *SetEntityHeadLookPacket {
+	return &SetEntityHeadLookPacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			SetEntityHeadLookPacketID,
+		),
+		eid: eid,
+		yaw: yaw,
+	}
+}
+
+func (p *SetEntityHeadLookPacket) Pack() *Data {
+	data := NewData()
+	data.WriteVarInt(p.eid)
+	data.WriteAngle(p.yaw)
+
+	return data
+}
+
+func (p *SetEntityHeadLookPacket) GetEID() int32 {
+	return p.eid
+}
+
+func (p *SetEntityHeadLookPacket) GetYaw() float32 {
+	return p.yaw
+}
+
+func (p *SetEntityHeadLookPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, eid: %d, yaw: %f }",
+		p.packet, p.eid, p.yaw,
 	)
 }
 

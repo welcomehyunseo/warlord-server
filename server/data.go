@@ -364,20 +364,20 @@ func (d *Data) WritePosition(
 	d.buf = concat(d.buf, buf)
 }
 
-func frem(x, y float64) float64 {
-	return x - y*math.Floor(x/y)
+func frem(x, y float32) float32 {
+	return x - y*float32(math.Floor(float64(x/y)))
 }
 
-func (d *Data) ReadAngle() float64 {
+func (d *Data) ReadAngle() float32 {
 	v, buf := shift(d.buf)
 	d.buf = buf
-	v0 := (360 * float64(v)) / math.MaxUint8
+	v0 := (360 * float32(v)) / math.MaxUint8
 	v1 := frem(v0, 360)
 	return v1
 }
 
 func (d *Data) WriteAngle(
-	v float64,
+	v float32,
 ) {
 	v0 := frem(v, 360)
 	b := uint8((math.MaxUint8 * v0) / 360)

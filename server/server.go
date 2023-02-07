@@ -92,7 +92,9 @@ type Server struct {
 	m7     map[ChunkPosStr]map[CID]types.Nil
 	m8     map[CID]ChanForSpawnPlayerEvent
 	m9     map[CID]ChanForDespawnEntityEvent
-	m10    map[CID]ChanForRelativeMoveEvent
+
+	m10 map[CID]ChanForSetEntityLookEvent
+	m11 map[CID]ChanForSetEntityRelativePosEvent
 }
 
 func NewServer(
@@ -152,7 +154,8 @@ func NewServer(
 		m8:     make(map[CID]ChanForSpawnPlayerEvent),
 		m9:     make(map[CID]ChanForDespawnEntityEvent),
 
-		m10: make(map[CID]ChanForRelativeMoveEvent),
+		m10: make(map[CID]ChanForSetEntityLookEvent),
+		m11: make(map[CID]ChanForSetEntityRelativePosEvent),
 	}, nil
 }
 
@@ -938,7 +941,165 @@ func (s *Server) handleDespawnEntityEvent(
 	lg.Debug("The handler for DespawnEntityEvent was ended")
 }
 
-func (s *Server) broadcastRelativeMoveEvent(
+func (s *Server) broadcastSetEntityLookEvent(
+	lg *Logger,
+	cid CID, eid int32,
+	yaw, pitch float32,
+	ground bool,
+) {
+	s.mutex6.RLock()
+	defer s.mutex6.RUnlock()
+
+	lg.Debug(
+		"It is started to broadcast SetEntityLookEvent.",
+		NewLgElement("cid", cid),
+		NewLgElement("eid", eid),
+		NewLgElement("yaw", yaw),
+		NewLgElement("pitch", pitch),
+		NewLgElement("ground", ground),
+	)
+
+	event := NewSetEntityLookEvent(
+		eid,
+		yaw, pitch,
+		ground,
+	)
+
+	m := s.m6[cid]
+	for cid, _ := range m {
+		ch := s.m10[cid]
+		ch <- event
+	}
+
+	lg.Debug(
+		"It is finished to broadcast SetEntityLookEvent.",
+	)
+}
+
+func (s *Server) handleSetEntityLookEvent(
+	chanForEvent ChanForSetEntityLookEvent,
+	uid uuid.UUID,
+	cnt *Client,
+	chanForError ChanForError,
+) {
+	lg := NewLogger(
+		NewLgElement("handler", "SetEntityLookEvent"),
+		NewLgElement("uid", uid),
+		NewLgElement("client", cnt),
+	)
+	lg.Debug(
+		"The handler for SetEntityLookEvent was started.",
+	)
+
+	defer func() {
+
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			eid := event.GetEID()
+			yaw, pitch := event.GetYaw(), event.GetPitch()
+			ground := event.GetGround()
+			if err := cnt.SetEntityLook(
+				lg,
+				eid,
+				yaw, pitch,
+				ground,
+			); err != nil {
+				panic(err)
+			}
+
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("The handler for SetEntityLookEvent was ended")
+}
+
+func (s *Server) handleUpdateLookEvent(
+	chanForEvent ChanForUpdateLookEvent,
+	cnt *Client,
+	player *Player,
+	chanForError ChanForError,
+) {
+	lg := NewLogger(
+		NewLgElement("handler", "UpdateLookEvent"),
+		NewLgElement("cnt", cnt),
+		NewLgElement("player", player),
+	)
+	lg.Debug(
+		"It is started to handle UpdateLookEvent.",
+	)
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	cid := cnt.GetCID()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			eid := player.GetEid()
+			yaw, pitch := event.GetYaw(), event.GetPitch()
+			ground := event.GetGround()
+
+			s.broadcastSetEntityLookEvent(
+				lg,
+				cid,
+				eid,
+				yaw, pitch,
+				ground,
+			)
+
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("It is finished to handle UpdateLookEvent.")
+}
+
+func (s *Server) broadcastSetEntityRelativePosEvent(
 	lg *Logger,
 	cid CID, eid int32,
 	x, y, z float64,
@@ -948,7 +1109,7 @@ func (s *Server) broadcastRelativeMoveEvent(
 	defer s.mutex6.RUnlock()
 
 	lg.Debug(
-		"It is started to broadcast RelativeMoveEvent.",
+		"It is started to broadcast SetEntityRelativePosEvent.",
 		NewLgElement("cid", cid),
 		NewLgElement("eid", eid),
 		NewLgElement("x", x),
@@ -964,7 +1125,7 @@ func (s *Server) broadcastRelativeMoveEvent(
 		int16(((y*32)-(prevY*32))*128),
 		int16(((z*32)-(prevZ*32))*128)
 
-	event := NewRelativeMoveEvent(
+	event := NewSetEntityRelativePosEvent(
 		eid,
 		deltaX, deltaY, deltaZ,
 		true, // TODO
@@ -972,28 +1133,28 @@ func (s *Server) broadcastRelativeMoveEvent(
 
 	m := s.m6[cid]
 	for cid, _ := range m {
-		ch := s.m10[cid]
+		ch := s.m11[cid]
 		ch <- event
 	}
 
 	lg.Debug(
-		"It is finished to broadcast RelativeMoveEvent.",
+		"It is finished to broadcast SetEntityRelativePosEvent.",
 	)
 }
 
-func (s *Server) handleRelativeMoveEvent(
-	chanForEvent ChanForRelativeMoveEvent,
+func (s *Server) handleSetEntityRelativePosEvent(
+	chanForEvent ChanForSetEntityRelativePosEvent,
 	uid uuid.UUID,
 	cnt *Client,
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "RelativeMoveEvent"),
+		NewLgElement("handler", "SetEntityRelativePosEvent"),
 		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
 	)
 	lg.Debug(
-		"The handler for RelativeMoveEvent was started.",
+		"It is started to handle SetEntityRelativePosEvent.",
 	)
 
 	defer func() {
@@ -1021,7 +1182,7 @@ func (s *Server) handleRelativeMoveEvent(
 			deltaX, deltaY, deltaZ :=
 				event.GetDeltaX(), event.GetDeltaY(), event.GetDeltaZ()
 			ground := event.GetGround()
-			if err := cnt.RelativeMove(
+			if err := cnt.SetEntityRelativePos(
 				lg,
 				eid,
 				deltaX, deltaY, deltaZ,
@@ -1040,7 +1201,7 @@ func (s *Server) handleRelativeMoveEvent(
 		}
 	}
 
-	lg.Debug("The handler for RelativeMoveEvent was ended")
+	lg.Debug("It is finished to handle SetEntityRelativePosEvent.")
 }
 
 func (s *Server) handleUpdatePosEvent(
@@ -1089,7 +1250,7 @@ func (s *Server) handleUpdatePosEvent(
 			prevY := player.GetPrevY()
 			prevZ := player.GetPrevZ()
 
-			s.broadcastRelativeMoveEvent(
+			s.broadcastSetEntityRelativePosEvent(
 				lg,
 				cid, eid,
 				x, y, z,
@@ -1208,7 +1369,9 @@ func (s *Server) initConnection(
 	ChanForSpawnPlayerEvent,
 	ChanForDespawnEntityEvent,
 	ChanForUpdateChunkPosEvent,
-	ChanForRelativeMoveEvent,
+	ChanForSetEntityLookEvent,
+	ChanForUpdateLookEvent,
+	ChanForSetEntityRelativePosEvent,
 	ChanForUpdatePosEvent,
 	ChanForConfirmKeepAliveEvent,
 	error,
@@ -1240,7 +1403,7 @@ func (s *Server) initConnection(
 		spawnX, spawnY, spawnZ,
 		spawnYaw, spawnPitch,
 	); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 
 	chanForAddPlayerEvent := make(ChanForAddPlayerEvent, 1)
@@ -1271,7 +1434,7 @@ func (s *Server) initConnection(
 	)
 
 	if err := s.initPlayerList(lg, player, cnt); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 
 	chanForSpawnPlayerEvent :=
@@ -1296,14 +1459,6 @@ func (s *Server) initConnection(
 
 	chanForUpdateChunkPosEvent :=
 		make(ChanForUpdateChunkPosEvent, 1)
-	if err := s.initChunks(
-		lg,
-		chanForSpawnPlayerEvent,
-		cnt, player,
-		cx, cz,
-	); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
-	}
 	go s.handleUpdateChunkPosEvent(
 		chanForUpdateChunkPosEvent,
 		uid,
@@ -1311,10 +1466,28 @@ func (s *Server) initConnection(
 		chanForError,
 	)
 
-	chanForRelativeMoveEvent := make(ChanForRelativeMoveEvent, 1)
-	s.m10[cid] = chanForRelativeMoveEvent
-	go s.handleRelativeMoveEvent(
-		chanForRelativeMoveEvent,
+	chanForSetEntityLookEvent := make(ChanForSetEntityLookEvent, 1)
+	s.m10[cid] = chanForSetEntityLookEvent
+	go s.handleSetEntityLookEvent(
+		chanForSetEntityLookEvent,
+		uid,
+		cnt,
+		chanForError,
+	)
+
+	chanForUpdateLookEvent := make(ChanForUpdateLookEvent, 1)
+	go s.handleUpdateLookEvent(
+		chanForUpdateLookEvent,
+		cnt,
+		player,
+		chanForError,
+	)
+
+	chanForSetEntityRelativePosEvent :=
+		make(ChanForSetEntityRelativePosEvent, 1)
+	s.m11[cid] = chanForSetEntityRelativePosEvent
+	go s.handleSetEntityRelativePosEvent(
+		chanForSetEntityRelativePosEvent,
 		uid,
 		cnt,
 		chanForError,
@@ -1328,6 +1501,15 @@ func (s *Server) initConnection(
 		player,
 		chanForError,
 	)
+
+	if err := s.initChunks(
+		lg,
+		chanForSpawnPlayerEvent,
+		cnt, player,
+		cx, cz,
+	); err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+	}
 
 	chanForConfirmKeepAliveEvent := make(ChanForConfirmKeepAliveEvent, 1)
 	go s.handleConfirmKeepAliveEvent(
@@ -1347,7 +1529,9 @@ func (s *Server) initConnection(
 		chanForSpawnPlayerEvent,
 		chanForDespawnEntityEvent,
 		chanForUpdateChunkPosEvent,
-		chanForRelativeMoveEvent,
+		chanForSetEntityLookEvent,
+		chanForUpdateLookEvent,
+		chanForSetEntityRelativePosEvent,
 		chanForUpdatePosEvent,
 		chanForConfirmKeepAliveEvent,
 		nil
@@ -1362,7 +1546,9 @@ func (s *Server) closeConnection(
 	chanForSpawnPlayerEvent ChanForSpawnPlayerEvent,
 	chanForDespawnEntityEvent ChanForDespawnEntityEvent,
 	chanForUpdateChunkPosEvent ChanForUpdateChunkPosEvent,
-	chanForRelativeMoveEvent ChanForRelativeMoveEvent,
+	chanForSetEntityLookEvent ChanForSetEntityLookEvent,
+	chanForUpdateLookEvent ChanForUpdateLookEvent,
+	chanForSetEntityRelativePosEvent ChanForSetEntityRelativePosEvent,
 	chanForUpdatePosEvent ChanForUpdatePosEvent,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 ) {
@@ -1373,15 +1559,21 @@ func (s *Server) closeConnection(
 
 	close(chanForConfirmKeepAliveEvent)
 
-	close(chanForUpdatePosEvent)
-
-	delete(s.m10, cid)
-	close(chanForRelativeMoveEvent)
-
 	s.closeChunks(
 		lg,
 		cid, player,
 	)
+
+	close(chanForUpdatePosEvent)
+
+	delete(s.m11, cid)
+	close(chanForSetEntityRelativePosEvent)
+
+	close(chanForUpdateLookEvent)
+
+	delete(s.m10, cid)
+	close(chanForSetEntityLookEvent)
+
 	close(chanForUpdateChunkPosEvent)
 
 	delete(s.m9, cid)
@@ -1507,7 +1699,9 @@ func (s *Server) handleConnection(
 		chanForSpawnPlayerEvent,
 		chanForDespawnEntityEvent,
 		chanForUpdateChunkPosEvent,
-		chanForRelativeMoveEvent,
+		chanForSetEntityLookEvent,
+		chanForUpdateLookEvent,
+		chanForSetEntityRelativePosEvent,
 		chanForUpdatePosEvent,
 		chanForConfirmKeepAliveEvent,
 		err :=
@@ -1531,7 +1725,9 @@ func (s *Server) handleConnection(
 		chanForSpawnPlayerEvent,
 		chanForDespawnEntityEvent,
 		chanForUpdateChunkPosEvent,
-		chanForRelativeMoveEvent,
+		chanForSetEntityLookEvent,
+		chanForUpdateLookEvent,
+		chanForSetEntityRelativePosEvent,
 		chanForUpdatePosEvent,
 		chanForConfirmKeepAliveEvent,
 	)
@@ -1543,6 +1739,7 @@ func (s *Server) handleConnection(
 			finish, err := cnt.Loop3(
 				lg,
 				chanForUpdatePosEvent,
+				chanForUpdateLookEvent,
 				chanForConfirmKeepAliveEvent,
 				state,
 			)

@@ -15,6 +15,7 @@ const ChangeSettingsPacketID = 0x04
 const ConfirmKeepAlivePacketID = 0x0B
 const ChangePosPacketID = 0x0D
 const ChangePosAndLookPacketID = 0x0E
+const ChangeLookPacketID = 0x0F
 
 type InPacket interface {
 	*Packet
@@ -528,6 +529,54 @@ func (p *ChangePosAndLookPacket) String() string {
 			"}",
 		p.packet,
 		p.x, p.y, p.z,
+		p.yaw, p.pitch,
+		p.ground,
+	)
+}
+
+type ChangeLookPacket struct {
+	*packet
+	yaw    float32
+	pitch  float32
+	ground bool
+}
+
+func NewChangeLookPacket() *ChangeLookPacket {
+	return &ChangeLookPacket{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			ChangeLookPacketID,
+		),
+	}
+}
+
+func (p *ChangeLookPacket) Unpack(data *Data) {
+	p.yaw = data.ReadFloat32()
+	p.pitch = data.ReadFloat32()
+	p.ground = data.ReadBool()
+}
+
+func (p *ChangeLookPacket) GetYaw() float32 {
+	return p.yaw
+}
+
+func (p *ChangeLookPacket) GetPitch() float32 {
+	return p.pitch
+}
+
+func (p *ChangeLookPacket) GetGround() bool {
+	return p.ground
+}
+
+func (p *ChangeLookPacket) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"yaw: %f, pitch: %f, "+
+			"ground: %v "+
+			"}",
+		p.packet,
 		p.yaw, p.pitch,
 		p.ground,
 	)
