@@ -271,7 +271,7 @@ func (cnt *Client) writeWithComp(
 ) error {
 	cnt.mutex0.Lock()
 	defer cnt.mutex0.Unlock()
-	
+
 	lg.Debug(
 		"It is started to generateData the packet with compression.",
 		NewLgElement("packet", packet),
@@ -620,7 +620,7 @@ func (cnt *Client) Init(
 	if err := func() error {
 		packet := NewJoinGamePacket(
 			eid,
-			1,
+			0,
 			0,
 			2,
 			"default",

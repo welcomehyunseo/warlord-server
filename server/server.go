@@ -174,7 +174,7 @@ func (s *Server) initPlayerList(
 	defer s.mutex2.Unlock()
 
 	lg.Debug(
-		"It is started to init player list.",
+		"It is started to init player report.",
 		NewLgElement("player", player),
 		NewLgElement("cnt", cnt),
 	)
@@ -202,7 +202,7 @@ func (s *Server) initPlayerList(
 	}
 
 	lg.Debug(
-		"It is finished to init player list.",
+		"It is finished to init player report.",
 	)
 	return nil
 }
@@ -240,7 +240,7 @@ func (s *Server) closePlayerList(
 	defer s.mutex2.Unlock()
 
 	lg.Debug(
-		"It is started to close player list.",
+		"It is started to reportChan player report.",
 	)
 
 	delete(s.m2, cid0)
@@ -252,7 +252,7 @@ func (s *Server) closePlayerList(
 	}
 
 	lg.Debug(
-		"It is finished to close player list.",
+		"It is finished to reportChan player report.",
 	)
 }
 
@@ -263,10 +263,11 @@ func (s *Server) handleAddPlayerEvent(
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "AddPlayerEvent"),
+		"add-player-event-handler",
 		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
 	lg.Debug(
 		"The handler for AddPlayerEvent was started.",
 	)
@@ -320,10 +321,11 @@ func (s *Server) handleRemovePlayerEvent(
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "RemovePlayerEvent"),
+		"remove-player-event-handler",
 		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
 	lg.Debug(
 		"The handler for RemovePlayerEvent was started.",
 	)
@@ -368,16 +370,17 @@ func (s *Server) handleRemovePlayerEvent(
 }
 
 func (s *Server) handleUpdateLatencyEvent(
-	uid uuid.UUID,
 	chanForEvent ChanForUpdateLatencyEvent,
+	uid uuid.UUID,
 	cnt *Client,
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "UpdateLatencyEvent"),
+		"update-latency-event-handler",
 		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
 	lg.Debug(
 		"The handler for UpdateLatencyEvent was started.",
 	)
@@ -684,7 +687,7 @@ func (s *Server) closeChunks(
 	defer s.mutex7.Unlock()
 
 	lg.Debug(
-		"It is started to close chunks.",
+		"It is started to reportChan chunks.",
 		NewLgElement("cid0", cid0),
 		NewLgElement("player", player),
 	)
@@ -692,12 +695,12 @@ func (s *Server) closeChunks(
 	x, z := player.GetX(), player.GetZ()
 	cx, cz := toChunkPos(x, z)
 
-	// close client ID by chunk pos
+	// reportChan client ID by chunk pos
 	chunkPosStr := toChunkPosStr(cx, cz)
 	m := s.m7[chunkPosStr]
 	delete(m, cid0)
 
-	// close interactions
+	// reportChan interactions
 	eid0 := player.GetEid()
 	event0 := NewDespawnEntityEvent(eid0)
 	for cid1, _ := range s.m6[cid0] {
@@ -710,7 +713,7 @@ func (s *Server) closeChunks(
 	delete(s.m6, cid0)
 
 	lg.Debug(
-		"It is finished to close chunks.",
+		"It is finished to reportChan chunks.",
 	)
 
 	return
@@ -723,10 +726,11 @@ func (s *Server) handleUpdateChunkPosEvent(
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "UpdateChunkPosEvent"),
+		"update-chunk-pos-event-handler",
 		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
 	lg.Debug(
 		"It is started to handle UpdateChunkPosEvent.",
 	)
@@ -808,10 +812,11 @@ func (s *Server) handleSpawnPlayerEvent(
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "SpawnPlayerEvent"),
+		"spawn-player-event-handler",
 		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
 	lg.Debug(
 		"The handler for SpawnPlayerEvent was started.",
 	)
@@ -892,10 +897,11 @@ func (s *Server) handleDespawnEntityEvent(
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "DespawnEntityEvent"),
+		"despawn-entity-event-handler",
 		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
 	lg.Debug(
 		"The handler for DespawnEntityEvent was started.",
 	)
@@ -983,10 +989,11 @@ func (s *Server) handleSetEntityLookEvent(
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "SetEntityLookEvent"),
+		"set-entity-look-event-handler",
 		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
 	lg.Debug(
 		"The handler for SetEntityLookEvent was started.",
 	)
@@ -1044,10 +1051,11 @@ func (s *Server) handleUpdateLookEvent(
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "UpdateLookEvent"),
+		"update-look-event-handler",
 		NewLgElement("cnt", cnt),
 		NewLgElement("player", player),
 	)
+	defer lg.Close()
 	lg.Debug(
 		"It is started to handle UpdateLookEvent.",
 	)
@@ -1149,10 +1157,11 @@ func (s *Server) handleSetEntityRelativePosEvent(
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "SetEntityRelativePosEvent"),
+		"set-entity-relative-pos-event-handler",
 		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
 	lg.Debug(
 		"It is started to handle SetEntityRelativePosEvent.",
 	)
@@ -1212,10 +1221,11 @@ func (s *Server) handleUpdatePosEvent(
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "UpdatePosEvent"),
+		"update-pos-event-handler",
 		NewLgElement("cnt", cnt),
 		NewLgElement("player", player),
 	)
+	defer lg.Close()
 	lg.Debug(
 		"The handler for UpdatePosEvent was started.",
 	)
@@ -1287,10 +1297,11 @@ func (s *Server) handleConfirmKeepAliveEvent(
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
-		NewLgElement("handler", "ConfirmKeepAliveEvent"),
+		"confirm-keep-alive-event-handler",
 		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
 	lg.Debug(
 		"The handler for ConfirmKeepAliveEvent was started.",
 	)
@@ -1427,8 +1438,8 @@ func (s *Server) initConnection(
 	chanForUpdateLatencyEvent := make(ChanForUpdateLatencyEvent, 1)
 	s.m5[cid] = chanForUpdateLatencyEvent
 	go s.handleUpdateLatencyEvent(
-		uid,
 		chanForUpdateLatencyEvent,
+		uid,
 		cnt,
 		chanForError,
 	)
@@ -1604,11 +1615,11 @@ func (s *Server) handleConnection(
 ) {
 	addr := conn.RemoteAddr()
 	lg := NewLogger(
+		"connection-handler",
 		NewLgElement("addr", addr),
-		NewLgElement("handler", "Connection"),
 	)
-
-	lg.Debug("The handler for connection was started.")
+	defer lg.Close()
+	lg.Debug("It is started to handle Connection.")
 
 	defer func() {
 		// TODO: send the Disconnect packet to the connection
@@ -1758,14 +1769,14 @@ func (s *Server) handleConnection(
 		}
 	}
 
-	lg.Debug("The handler for connection was finished.")
+	lg.Debug("It is finished to handle Connection.")
 }
 
 func (s *Server) Render() {
 	lg := NewLogger(
-		NewLgElement("context", "server-renderer"),
+		"server-renderer",
 	)
-
+	defer lg.Close()
 	addr := s.addr
 	network := Network
 
