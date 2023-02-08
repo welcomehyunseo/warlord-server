@@ -67,7 +67,7 @@ func (p *ResponsePacket) Pack() *Data {
 		"{"+
 			"\"version\":{\"name\":\"%s\",\"protocol\":%d},"+
 			"\"players\":{\"max\":%d,\"online\":%d,\"sample\":[]},"+
-			"\"description\":{\"text\":\"%s\"},"+
+			"\"description\":{\"Text\":\"%s\"},"+
 			"\"favicon\":\"%s\","+
 			"\"previewsChat\":%v,"+
 			"\"enforcesSecureChat\":%v"+
@@ -100,7 +100,7 @@ func (p *ResponsePacket) GetFavicon() string {
 
 func (p *ResponsePacket) String() string {
 	return fmt.Sprintf(
-		"{ packet: %+v, max: %d, online: %d, text: %s, favicon: %s }",
+		"{ packet: %+v, max: %d, online: %d, Text: %s, favicon: %s }",
 		p.packet, p.max, p.online, p.text, p.favicon,
 	)
 }
@@ -264,35 +264,6 @@ func (p *SpawnPlayerPacket) Pack() *Data {
 	data.WriteFloat64(p.z)
 	data.WriteFloat32(p.yaw)
 	data.WriteFloat32(p.pitch)
-	//
-	//data.WriteUint8(0)
-	//data.WriteVarInt(0) // byte
-	//data.WriteInt8(0)
-
-	//data.WriteUint8(1)
-	//data.WriteVarInt(1) // varint
-	//data.WriteVarInt(300)
-	//
-	//data.WriteUint8(3)
-	//data.WriteVarInt(7) // bool
-	//data.WriteBool(false)
-	//
-	//data.WriteUint8(4)
-	//data.WriteVarInt(7) // bool
-	//data.WriteBool(false)
-	//
-	//data.WriteUint8(5)
-	//data.WriteVarInt(7) // bool
-	//data.WriteBool(false)
-	//
-	//data.WriteUint8(6)
-	//data.WriteVarInt(0) // byte
-	//data.WriteInt8(0x01)
-	//
-	//data.WriteUint8(7)
-	//data.WriteVarInt(2) // float
-	//data.WriteFloat32(20.0)
-
 	data.WriteUint8(0xff)
 
 	return data
@@ -829,7 +800,7 @@ type AddPlayerPacket struct {
 	signature   string
 	gamemode    int32
 	latency     int32
-	displayName string
+	displayName *Chat
 }
 
 func NewAddPlayerPacket(
@@ -839,7 +810,7 @@ func NewAddPlayerPacket(
 	signature string,
 	gamemode int32,
 	latency int32,
-	displayName string,
+	displayName *Chat,
 ) *AddPlayerPacket {
 	return &AddPlayerPacket{
 		packet: newPacket(
@@ -871,8 +842,9 @@ func (p *AddPlayerPacket) Pack() *Data {
 	data.WriteString(p.signature)
 	data.WriteVarInt(p.gamemode)
 	data.WriteVarInt(p.latency)
-	data.WriteBool(false)
-	//data.WriteString(p.displayName)  // TODO
+	data.WriteBool(true)
+	_ = data.WriteChat(p.displayName)
+	// TODO
 
 	return data
 }
@@ -901,7 +873,7 @@ func (p *AddPlayerPacket) GetLatency() int32 {
 	return p.latency
 }
 
-func (p *AddPlayerPacket) GetDisplayName() string {
+func (p *AddPlayerPacket) GetDisplayName() *Chat {
 	return p.displayName
 }
 
@@ -915,7 +887,7 @@ func (p *AddPlayerPacket) String() string {
 			"signature: %s, "+
 			"gamemode: %d, "+
 			"latency: %d, "+
-			"displayName: %s "+
+			"displayName: %+v "+
 			"}",
 		p.packet,
 		p.uid,

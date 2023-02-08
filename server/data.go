@@ -2,33 +2,76 @@ package server
 
 import (
 	"encoding/binary"
+	"encoding/json"
+	"errors"
 	"github.com/google/uuid"
 	"math"
 )
 
-//var NegativeValueErr = errors.New("NegativeErr: negative value is not allowed")
-//var NoMoreByteErr = errors.New("NoMoreByteErr: no more byte to read in Data")
-//var NoMoreBytesErr = errors.New("NoMoreBytesErr: no more bytes to read in Data")
+var InsufLenOfBytesError = errors.New("the array of bytes has insufficient length")
+var LessThanMinBytesError = errors.New("there are less than minimum number of bytes")
+var OverThanMaxBytesError = errors.New("there are over than maximum number of bytes")
+var VarIntIsTooBigError = errors.New("VarInt is too big")
+var VarLongIsTooBigError = errors.New("VarLong is too big")
+var Not26BitIntValueRangeError = errors.New("it is a not 26-bit integer value range")
+var Not12BitIntValueRangeError = errors.New("it is a not 12-bit integer value range")
 
 const (
 	SegmentBits = uint8(0x7F)
 	ContinueBit = uint8(0x80)
 
-	BytesNumOfBool     = 1
-	BytesNumOfInt8     = 1
-	BytesNumOfUint8    = 1
-	BytesNumOfInt16    = 2
-	BytesNumOfUint16   = 2
-	BytesNumOfInt32    = 4
-	BytesNumOfInt64    = 8
-	BytesNumOfFloat32  = 4
-	BytesNumOfFloat64  = 8
-	BytesNumOfVarInt   = 4
-	BytesNumOfVarLong  = 8
-	BytesNumOfPosition = 8
-	BytesNumOfAngle    = 1
-	BytesNumOfUUID     = 16
+	MinBytesNumOfBool     = 1
+	MinBytesNumOfInt8     = 1
+	MinBytesNumOfUint8    = 1
+	MinBytesNumOfInt16    = 2
+	MinBytesNumOfUint16   = 2
+	MinBytesNumOfInt32    = 4
+	MinBytesNumOfInt64    = 8
+	MinBytesNumOfFloat32  = 4
+	MinBytesNumOfFloat64  = 8
+	MinBytesNumOfString   = 0
+	MinBytesNumOfChat     = 0
+	MinBytesNumOfVarInt   = 4
+	MinBytesNumOfVarLong  = 8
+	MinBytesNumOfPosition = 8
+	MinBytesNumOfAngle    = 1
+	MinBytesNumOfUUID     = 16
+
+	MaxBytesNumOfBool     = 1
+	MaxBytesNumOfInt8     = 1
+	MaxBytesNumOfUint8    = 1
+	MaxBytesNumOfInt16    = 2
+	MaxBytesNumOfUint16   = 2
+	MaxBytesNumOfInt32    = 4
+	MaxBytesNumOfInt64    = 8
+	MaxBytesNumOfFloat32  = 4
+	MaxBytesNumOfFloat64  = 8
+	MaxBytesNumOfString   = 32767 * 4
+	MaxBytesNumOfChat     = 262144 * 4
+	MaxBytesNumOfVarInt   = 4
+	MaxBytesNumOfVarLong  = 8
+	MaxBytesNumOfPosition = 8
+	MaxBytesNumOfAngle    = 1
+	MaxBytesNumOfUUID     = 16
+
+	MinNumOf26BitInt = -33554432
+	MaxNumOf26BitInt = 33554431
+	MinNumOf12BitInt = -2048
+	MaxNumOf12BitInt = 2047
 )
+
+type Chat struct {
+	Text          string  `json:"text,omitempty"`
+	Bold          bool    `json:"bold,omitempty"`
+	Italic        bool    `json:"italic,omitempty"`
+	Underlined    bool    `json:"underlined,omitempty"`
+	Strikethrough bool    `json:"strikethrough,omitempty"`
+	Obfuscated    bool    `json:"obfuscated,omitempty"`
+	Font          string  `json:"font,omitempty"`
+	Color         string  `json:"color,omitempty"`
+	Insertion     string  `json:"insertion,omitempty"`
+	Extra         []*Chat `json:"extra,omitempty"`
+}
 
 func compare(
 	buf0 []uint8,
@@ -50,51 +93,71 @@ func compare(
 }
 
 func split(
-	buf []uint8,
+	buf []byte,
 	n int,
-) ([]uint8, []uint8) {
+) (
+	[]byte,
+	[]byte,
+	error,
+) {
 	l := len(buf)
-	return buf[0:n], buf[n:l]
+	if l < n {
+		return nil, nil, InsufLenOfBytesError
+	}
+
+	return buf[0:n], buf[n:l], nil
 }
 
 func shift(
-	buf []uint8,
-) (uint8, []uint8) {
-	buf0, buf1 := split(buf, 1)
+	buf []byte,
+) (
+	byte,
+	[]byte,
+	error,
+) {
+	buf0, buf1, err := split(buf, 1)
+	if err != nil {
+		return 0x00, nil, err
+	}
+
 	b := buf0[0]
-	return b, buf1
+	return b, buf1, nil
 }
 
 func concat(
-	buf0 []uint8,
-	buf1 []uint8,
-) []uint8 {
+	buf0 []byte,
+	buf1 []byte,
+) []byte {
 	l0 := len(buf0)
 	l1 := len(buf1)
-	buf2 := make([]uint8, l0+l1)
-	for i := 0; i < l0; i++ {
-		buf2[i] = buf0[i]
-	}
-	for i := 0; i < l1; i++ {
-		buf2[i+l0] = buf1[i]
-	}
+	buf2 := make([]byte, l0+l1)
+
+	copy(buf2[0:], buf0)
+	copy(buf2[l0:], buf1)
+
 	return buf2
 }
 
 func push(
-	buf []uint8,
-	v uint8,
-) []uint8 {
-	return concat(buf, []uint8{v})
+	buf0 []byte,
+	b byte,
+) []byte {
+	l0 := len(buf0)
+	buf1 := make([]byte, l0+1)
+
+	copy(buf1, buf0)
+	buf1[l0] = b
+
+	return buf1
 }
 
 type Data struct {
-	buf []uint8
+	buf []byte
 }
 
-func NewData(bytes ...uint8) *Data {
+func NewData(bytes ...byte) *Data {
 	if bytes == nil {
-		bytes = make([]uint8, 0)
+		bytes = make([]byte, 0)
 	}
 
 	return &Data{
@@ -102,10 +165,16 @@ func NewData(bytes ...uint8) *Data {
 	}
 }
 
-func (d *Data) ReadBool() bool {
-	v, buf := shift(d.buf)
+func (d *Data) ReadBool() (
+	bool,
+	error,
+) {
+	v, buf, err := shift(d.buf)
+	if err != nil {
+		return false, err
+	}
 	d.buf = buf
-	return v == 0x1
+	return v == 0x1, nil
 }
 
 func (d *Data) WriteBool(
@@ -118,11 +187,17 @@ func (d *Data) WriteBool(
 	}
 }
 
-func (d *Data) ReadInt8() int8 {
-	v, buf := shift(d.buf)
+func (d *Data) ReadInt8() (
+	int8,
+	error,
+) {
+	v, buf, err := shift(d.buf)
+	if err != nil {
+		return 0, err
+	}
 	d.buf = buf
 
-	return int8(v)
+	return int8(v), nil
 }
 
 func (d *Data) WriteInt8(
@@ -131,11 +206,17 @@ func (d *Data) WriteInt8(
 	d.buf = push(d.buf, uint8(v))
 }
 
-func (d *Data) ReadUint8() uint8 {
-	v, buf := shift(d.buf)
+func (d *Data) ReadUint8() (
+	uint8,
+	error,
+) {
+	v, buf, err := shift(d.buf)
+	if err != nil {
+		return 0, err
+	}
 	d.buf = buf
 
-	return v
+	return v, nil
 }
 
 func (d *Data) WriteUint8(
@@ -144,123 +225,211 @@ func (d *Data) WriteUint8(
 	d.buf = push(d.buf, v)
 }
 
-func (d *Data) ReadInt16() int16 {
-	buf0, buf1 := split(d.buf, BytesNumOfInt16)
+func (d *Data) ReadInt16() (
+	int16,
+	error,
+) {
+	buf0, buf1, err := split(d.buf, MaxBytesNumOfInt16)
+	if err != nil {
+		return 0, err
+	}
 	d.buf = buf1
 	v := binary.BigEndian.Uint16(buf0)
-	return int16(v)
+	return int16(v), nil
 }
 
 func (d *Data) WriteInt16(
 	v int16,
 ) {
-	buf := make([]uint8, BytesNumOfInt16)
+	buf := make([]uint8, MaxBytesNumOfInt16)
 	binary.BigEndian.PutUint16(buf, uint16(v))
 	d.buf = concat(d.buf, buf)
 }
 
-func (d *Data) ReadUint16() uint16 {
-	buf0, buf1 := split(d.buf, BytesNumOfUint16)
+func (d *Data) ReadUint16() (
+	uint16,
+	error,
+) {
+	buf0, buf1, err := split(d.buf, MaxBytesNumOfUint16)
+	if err != nil {
+		return 0, err
+	}
 	d.buf = buf1
 	v := binary.BigEndian.Uint16(buf0)
-	return v
+	return v, nil
 }
 
 func (d *Data) WriteUint16(
 	v uint16,
 ) {
-	buf := make([]uint8, BytesNumOfUint16)
+	buf := make([]uint8, MaxBytesNumOfUint16)
 	binary.BigEndian.PutUint16(buf, v)
 	d.buf = concat(d.buf, buf)
 }
 
-func (d *Data) ReadInt32() int32 {
-	buf0, buf1 := split(d.buf, BytesNumOfInt32)
+func (d *Data) ReadInt32() (
+	int32,
+	error,
+) {
+	buf0, buf1, err := split(d.buf, MaxBytesNumOfInt32)
+	if err != nil {
+		return 0, err
+	}
 	d.buf = buf1
 	v := binary.BigEndian.Uint32(buf0)
-	return int32(v)
+	return int32(v), nil
 }
 
 func (d *Data) WriteInt32(
 	v int32,
 ) {
-	buf := make([]uint8, BytesNumOfInt32)
+	buf := make([]uint8, MaxBytesNumOfInt32)
 	binary.BigEndian.PutUint32(buf, uint32(v))
 	d.buf = concat(d.buf, buf)
 }
 
-func (d *Data) ReadInt64() int64 {
-	buf0, buf1 := split(d.buf, BytesNumOfInt64)
+func (d *Data) ReadInt64() (
+	int64,
+	error,
+) {
+	buf0, buf1, err := split(d.buf, MaxBytesNumOfInt64)
+	if err != nil {
+		return 0, err
+	}
 	d.buf = buf1
 	v := binary.BigEndian.Uint64(buf0)
-	return int64(v)
+	return int64(v), nil
 }
 
 func (d *Data) WriteInt64(
 	v int64,
 ) {
-	buf := make([]uint8, BytesNumOfInt64)
+	buf := make([]uint8, MaxBytesNumOfInt64)
 	binary.BigEndian.PutUint64(buf, uint64(v))
 	d.buf = concat(d.buf, buf)
 }
 
-func (d *Data) ReadFloat32() float32 {
-	buf0, buf1 := split(d.buf, BytesNumOfFloat32)
+func (d *Data) ReadFloat32() (
+	float32,
+	error,
+) {
+	buf0, buf1, err := split(d.buf, MaxBytesNumOfFloat32)
+	if err != nil {
+		return 0, err
+	}
 	d.buf = buf1
 	bits := binary.BigEndian.Uint32(buf0)
 	v := math.Float32frombits(bits)
-	return v
+	return v, err
 }
 
 func (d *Data) WriteFloat32(
 	v float32,
 ) {
 	bits := math.Float32bits(v)
-	buf := make([]uint8, BytesNumOfFloat32)
+	buf := make([]uint8, MaxBytesNumOfFloat32)
 	binary.BigEndian.PutUint32(buf, bits)
 	d.buf = concat(d.buf, buf)
 }
 
-func (d *Data) ReadFloat64() float64 {
-	buf0, buf1 := split(d.buf, BytesNumOfFloat64)
+func (d *Data) ReadFloat64() (
+	float64,
+	error,
+) {
+	buf0, buf1, err := split(d.buf, MaxBytesNumOfFloat64)
+	if err != nil {
+		return 0, err
+	}
 	d.buf = buf1
 	bits := binary.BigEndian.Uint64(buf0)
 	v := math.Float64frombits(bits)
-	return v
+	return v, nil
 }
 
 func (d *Data) WriteFloat64(
 	v float64,
 ) {
 	bits := math.Float64bits(v)
-	buf := make([]uint8, BytesNumOfFloat64)
+	buf := make([]uint8, MaxBytesNumOfFloat64)
 	binary.BigEndian.PutUint64(buf, bits)
 	d.buf = concat(d.buf, buf)
 }
 
-func (d *Data) ReadString() string {
-	l := d.ReadVarInt()
-	buf0, buf1 := split(d.buf, int(l))
+func (d *Data) ReadString() (
+	string,
+	error,
+) {
+	l, err := d.ReadVarInt()
+	if err != nil {
+		return "", err
+	}
+	if l < MinBytesNumOfString {
+		return "", LessThanMinBytesError
+	}
+	if MaxBytesNumOfString < l {
+		return "", OverThanMaxBytesError
+	}
+
+	buf0, buf1, err := split(d.buf, int(l))
+	if err != nil {
+		return "", err
+	}
 	d.buf = buf1
 	s := string(buf0)
-	return s
+	return s, nil
 }
 
 func (d *Data) WriteString(
 	v string,
-) {
-	buf := []uint8(v)
+) error {
+	buf := []byte(v)
+
 	l := len(buf)
+	if l < MinBytesNumOfString {
+		return LessThanMinBytesError
+	}
+	if MaxBytesNumOfString < l {
+		return OverThanMaxBytesError
+	}
+
 	d.WriteVarInt(int32(l))
 	d.buf = concat(d.buf, buf)
+	return nil
 }
 
-func (d *Data) ReadVarInt() int32 {
+func (d *Data) WriteChat(
+	v *Chat,
+) error {
+	buf, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	l := len(buf)
+	if l < MinBytesNumOfChat {
+		return LessThanMinBytesError
+	}
+	if MaxBytesNumOfChat < l {
+		return OverThanMaxBytesError
+	}
+
+	d.WriteVarInt(int32(l))
+	d.buf = concat(d.buf, buf)
+	return nil
+}
+
+func (d *Data) ReadVarInt() (
+	int32,
+	error,
+) {
 	v := int32(0)
 	position := uint8(0)
 
 	for {
-		b, buf := shift(d.buf)
+		b, buf, err := shift(d.buf)
+		if err != nil {
+			return 0, err
+		}
 		d.buf = buf
 		v |= int32(b&SegmentBits) << position
 
@@ -269,9 +438,13 @@ func (d *Data) ReadVarInt() int32 {
 		}
 
 		position += 7
+
+		if position >= 32 {
+			return 0, VarIntIsTooBigError
+		}
 	}
 
-	return v
+	return v, nil
 }
 
 func (d *Data) WriteVarInt(
@@ -292,12 +465,18 @@ func (d *Data) WriteVarInt(
 	}
 }
 
-func (d *Data) ReadVarLong() int64 {
+func (d *Data) ReadVarLong() (
+	int64,
+	error,
+) {
 	v := int64(0)
 	position := uint8(0)
 
 	for {
-		b, buf := shift(d.buf)
+		b, buf, err := shift(d.buf)
+		if err != nil {
+			return 0, err
+		}
 		d.buf = buf
 		v |= int64(b&SegmentBits) << position
 
@@ -306,9 +485,12 @@ func (d *Data) ReadVarLong() int64 {
 		}
 
 		position += 7
+		if position >= 64 {
+			return 0, VarLongIsTooBigError
+		}
 	}
 
-	return v
+	return v, nil
 }
 
 func (d *Data) WriteVarLong(
@@ -329,8 +511,14 @@ func (d *Data) WriteVarLong(
 	}
 }
 
-func (d *Data) ReadPosition() (int, int, int) {
-	v := d.ReadInt64()
+func (d *Data) ReadPosition() (
+	int, int, int,
+	error,
+) {
+	v, err := d.ReadInt64()
+	if err != nil {
+		return 0, 0, 0, err
+	}
 
 	x := int(v >> 38)
 	y := int(v & 0xFFF)
@@ -346,7 +534,7 @@ func (d *Data) ReadPosition() (int, int, int) {
 		z -= 1 << 26
 	}
 
-	return x, y, z
+	return x, y, z, nil
 }
 
 // WritePosition encodes an integer position into the current Data.
@@ -354,26 +542,41 @@ func (d *Data) ReadPosition() (int, int, int) {
 // and a value y as a signed 12-bit integer with two's complement and big-endian.
 func (d *Data) WritePosition(
 	x, y, z int,
-) {
-	buf := make([]uint8, BytesNumOfPosition)
+) error {
+	if x < MinNumOf26BitInt || MaxNumOf26BitInt < x ||
+		z < MinNumOf26BitInt || MaxNumOf26BitInt < z {
+		return Not26BitIntValueRangeError
+	}
+	if y < MinNumOf12BitInt || MaxNumOf12BitInt < y {
+		return Not12BitIntValueRangeError
+	}
+
+	buf := make([]uint8, MaxBytesNumOfPosition)
 	v := uint64(x&0x3FFFFFF)<<38 | uint64((z&0x3FFFFFF)<<12) | uint64(y&0xFFF)
 	for i := 7; i >= 0; i-- {
 		buf[i] = uint8(v)
 		v >>= 8
 	}
 	d.buf = concat(d.buf, buf)
+	return nil
 }
 
 func frem(x, y float32) float32 {
 	return x - y*float32(math.Floor(float64(x/y)))
 }
 
-func (d *Data) ReadAngle() float32 {
-	v, buf := shift(d.buf)
+func (d *Data) ReadAngle() (
+	float32,
+	error,
+) {
+	v, buf, err := shift(d.buf)
+	if err != nil {
+		return 0, err
+	}
 	d.buf = buf
 	v0 := (360 * float32(v)) / math.MaxUint8
 	v1 := frem(v0, 360)
-	return v1
+	return v1, nil
 }
 
 func (d *Data) WriteAngle(
@@ -384,32 +587,47 @@ func (d *Data) WriteAngle(
 	d.buf = push(d.buf, b)
 }
 
-func (d *Data) ReadUUID() uuid.UUID {
-	buf0, buf1 := split(d.buf, BytesNumOfUUID)
+func (d *Data) ReadUUID() (
+	uuid.UUID,
+	error,
+) {
+	buf0, buf1, err := split(d.buf, MaxBytesNumOfUUID)
+	if err != nil {
+		return uuid.Nil, err
+	}
 	d.buf = buf1
-	v, _ := uuid.FromBytes(buf0)
+	v, err := uuid.FromBytes(buf0)
+	if err != nil {
+		return uuid.Nil, err
+	}
 
-	return v
+	return v, nil
 }
 
 func (d *Data) WriteUUID(
 	v uuid.UUID,
 ) {
-	buf := make([]uint8, BytesNumOfUUID)
-	for i := 0; i < BytesNumOfUUID; i++ {
+	buf := make([]byte, MaxBytesNumOfUUID)
+	for i := 0; i < MaxBytesNumOfUUID; i++ {
 		buf[i] = v[i]
 	}
 	d.buf = concat(d.buf, buf)
 }
 
-func (d *Data) GetBytes() []uint8 {
+func (d *Data) GetBytes() []byte {
 	return d.buf
 }
 
-func (d *Data) ReadBytes(n int) []uint8 {
-	b0, b1 := split(d.buf, n)
+func (d *Data) ReadBytes(n int) (
+	[]byte,
+	error,
+) {
+	b0, b1, err := split(d.buf, n)
+	if err != nil {
+		return nil, err
+	}
 	d.buf = b1
-	return b0
+	return b0, nil
 }
 
 func (d *Data) WriteBytes(b []uint8) {

@@ -195,6 +195,9 @@ func (s *Server) initPlayerList(
 			return err
 		}
 
+		if cid0 == cid1 {
+			continue
+		}
 		event0 := NewAddPlayerEvent(uid0, username0)
 		ch := s.m3[cid1]
 		ch <- event0

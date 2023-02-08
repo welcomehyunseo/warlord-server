@@ -21,15 +21,15 @@ const HaveActionPacketID = 0x15
 type InPacket interface {
 	*Packet
 
-	Unpack(*Data)
+	Unpack(*Data) error
 }
 
 type HandshakePacket struct {
 	*packet
-	version int32  // protocol version
-	addr    string // server address
-	port    uint16 // server port
-	next    int32  // next state
+	version int32
+	addr    string
+	port    uint16
+	next    int32
 }
 
 func NewHandshakePacket() *HandshakePacket {
@@ -44,11 +44,25 @@ func NewHandshakePacket() *HandshakePacket {
 
 func (p *HandshakePacket) Unpack(
 	data *Data,
-) {
-	p.version = data.ReadVarInt()
-	p.addr = data.ReadString()
-	p.port = data.ReadUint16()
-	p.next = data.ReadVarInt()
+) error {
+	var err error
+	p.version, err = data.ReadVarInt()
+	if err != nil {
+		return err
+	}
+	p.addr, err = data.ReadString()
+	if err != nil {
+		return err
+	}
+	p.port, err = data.ReadUint16()
+	if err != nil {
+		return err
+	}
+	p.next, err = data.ReadVarInt()
+	if err != nil {
+		return err
+	}
+	return err
 }
 
 func (p *HandshakePacket) GetVersion() int32 {
@@ -96,7 +110,9 @@ func NewRequestPacket() *RequestPacket {
 
 func (p *RequestPacket) Unpack(
 	data *Data,
-) {
+) error {
+	var err error
+	return err
 }
 
 func (p *RequestPacket) String() string {
@@ -123,8 +139,13 @@ func NewPingPacket() *PingPacket {
 
 func (p *PingPacket) Unpack(
 	data *Data,
-) {
-	p.payload = data.ReadInt64()
+) error {
+	var err error
+	p.payload, err = data.ReadInt64()
+	if err != nil {
+		return err
+	}
+	return err
 }
 
 func (p *PingPacket) GetPayload() int64 {
@@ -155,8 +176,13 @@ func NewStartLoginPacket() *StartLoginPacket {
 
 func (p *StartLoginPacket) Unpack(
 	data *Data,
-) {
-	p.username = data.ReadString()
+) error {
+	var err error
+	p.username, err = data.ReadString()
+	if err != nil {
+		return nil
+	}
+	return err
 }
 
 func (p *StartLoginPacket) GetUsername() string {
@@ -185,8 +211,15 @@ func NewFinishTeleportPacket() *FinishTeleportPacket {
 	}
 }
 
-func (p *FinishTeleportPacket) Unpack(data *Data) {
-	p.payload = data.ReadVarInt()
+func (p *FinishTeleportPacket) Unpack(
+	data *Data,
+) error {
+	var err error
+	p.payload, err = data.ReadVarInt()
+	if err != nil {
+		return err
+	}
+	return err
 }
 
 func (p *FinishTeleportPacket) GetPayload() int32 {
@@ -216,8 +249,14 @@ func NewDemandPacket() *DemandPacket {
 	}
 }
 
-func (p *DemandPacket) Unpack(data *Data) {
-	action := data.ReadVarInt()
+func (p *DemandPacket) Unpack(
+	data *Data,
+) error {
+	var err error
+	action, err := data.ReadVarInt()
+	if err != nil {
+		return err
+	}
 	if action == 0 {
 		p.respawn = true
 		p.stats = false
@@ -225,6 +264,7 @@ func (p *DemandPacket) Unpack(data *Data) {
 		p.respawn = false
 		p.stats = true
 	}
+	return err
 }
 
 func (p *DemandPacket) GetRespawn() bool {
@@ -270,12 +310,28 @@ func NewChangeSettingsPacket() *ChangeSettingsPacket {
 
 func (p *ChangeSettingsPacket) Unpack(
 	data *Data,
-) {
-	p.local = data.ReadString()
-	p.rndDist = data.ReadInt8()
-	p.chatMode = data.ReadVarInt()
-	p.chatColors = data.ReadBool()
-	bitmask := data.ReadUint8()
+) error {
+	var err error
+	p.local, err = data.ReadString()
+	if err != nil {
+		return err
+	}
+	p.rndDist, err = data.ReadInt8()
+	if err != nil {
+		return err
+	}
+	p.chatMode, err = data.ReadVarInt()
+	if err != nil {
+		return err
+	}
+	p.chatColors, err = data.ReadBool()
+	if err != nil {
+		return err
+	}
+	bitmask, err := data.ReadUint8()
+	if err != nil {
+		return err
+	}
 	if bitmask&uint8(1) == uint8(1) {
 		p.cape = true
 	} else {
@@ -311,7 +367,11 @@ func (p *ChangeSettingsPacket) Unpack(
 	} else {
 		p.hat = false
 	}
-	p.mainHand = data.ReadVarInt()
+	p.mainHand, err = data.ReadVarInt()
+	if err != nil {
+		return err
+	}
+	return err
 }
 
 func (p *ChangeSettingsPacket) GetLocal() string {
@@ -404,8 +464,15 @@ func NewConfirmKeepAlivePacket() *ConfirmKeepAlivePacket {
 	}
 }
 
-func (p *ConfirmKeepAlivePacket) Unpack(data *Data) {
-	p.payload = data.ReadInt64()
+func (p *ConfirmKeepAlivePacket) Unpack(
+	data *Data,
+) error {
+	var err error
+	p.payload, err = data.ReadInt64()
+	if err != nil {
+		return err
+	}
+	return err
 }
 
 func (p *ConfirmKeepAlivePacket) GetPayload() int64 {
@@ -437,11 +504,27 @@ func NewChangePlayerPosPacket() *ChangePosPacket {
 	}
 }
 
-func (p *ChangePosPacket) Unpack(data *Data) {
-	p.x = data.ReadFloat64()
-	p.y = data.ReadFloat64()
-	p.z = data.ReadFloat64()
-	p.ground = data.ReadBool()
+func (p *ChangePosPacket) Unpack(
+	data *Data,
+) error {
+	var err error
+	p.x, err = data.ReadFloat64()
+	if err != nil {
+		return err
+	}
+	p.y, err = data.ReadFloat64()
+	if err != nil {
+		return err
+	}
+	p.z, err = data.ReadFloat64()
+	if err != nil {
+		return err
+	}
+	p.ground, err = data.ReadBool()
+	if err != nil {
+		return err
+	}
+	return err
 }
 
 func (p *ChangePosPacket) GetX() float64 {
@@ -487,13 +570,35 @@ func NewChangePosAndLookPacket() *ChangePosAndLookPacket {
 	}
 }
 
-func (p *ChangePosAndLookPacket) Unpack(data *Data) {
-	p.x = data.ReadFloat64()
-	p.y = data.ReadFloat64()
-	p.z = data.ReadFloat64()
-	p.yaw = data.ReadFloat32()
-	p.pitch = data.ReadFloat32()
-	p.ground = data.ReadBool()
+func (p *ChangePosAndLookPacket) Unpack(
+	data *Data,
+) error {
+	var err error
+	p.x, err = data.ReadFloat64()
+	if err != nil {
+		return err
+	}
+	p.y, err = data.ReadFloat64()
+	if err != nil {
+		return err
+	}
+	p.z, err = data.ReadFloat64()
+	if err != nil {
+		return err
+	}
+	p.yaw, err = data.ReadFloat32()
+	if err != nil {
+		return err
+	}
+	p.pitch, err = data.ReadFloat32()
+	if err != nil {
+		return err
+	}
+	p.ground, err = data.ReadBool()
+	if err != nil {
+		return err
+	}
+	return err
 }
 
 func (p *ChangePosAndLookPacket) GetX() float64 {
@@ -552,10 +657,23 @@ func NewChangeLookPacket() *ChangeLookPacket {
 	}
 }
 
-func (p *ChangeLookPacket) Unpack(data *Data) {
-	p.yaw = data.ReadFloat32()
-	p.pitch = data.ReadFloat32()
-	p.ground = data.ReadBool()
+func (p *ChangeLookPacket) Unpack(
+	data *Data,
+) error {
+	var err error
+	p.yaw, err = data.ReadFloat32()
+	if err != nil {
+		return err
+	}
+	p.pitch, err = data.ReadFloat32()
+	if err != nil {
+		return err
+	}
+	p.ground, err = data.ReadBool()
+	if err != nil {
+		return err
+	}
+	return err
 }
 
 func (p *ChangeLookPacket) GetYaw() float32 {
@@ -608,9 +726,18 @@ func NewHaveActionPacket() *HaveActionPacket {
 	}
 }
 
-func (p *HaveActionPacket) Unpack(data *Data) {
-	p.eid = data.ReadVarInt()
-	id := data.ReadVarInt()
+func (p *HaveActionPacket) Unpack(
+	data *Data,
+) error {
+	var err error
+	p.eid, err = data.ReadVarInt()
+	if err != nil {
+		return err
+	}
+	id, err := data.ReadVarInt()
+	if err != nil {
+		return err
+	}
 	switch id {
 	case 0:
 		p.startSneaking = true
@@ -629,7 +756,10 @@ func (p *HaveActionPacket) Unpack(data *Data) {
 		break
 	case 5:
 		p.startHorseJump = true
-		p.horseJumpBoost = data.ReadVarInt()
+		p.horseJumpBoost, err = data.ReadVarInt()
+		if err != nil {
+			return err
+		}
 		break
 	case 6:
 		p.stopHorseJump = true
@@ -641,6 +771,7 @@ func (p *HaveActionPacket) Unpack(data *Data) {
 		p.startElytraFlying = true
 		break
 	}
+	return err
 }
 
 func (p *HaveActionPacket) GetEid() int32 {

@@ -7,7 +7,7 @@ import (
 func main() {
 	lc := server.NewLoggerConfigurator()
 	lc.SetLogLevel(server.DebugLevel)
-	lc.EnableReport()
+	//lc.EnableReport()
 	lc.SetFilter("server-renderer")
 
 	addr := ":9999"
@@ -47,4 +47,5 @@ func main() {
 		}
 	}
 	s.Render()
+
 }

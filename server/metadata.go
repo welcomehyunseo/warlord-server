@@ -119,14 +119,15 @@ type EntityMetadata struct {
 	*Metadata
 }
 
-func NewEntityMetadata(
-	burning bool,
-	sneaking bool,
-	sprinting bool,
-	swimming bool,
-	invisible bool,
-	glowingEffect bool,
-	elytraFlying bool,
-) *EntityMetadata {
-
-}
+//
+//func NewEntityMetadata(
+//	burning bool,
+//	sneaking bool,
+//	sprinting bool,
+//	swimming bool,
+//	invisible bool,
+//	glowingEffect bool,
+//	elytraFlying bool,
+//) *EntityMetadata {
+//
+//}

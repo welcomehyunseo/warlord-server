@@ -365,7 +365,10 @@ func (cnt *Client) Loop0(
 		return NilState, UnknownPacketIDError
 	case HandshakePacketID:
 		packet := NewHandshakePacket()
-		packet.Unpack(data)
+		err := packet.Unpack(data)
+		if err != nil {
+			return state, err
+		}
 		lg.Debug(
 			"HandshakePacket was created.",
 			NewLgElement("packet", packet),
@@ -408,7 +411,10 @@ func (cnt *Client) Loop1(
 		return true, UnknownPacketIDError
 	case RequestPacketID:
 		packet0 := NewRequestPacket()
-		packet0.Unpack(data)
+		err := packet0.Unpack(data)
+		if err != nil {
+			return false, err
+		}
 		lg.Debug(
 			"RequestPacket was created.",
 			NewLgElement("packet", packet0),
@@ -424,7 +430,10 @@ func (cnt *Client) Loop1(
 		break
 	case PingPacketID:
 		packet0 := NewPingPacket()
-		packet0.Unpack(data)
+		err := packet0.Unpack(data)
+		if err != nil {
+			return false, err
+		}
 		lg.Debug(
 			"PingPacket was created.",
 			NewLgElement("packet", packet0),
@@ -474,7 +483,10 @@ func (cnt *Client) Loop2(
 		return true, uuid.Nil, "", UnknownPacketIDError
 	case StartLoginPacketID:
 		packet0 := NewStartLoginPacket()
-		packet0.Unpack(d0)
+		err := packet0.Unpack(d0)
+		if err != nil {
+			return false, uuid.Nil, "", err
+		}
 		lg.Debug(
 			"StartLoginPacket was created.",
 			NewLgElement("packet", packet0),
@@ -540,7 +552,10 @@ func (cnt *Client) Loop3(
 	switch pid {
 	case ConfirmKeepAlivePacketID:
 		packet := NewConfirmKeepAlivePacket()
-		packet.Unpack(data)
+		err := packet.Unpack(data)
+		if err != nil {
+			return false, err
+		}
 		lg.Debug(
 			"ConfirmKeepAlivePacket was created.",
 			NewLgElement("packet", packet),
@@ -550,7 +565,10 @@ func (cnt *Client) Loop3(
 		break
 	case ChangePosPacketID:
 		packet := NewChangePlayerPosPacket()
-		packet.Unpack(data)
+		err := packet.Unpack(data)
+		if err != nil {
+			return false, err
+		}
 		lg.Debug(
 			"ChangePosPacket was created.",
 			NewLgElement("packet", packet),
@@ -566,7 +584,10 @@ func (cnt *Client) Loop3(
 		break
 	case ChangePosAndLookPacketID:
 		packet := NewChangePosAndLookPacket()
-		packet.Unpack(data)
+		err := packet.Unpack(data)
+		if err != nil {
+			return false, err
+		}
 		lg.Debug(
 			"ChangePosAndLookPacket was created.",
 			NewLgElement("packet", packet),
@@ -586,7 +607,10 @@ func (cnt *Client) Loop3(
 		break
 	case ChangeLookPacketID:
 		packet := NewChangeLookPacket()
-		packet.Unpack(data)
+		err := packet.Unpack(data)
+		if err != nil {
+			return false, err
+		}
 		lg.Debug(
 			"ChangeLookPacket was created.",
 			NewLgElement("packet", packet),
@@ -647,7 +671,9 @@ func (cnt *Client) Init(
 			return InvalidPacketIDError
 		}
 		packet := NewChangeSettingsPacket()
-		packet.Unpack(data)
+		if err := packet.Unpack(data); err != nil {
+			return err
+		}
 		lg.Debug(
 			"ChangeSettingsPacket was created.",
 			NewLgElement("packet", packet),
@@ -717,7 +743,9 @@ func (cnt *Client) Init(
 			return InvalidPacketIDError
 		}
 		packet := NewFinishTeleportPacket()
-		packet.Unpack(data)
+		if err := packet.Unpack(data); err != nil {
+			return err
+		}
 		lg.Debug(
 			"FinishTeleportPacket was created.",
 			NewLgElement("packet", packet),
@@ -824,7 +852,10 @@ func (cnt *Client) AddPlayer(
 	}
 	gamemode := int32(0)
 	ping := int32(1000)
-	displayName := username
+	displayName := &Chat{
+		Text: username,
+		Bold: true,
+	}
 	packet := NewAddPlayerPacket(
 		uid,
 		username,
