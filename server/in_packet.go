@@ -16,6 +16,7 @@ const ConfirmKeepAlivePacketID = 0x0B
 const ChangePosPacketID = 0x0D
 const ChangePosAndLookPacketID = 0x0E
 const ChangeLookPacketID = 0x0F
+const HaveActionPacketID = 0x15
 
 type InPacket interface {
 	*Packet
@@ -579,5 +580,140 @@ func (p *ChangeLookPacket) String() string {
 		p.packet,
 		p.yaw, p.pitch,
 		p.ground,
+	)
+}
+
+type HaveActionPacket struct {
+	*packet
+	eid                int32
+	startSneaking      bool
+	stopSneaking       bool
+	leaveBed           bool
+	startSprinting     bool
+	stopSprinting      bool
+	startHorseJump     bool
+	stopHorseJump      bool
+	horseJumpBoost     int32
+	openHorseInventory bool
+	startElytraFlying  bool
+}
+
+func NewHaveActionPacket() *HaveActionPacket {
+	return &HaveActionPacket{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			HaveActionPacketID,
+		),
+	}
+}
+
+func (p *HaveActionPacket) Unpack(data *Data) {
+	p.eid = data.ReadVarInt()
+	id := data.ReadVarInt()
+	switch id {
+	case 0:
+		p.startSneaking = true
+		break
+	case 1:
+		p.stopSprinting = true
+		break
+	case 2:
+		p.leaveBed = true
+		break
+	case 3:
+		p.startSprinting = true
+		break
+	case 4:
+		p.stopSprinting = true
+		break
+	case 5:
+		p.startHorseJump = true
+		p.horseJumpBoost = data.ReadVarInt()
+		break
+	case 6:
+		p.stopHorseJump = true
+		break
+	case 7:
+		p.openHorseInventory = true
+		break
+	case 8:
+		p.startElytraFlying = true
+		break
+	}
+}
+
+func (p *HaveActionPacket) GetEid() int32 {
+	return p.eid
+}
+
+func (p *HaveActionPacket) GetStartSneaking() bool {
+	return p.startSneaking
+}
+
+func (p *HaveActionPacket) GetStopSneaking() bool {
+	return p.stopSneaking
+}
+
+func (p *HaveActionPacket) GetLeaveBed() bool {
+	return p.leaveBed
+}
+
+func (p *HaveActionPacket) GetStartSprinting() bool {
+	return p.startSprinting
+}
+
+func (p *HaveActionPacket) GetStopSprinting() bool {
+	return p.stopSprinting
+}
+
+func (p *HaveActionPacket) GetStartHorseJump() bool {
+	return p.startHorseJump
+}
+
+func (p *HaveActionPacket) GetStopHorseJump() bool {
+	return p.stopHorseJump
+}
+
+func (p *HaveActionPacket) GetHorseJumpBoost() int32 {
+	return p.horseJumpBoost
+}
+
+func (p *HaveActionPacket) GetOpenHorseInventory() bool {
+	return p.openHorseInventory
+}
+
+func (p *HaveActionPacket) GetStartElytraFlying() bool {
+	return p.startElytraFlying
+}
+
+func (p *HaveActionPacket) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"eid: %d, "+
+			"startSneaking: %v, "+
+			"stopSneaking: %v, "+
+			"leaveBed: %v, "+
+			"startSprinting: %v, "+
+			"stopSprinting: %v, "+
+			"startHorseJump: %v, "+
+			"stopHorseJump: %v, "+
+			"horseJumpBoost: %d "+
+			"openHorseInventory: %v, "+
+			"startElytraFlying: %v, "+
+			"}",
+		p.packet,
+		p.eid,
+		p.startSneaking,
+		p.stopSneaking,
+		p.leaveBed,
+		p.startSprinting,
+		p.stopSprinting,
+		p.startHorseJump,
+		p.stopHorseJump,
+		p.horseJumpBoost,
+		p.openHorseInventory,
+		p.startElytraFlying,
 	)
 }
