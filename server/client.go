@@ -237,30 +237,32 @@ func (cnt *Client) write(
 	defer cnt.mutex0.Unlock()
 
 	lg.Debug(
-		"It is started to generateData the packet.",
+		"It is started to write the packet.",
 		NewLgElement("packet", packet),
 	)
 
-	conn := cnt.conn
-
 	pid := packet.GetID()
-	data := packet.Pack()
-
-	buf, err := write(pid, data)
+	data, err := packet.Pack()
 	if err != nil {
 		return err
 	}
-	arr := buf.Bytes()
-	length := len(arr)
+
+	buf0, err := write(pid, data)
+	if err != nil {
+		return err
+	}
+	buf1 := buf0.Bytes()
+	length := len(buf1)
+	conn := cnt.conn
 	if _, err := writeVarInt(int32(length), conn); err != nil {
 		return err
 	}
-	if _, err := conn.Write(arr); err != nil {
+	if _, err := conn.Write(buf1); err != nil {
 		return err
 	}
 
 	lg.Debug(
-		"It is finished to generateData the packet.",
+		"It is finished to write the packet.",
 	)
 	return nil
 }
@@ -273,14 +275,17 @@ func (cnt *Client) writeWithComp(
 	defer cnt.mutex0.Unlock()
 
 	lg.Debug(
-		"It is started to generateData the packet with compression.",
+		"It is started to write the packet with compression.",
 		NewLgElement("packet", packet),
 	)
 
 	conn := cnt.conn
 
 	pid := packet.GetID()
-	data := packet.Pack()
+	data, err := packet.Pack()
+	if err != nil {
+		return err
+	}
 
 	buf0, err := write(pid, data)
 	if err != nil {
@@ -338,7 +343,7 @@ func (cnt *Client) writeWithComp(
 	}
 
 	lg.Debug(
-		"It is finished to generateData the packet with compression.",
+		"It is finished to write the packet with compression.",
 	)
 	return nil
 }
@@ -408,7 +413,7 @@ func (cnt *Client) Loop1(
 
 	switch pid {
 	default:
-		return true, UnknownPacketIDError
+		return false, UnknownPacketIDError
 	case RequestPacketID:
 		packet0 := NewRequestPacket()
 		err := packet0.Unpack(data)
@@ -430,8 +435,7 @@ func (cnt *Client) Loop1(
 		break
 	case PingPacketID:
 		packet0 := NewPingPacket()
-		err := packet0.Unpack(data)
-		if err != nil {
+		if err := packet0.Unpack(data); err != nil {
 			return false, err
 		}
 		lg.Debug(

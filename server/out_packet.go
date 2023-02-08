@@ -31,7 +31,10 @@ const SetSpawnPosPacketID = 0x46
 type OutPacket interface {
 	Packet
 
-	Pack() *Data
+	Pack() (
+		*Data,
+		error,
+	)
 }
 
 type ResponsePacket struct {
@@ -61,13 +64,16 @@ func NewResponsePacket(
 	}
 }
 
-func (p *ResponsePacket) Pack() *Data {
+func (p *ResponsePacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
 	jsonString := fmt.Sprintf(
 		"{"+
 			"\"version\":{\"name\":\"%s\",\"protocol\":%d},"+
 			"\"players\":{\"max\":%d,\"online\":%d,\"sample\":[]},"+
-			"\"description\":{\"Text\":\"%s\"},"+
+			"\"description\":{\"text\":\"%s\"},"+
 			"\"favicon\":\"%s\","+
 			"\"previewsChat\":%v,"+
 			"\"enforcesSecureChat\":%v"+
@@ -77,9 +83,11 @@ func (p *ResponsePacket) Pack() *Data {
 		p.text, p.favicon,
 		true, true,
 	)
-	data.WriteString(jsonString)
+	if err := data.WriteString(jsonString); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *ResponsePacket) GetMax() int {
@@ -123,11 +131,16 @@ func NewPongPacket(
 	}
 }
 
-func (p *PongPacket) Pack() *Data {
+func (p *PongPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteInt64(p.payload)
+	if err := data.WriteInt64(p.payload); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *PongPacket) GetPayload() int64 {
@@ -162,12 +175,19 @@ func NewCompleteLoginPacket(
 	}
 }
 
-func (p *CompleteLoginPacket) Pack() *Data {
+func (p *CompleteLoginPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteString(p.uid.String())
-	data.WriteString(p.username)
+	if err := data.WriteString(p.uid.String()); err != nil {
+		return nil, err
+	}
+	if err := data.WriteString(p.username); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *CompleteLoginPacket) GetUUID() uuid.UUID {
@@ -203,11 +223,16 @@ func NewEnableCompPacket(
 	}
 }
 
-func (p *EnableCompPacket) Pack() *Data {
+func (p *EnableCompPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteVarInt(p.threshold)
+	if err := data.WriteVarInt(p.threshold); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *EnableCompPacket) GetThreshold() int32 {
@@ -255,18 +280,37 @@ func NewSpawnPlayerPacket(
 	}
 }
 
-func (p *SpawnPlayerPacket) Pack() *Data {
+func (p *SpawnPlayerPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteVarInt(p.eid)
-	data.WriteUUID(p.uid)
-	data.WriteFloat64(p.x)
-	data.WriteFloat64(p.y)
-	data.WriteFloat64(p.z)
-	data.WriteFloat32(p.yaw)
-	data.WriteFloat32(p.pitch)
-	data.WriteUint8(0xff)
+	if err := data.WriteVarInt(p.eid); err != nil {
+		return nil, err
+	}
+	if err := data.WriteUUID(p.uid); err != nil {
+		return nil, err
+	}
+	if err := data.WriteFloat64(p.x); err != nil {
+		return nil, err
+	}
+	if err := data.WriteFloat64(p.y); err != nil {
+		return nil, err
+	}
+	if err := data.WriteFloat64(p.z); err != nil {
+		return nil, err
+	}
+	if err := data.WriteFloat32(p.yaw); err != nil {
+		return nil, err
+	}
+	if err := data.WriteFloat32(p.pitch); err != nil {
+		return nil, err
+	}
+	if err := data.WriteUint8(0xff); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *SpawnPlayerPacket) GetEID() int32 {
@@ -340,12 +384,19 @@ func NewUnloadChunkPacket(
 	}
 }
 
-func (p *UnloadChunkPacket) Pack() *Data {
+func (p *UnloadChunkPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteInt32(p.cx)
-	data.WriteInt32(p.cz)
+	if err := data.WriteInt32(p.cx); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt32(p.cz); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *UnloadChunkPacket) GetCx() int32 {
@@ -381,11 +432,16 @@ func NewCheckKeepAlivePacket(
 	}
 }
 
-func (p *CheckKeepAlivePacket) Pack() *Data {
+func (p *CheckKeepAlivePacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteInt64(p.payload)
+	if err := data.WriteInt64(p.payload); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *CheckKeepAlivePacket) GetPayload() int64 {
@@ -428,20 +484,36 @@ func NewSendChunkDataPacket(
 	}
 }
 
-func (p *SendChunkDataPacket) Pack() *Data {
+func (p *SendChunkDataPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteInt32(p.cx)
-	data.WriteInt32(p.cz)
-	data.WriteBool(p.init)
-	data.WriteVarInt(int32(p.bitmask))
+	if err := data.WriteInt32(p.cx); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt32(p.cz); err != nil {
+		return nil, err
+	}
+	if err := data.WriteBool(p.init); err != nil {
+		return nil, err
+	}
+	if err := data.WriteVarInt(int32(p.bitmask)); err != nil {
+		return nil, err
+	}
 	l0 := len(p.data)
-	data.WriteVarInt(int32(l0))
-	data.WriteBytes(p.data)
-
+	if err := data.WriteVarInt(int32(l0)); err != nil {
+		return nil, err
+	}
+	if err := data.WriteBytes(p.data); err != nil {
+		return nil, err
+	}
 	l1 := 0
-	data.WriteVarInt(int32(l1)) // block entities
+	if err := data.WriteVarInt(int32(l1)); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *SendChunkDataPacket) GetCx() int32 {
@@ -504,17 +576,34 @@ func NewJoinGamePacket(
 	}
 }
 
-func (p *JoinGamePacket) Pack() *Data {
+func (p *JoinGamePacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteInt32(p.eid)
-	data.WriteUint8(p.gamemode)
-	data.WriteInt32(p.dimension)
-	data.WriteUint8(p.difficulty)
-	data.WriteUint8(0) // max is ignored
-	data.WriteString(p.level)
-	data.WriteBool(p.debug)
+	if err := data.WriteInt32(p.eid); err != nil {
+		return nil, err
+	}
+	if err := data.WriteUint8(p.gamemode); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt32(p.dimension); err != nil {
+		return nil, err
+	}
+	if err := data.WriteUint8(p.difficulty); err != nil {
+		return nil, err
+	}
+	if err := data.WriteUint8(0); err != nil { // max is ignored;
+		return nil, err
+	}
+	if err := data.WriteString(p.level); err != nil {
+		return nil, err
+	}
+	if err := data.WriteBool(p.debug); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *JoinGamePacket) GetEid() int32 {
@@ -576,15 +665,28 @@ func NewSetEntityRelativePosPacket(
 	}
 }
 
-func (p *SetEntityRelativePosPacket) Pack() *Data {
+func (p *SetEntityRelativePosPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteVarInt(p.eid)
-	data.WriteInt16(p.deltaX)
-	data.WriteInt16(p.deltaY)
-	data.WriteInt16(p.deltaZ)
-	data.WriteBool(p.ground)
+	if err := data.WriteVarInt(p.eid); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt16(p.deltaX); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt16(p.deltaY); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt16(p.deltaZ); err != nil {
+		return nil, err
+	}
+	if err := data.WriteBool(p.ground); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *SetEntityRelativePosPacket) GetEID() int32 {
@@ -652,14 +754,25 @@ func NewSetEntityLookPacket(
 	}
 }
 
-func (p *SetEntityLookPacket) Pack() *Data {
+func (p *SetEntityLookPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteVarInt(p.eid)
-	data.WriteAngle(p.yaw)
-	data.WriteAngle(p.pitch)
-	data.WriteBool(p.ground)
+	if err := data.WriteVarInt(p.eid); err != nil {
+		return nil, err
+	}
+	if err := data.WriteAngle(p.yaw); err != nil {
+		return nil, err
+	}
+	if err := data.WriteAngle(p.pitch); err != nil {
+		return nil, err
+	}
+	if err := data.WriteBool(p.ground); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *SetEntityLookPacket) GetEID() int32 {
@@ -725,7 +838,10 @@ func NewSetAbilitiesPacket(
 	}
 }
 
-func (p *SetAbilitiesPacket) Pack() *Data {
+func (p *SetAbilitiesPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
 	bitmask := uint8(0)
 	if p.invulnerable == true {
@@ -740,11 +856,17 @@ func (p *SetAbilitiesPacket) Pack() *Data {
 	if p.instantBreak == true {
 		bitmask |= uint8(8)
 	}
-	data.WriteUint8(bitmask)
-	data.WriteFloat32(p.flyingSpeed)
-	data.WriteFloat32(p.fovModifier)
+	if err := data.WriteUint8(bitmask); err != nil {
+		return nil, err
+	}
+	if err := data.WriteFloat32(p.flyingSpeed); err != nil {
+		return nil, err
+	}
+	if err := data.WriteFloat32(p.fovModifier); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *SetAbilitiesPacket) GetInvulnerable() bool {
@@ -828,25 +950,53 @@ func NewAddPlayerPacket(
 	}
 }
 
-func (p *AddPlayerPacket) Pack() *Data {
+func (p *AddPlayerPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteVarInt(0)
-	data.WriteVarInt(1)
+	if err := data.WriteVarInt(0); err != nil {
+		return nil, err
+	}
+	if err := data.WriteVarInt(1); err != nil {
+		return nil, err
+	}
 
-	data.WriteUUID(p.uid)
-	data.WriteString(p.username)
-	data.WriteVarInt(1)
-	data.WriteString("texture")
-	data.WriteString(p.texture)
-	data.WriteBool(true)
-	data.WriteString(p.signature)
-	data.WriteVarInt(p.gamemode)
-	data.WriteVarInt(p.latency)
-	data.WriteBool(true)
-	_ = data.WriteChat(p.displayName)
-	// TODO
+	if err := data.WriteUUID(p.uid); err != nil {
+		return nil, err
+	}
+	if err := data.WriteString(p.username); err != nil {
+		return nil, err
+	}
+	if err := data.WriteVarInt(1); err != nil {
+		return nil, err
+	}
+	if err := data.WriteString("texture"); err != nil {
+		return nil, err
+	}
+	if err := data.WriteString(p.texture); err != nil {
+		return nil, err
+	}
+	if err := data.WriteBool(true); err != nil {
+		return nil, err
+	}
+	if err := data.WriteString(p.signature); err != nil {
+		return nil, err
+	}
+	if err := data.WriteVarInt(p.gamemode); err != nil {
+		return nil, err
+	}
+	if err := data.WriteVarInt(p.latency); err != nil {
+		return nil, err
+	}
+	if err := data.WriteBool(true); err != nil {
+		return nil, err
+	}
+	if err := data.WriteChat(p.displayName); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *AddPlayerPacket) GetUid() uuid.UUID {
@@ -918,14 +1068,22 @@ func NewRemovePlayerPacket(
 	}
 }
 
-func (p *RemovePlayerPacket) Pack() *Data {
+func (p *RemovePlayerPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteVarInt(4)
-	data.WriteVarInt(1)
+	if err := data.WriteVarInt(4); err != nil {
+		return nil, err
+	}
+	if err := data.WriteVarInt(1); err != nil {
+		return nil, err
+	}
+	if err := data.WriteUUID(p.uid); err != nil {
+		return nil, err
+	}
 
-	data.WriteUUID(p.uid)
-
-	return data
+	return data, nil
 }
 
 func (p *RemovePlayerPacket) GetUUID() uuid.UUID {
@@ -960,15 +1118,25 @@ func NewUpdateLatencyPacket(
 	}
 }
 
-func (p *UpdateLatencyPacket) Pack() *Data {
+func (p *UpdateLatencyPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteVarInt(2)
-	data.WriteVarInt(1)
+	if err := data.WriteVarInt(2); err != nil {
+		return nil, err
+	}
+	if err := data.WriteVarInt(1); err != nil {
+		return nil, err
+	}
+	if err := data.WriteUUID(p.uid); err != nil {
+		return nil, err
+	}
+	if err := data.WriteVarInt(p.latency); err != nil {
+		return nil, err
+	}
 
-	data.WriteUUID(p.uid)
-	data.WriteVarInt(p.latency)
-
-	return data
+	return data, nil
 }
 
 func (p *UpdateLatencyPacket) GetUUID() uuid.UUID {
@@ -1016,17 +1184,34 @@ func NewTeleportPacket(
 	}
 }
 
-func (p *TeleportPacket) Pack() *Data {
+func (p *TeleportPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteFloat64(p.x)
-	data.WriteFloat64(p.y)
-	data.WriteFloat64(p.z)
-	data.WriteFloat32(p.yaw)
-	data.WriteFloat32(p.pitch)
-	data.WriteInt8(0)
-	data.WriteVarInt(p.payload)
+	if err := data.WriteFloat64(p.x); err != nil {
+		return nil, err
+	}
+	if err := data.WriteFloat64(p.y); err != nil {
+		return nil, err
+	}
+	if err := data.WriteFloat64(p.z); err != nil {
+		return nil, err
+	}
+	if err := data.WriteFloat32(p.yaw); err != nil {
+		return nil, err
+	}
+	if err := data.WriteFloat32(p.pitch); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt8(0); err != nil {
+		return nil, err
+	}
+	if err := data.WriteVarInt(p.payload); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *TeleportPacket) GetX() float64 {
@@ -1086,12 +1271,19 @@ func NewDespawnEntityPacket(
 	}
 }
 
-func (p *DespawnEntityPacket) Pack() *Data {
+func (p *DespawnEntityPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteVarInt(1)
-	data.WriteVarInt(p.eid)
+	if err := data.WriteVarInt(1); err != nil {
+		return nil, err
+	}
+	if err := data.WriteVarInt(p.eid); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *DespawnEntityPacket) GetEID() int32 {
@@ -1126,12 +1318,19 @@ func NewSetEntityHeadLookPacket(
 	}
 }
 
-func (p *SetEntityHeadLookPacket) Pack() *Data {
+func (p *SetEntityHeadLookPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WriteVarInt(p.eid)
-	data.WriteAngle(p.yaw)
+	if err := data.WriteVarInt(p.eid); err != nil {
+		return nil, err
+	}
+	if err := data.WriteAngle(p.yaw); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *SetEntityHeadLookPacket) GetEID() int32 {
@@ -1173,11 +1372,16 @@ func NewSetSpawnPosPacket(
 	}
 }
 
-func (p *SetSpawnPosPacket) Pack() *Data {
+func (p *SetSpawnPosPacket) Pack() (
+	*Data,
+	error,
+) {
 	data := NewData()
-	data.WritePosition(p.x, p.y, p.z)
+	if err := data.WritePosition(p.x, p.y, p.z); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (p *SetSpawnPosPacket) GetX() int {
