@@ -6,16 +6,18 @@ import (
 )
 
 type entity struct {
-	eid   int32
-	uid   uuid.UUID
-	x     float64
-	y     float64
-	z     float64
-	yaw   float32
-	pitch float32
-	prevX float64
-	prevY float64
-	prevZ float64
+	eid       int32
+	uid       uuid.UUID
+	x         float64
+	y         float64
+	z         float64
+	yaw       float32
+	pitch     float32
+	prevX     float64
+	prevY     float64
+	prevZ     float64
+	sneaking  bool
+	sprinting bool
 }
 
 func newEntity(
@@ -39,19 +41,6 @@ func newEntity(
 		prevY: y,
 		prevZ: z,
 	}
-}
-
-func (e *entity) UpdatePos(
-	x float64,
-	y float64,
-	z float64,
-) {
-	e.prevX = e.x
-	e.prevY = e.y
-	e.prevZ = e.z
-	e.x = x
-	e.y = y
-	e.z = z
 }
 
 func (e *entity) GetEid() int32 {
@@ -82,6 +71,13 @@ func (e *entity) GetPitch() float32 {
 	return e.pitch
 }
 
+func (e *entity) UpdateLook(
+	yaw, pitch float32,
+) {
+	e.yaw = yaw
+	e.pitch = pitch
+}
+
 func (e *entity) GetPrevX() float64 {
 	return e.prevX
 }
@@ -92,6 +88,41 @@ func (e *entity) GetPrevY() float64 {
 
 func (e *entity) GetPrevZ() float64 {
 	return e.prevZ
+}
+
+func (e *entity) UpdatePos(
+	x, y, z float64,
+) {
+	e.prevX = e.x
+	e.prevY = e.y
+	e.prevZ = e.z
+	e.x = x
+	e.y = y
+	e.z = z
+}
+
+func (e *entity) IsSneaking() bool {
+	return e.sneaking
+}
+
+func (e *entity) StartSneaking() {
+	e.sneaking = true
+}
+
+func (e *entity) StopSneaking() {
+	e.sneaking = false
+}
+
+func (e *entity) IsSprinting() bool {
+	return e.sprinting
+}
+
+func (e *entity) StartSprinting() {
+	e.sprinting = true
+}
+
+func (e *entity) StopSprinting() {
+	e.sprinting = false
 }
 
 func (e *entity) String() string {

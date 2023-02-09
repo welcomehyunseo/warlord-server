@@ -18,6 +18,12 @@ type ChanForUpdateLookEvent chan *UpdateLookEvent
 type ChanForSetEntityRelativePosEvent chan *SetEntityRelativePosEvent
 type ChanForUpdatePosEvent chan *UpdatePosEvent
 
+type ChanForSetEntityActionsEvent chan *SetEntityActionsEvent
+type ChanForStartSneakingEvent chan *StartSneakingEvent
+type ChanForStopSneakingEvent chan *StopSneakingEvent
+type ChanForStartSprintingEvent chan *StartSprintingEvent
+type ChanForStopSprintingEvent chan *StopSprintingEvent
+
 type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
 
 type AddPlayerEvent struct {
@@ -450,6 +456,95 @@ func (e *UpdatePosEvent) String() string {
 	return fmt.Sprintf(
 		"{ x: %f, y: %f, z: %f }",
 		e.x, e.y, e.z,
+	)
+}
+
+type SetEntityActionsEvent struct {
+	eid       int32
+	sneaking  bool
+	sprinting bool
+}
+
+func NewSetEntityActionsEvent(
+	eid int32,
+	sneaking bool,
+	sprinting bool,
+) *SetEntityActionsEvent {
+	return &SetEntityActionsEvent{
+		eid:       eid,
+		sneaking:  sneaking,
+		sprinting: sprinting,
+	}
+}
+
+func (e *SetEntityActionsEvent) GetEID() int32 {
+	return e.eid
+}
+
+func (e *SetEntityActionsEvent) IsSneaking() bool {
+	return e.sneaking
+}
+
+func (e *SetEntityActionsEvent) IsSprinting() bool {
+	return e.sprinting
+}
+
+func (e *SetEntityActionsEvent) String() string {
+	return fmt.Sprintf(
+		"{ eid: %d, sneaking: %v, sprinting: %v }",
+		e.eid, e.sneaking, e.sprinting,
+	)
+}
+
+type StartSneakingEvent struct {
+}
+
+func NewStartSneakingEvent() *StartSneakingEvent {
+	return &StartSneakingEvent{}
+}
+
+func (e *StartSneakingEvent) String() string {
+	return fmt.Sprintf(
+		"{ }",
+	)
+}
+
+type StopSneakingEvent struct {
+}
+
+func NewStopSneakingEvent() *StopSneakingEvent {
+	return &StopSneakingEvent{}
+}
+
+func (e *StopSneakingEvent) String() string {
+	return fmt.Sprintf(
+		"{ }",
+	)
+}
+
+type StartSprintingEvent struct {
+}
+
+func NewStartSprintingEvent() *StartSprintingEvent {
+	return &StartSprintingEvent{}
+}
+
+func (e *StartSprintingEvent) String() string {
+	return fmt.Sprintf(
+		"{ }",
+	)
+}
+
+type StopSprintingEvent struct {
+}
+
+func NewStopSprintingEvent() *StopSprintingEvent {
+	return &StopSprintingEvent{}
+}
+
+func (e *StopSprintingEvent) String() string {
+	return fmt.Sprintf(
+		"{ }",
 	)
 }
 

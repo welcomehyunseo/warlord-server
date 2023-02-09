@@ -26,6 +26,7 @@ const UpdateLatencyPacketID = 0x2E
 const TeleportPacketID = 0x2F
 const DespawnEntityPacketID = 0x32
 const SetEntityHeadLookPacketID = 0x36
+const SetEntityMetadataPacketID = 0x3C
 const SetSpawnPosPacketID = 0x46
 
 type OutPacket interface {
@@ -1345,6 +1346,57 @@ func (p *SetEntityHeadLookPacket) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, eid: %d, yaw: %f }",
 		p.packet, p.eid, p.yaw,
+	)
+}
+
+type SetEntityMetadataPacket struct {
+	*packet
+	eid      int32
+	metadata *EntityMetadata
+}
+
+func NewSetEntityMetadataPacket(
+	eid int32,
+	metadata *EntityMetadata,
+) *SetEntityMetadataPacket {
+	return &SetEntityMetadataPacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			SetEntityMetadataPacketID,
+		),
+		eid:      eid,
+		metadata: metadata,
+	}
+}
+
+func (p *SetEntityMetadataPacket) Pack() (
+	*Data,
+	error,
+) {
+	data := NewData()
+	if err := data.WriteVarInt(p.eid); err != nil {
+		return nil, err
+	}
+	if err := data.WriteMetadata(p.metadata); err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func (p *SetEntityMetadataPacket) GetEID() int32 {
+	return p.eid
+}
+
+func (p *SetEntityMetadataPacket) GetMetadata() *EntityMetadata {
+	return p.metadata
+}
+
+func (p *SetEntityMetadataPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, eid: %d, metadata: {...} }",
+		p.packet, p.eid,
 	)
 }
 

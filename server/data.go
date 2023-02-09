@@ -552,6 +552,18 @@ func (d *Data) WriteVarLong(
 	return nil
 }
 
+func (d *Data) WriteMetadata(
+	v Metadata,
+) error {
+	if err := v.Finish(); err != nil {
+		return err
+	}
+
+	buf := v.GetBytes()
+	d.buf = concat(d.buf, buf)
+	return nil
+}
+
 func (d *Data) ReadPosition() (
 	int, int, int,
 	error,

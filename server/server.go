@@ -95,6 +95,7 @@ type Server struct {
 
 	m10 map[CID]ChanForSetEntityLookEvent
 	m11 map[CID]ChanForSetEntityRelativePosEvent
+	m12 map[CID]ChanForSetEntityActionsEvent
 }
 
 func NewServer(
@@ -156,6 +157,7 @@ func NewServer(
 
 		m10: make(map[CID]ChanForSetEntityLookEvent),
 		m11: make(map[CID]ChanForSetEntityRelativePosEvent),
+		m12: make(map[CID]ChanForSetEntityActionsEvent),
 	}, nil
 }
 
@@ -1089,6 +1091,8 @@ func (s *Server) handleUpdateLookEvent(
 			yaw, pitch := event.GetYaw(), event.GetPitch()
 			ground := event.GetGround()
 
+			player.UpdateLook(yaw, pitch)
+
 			s.broadcastSetEntityLookEvent(
 				lg,
 				cid,
@@ -1293,6 +1297,339 @@ func (s *Server) handleUpdatePosEvent(
 	lg.Debug("The handler for UpdatePosEvent was ended.")
 }
 
+func (s *Server) broadcastSetEntityActionsEvent(
+	lg *Logger,
+	cid CID,
+	eid int32,
+	sneaking bool,
+	sprinting bool,
+) {
+	s.mutex6.RLock()
+	defer s.mutex6.RUnlock()
+
+	lg.Debug(
+		"It is started to broadcast SetEntityActionsEvent.",
+		NewLgElement("cid", cid),
+		NewLgElement("eid", eid),
+		NewLgElement("sneaking", sneaking),
+		NewLgElement("sprinting", sprinting),
+	)
+
+	event := NewSetEntityActionsEvent(
+		eid,
+		sneaking, sprinting,
+	)
+	m := s.m6[cid]
+	for cid, _ := range m {
+		ch := s.m12[cid]
+		ch <- event
+	}
+
+	lg.Debug(
+		"It is finished to broadcast SetEntityActionsEvent.",
+	)
+}
+
+func (s *Server) handleSetEntityActionsEvent(
+	chanForEvent ChanForSetEntityActionsEvent,
+	cnt *Client,
+	player *Player,
+	chanForError ChanForError,
+) {
+	lg := NewLogger(
+		"set-entity-actions-event-handler",
+		NewLgElement("cnt", cnt),
+		NewLgElement("player", player),
+	)
+	defer lg.Close()
+	lg.Debug("It is started to handle SetEntityActionsEvent.")
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	//cid := cnt.GetCID()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			eid := event.GetEID()
+			sneaking, sprinting :=
+				event.IsSneaking(), event.IsSprinting()
+			if err := cnt.SetEntityActions(
+				lg,
+				eid,
+				sneaking, sprinting,
+			); err != nil {
+				panic(err)
+			}
+
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("It is finished to handle SetEntityActionsEvent.")
+}
+
+func (s *Server) handleStartSneakingEvent(
+	chanForEvent ChanForStartSneakingEvent,
+	cnt *Client,
+	player *Player,
+	chanForError ChanForError,
+) {
+	lg := NewLogger(
+		"start-sneaking-event-handler",
+		NewLgElement("cnt", cnt),
+		NewLgElement("player", player),
+	)
+	defer lg.Close()
+	lg.Debug("It is started to handle StartSneakingEvent.")
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	eid := player.GetEid()
+	cid := cnt.GetCID()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			player.StartSneaking()
+			sneaking, sprinting :=
+				player.IsSneaking(), player.IsSprinting()
+			s.broadcastSetEntityActionsEvent(
+				lg,
+				cid,
+				eid,
+				sneaking, sprinting,
+			)
+
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("It is finished to handle StartSneakingEvent.")
+}
+
+func (s *Server) handleStopSneakingEvent(
+	chanForEvent ChanForStopSneakingEvent,
+	cnt *Client,
+	player *Player,
+	chanForError ChanForError,
+) {
+	lg := NewLogger(
+		"stop-sneaking-event-handler",
+		NewLgElement("cnt", cnt),
+		NewLgElement("player", player),
+	)
+	defer lg.Close()
+	lg.Debug("It is started to handle StopSneakingEvent.")
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	cid := cnt.GetCID()
+	eid := player.GetEid()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			player.StopSneaking()
+			sneaking, sprinting :=
+				player.IsSneaking(), player.IsSprinting()
+			s.broadcastSetEntityActionsEvent(
+				lg,
+				cid,
+				eid,
+				sneaking, sprinting,
+			)
+
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("It is finished to handle StopSneakingEvent.")
+}
+
+func (s *Server) handleStartSprintingEvent(
+	chanForEvent ChanForStartSprintingEvent,
+	cnt *Client,
+	player *Player,
+	chanForError ChanForError,
+) {
+	lg := NewLogger(
+		"start-sprinting-event-handler",
+		NewLgElement("cnt", cnt),
+		NewLgElement("player", player),
+	)
+	defer lg.Close()
+	lg.Debug("It is started to handle StartSprintingEvent.")
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	eid := player.GetEid()
+	cid := cnt.GetCID()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			player.StartSprinting()
+			sneaking, sprinting :=
+				player.IsSneaking(), player.IsSprinting()
+			s.broadcastSetEntityActionsEvent(
+				lg,
+				cid,
+				eid,
+				sneaking, sprinting,
+			)
+
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("It is finished to handle StartSprintingEvent.")
+}
+
+func (s *Server) handleStopSprintingEvent(
+	chanForEvent ChanForStopSprintingEvent,
+	cnt *Client,
+	player *Player,
+	chanForError ChanForError,
+) {
+	lg := NewLogger(
+		"stop-sneaking-event-handler",
+		NewLgElement("cnt", cnt),
+		NewLgElement("player", player),
+	)
+	defer lg.Close()
+	lg.Debug("It is started to handle StopSprintingEvent.")
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	cid := cnt.GetCID()
+	eid := player.GetEid()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			lg.Debug(
+				"The event was received by the channel.",
+				NewLgElement("event", event),
+			)
+
+			player.StopSprinting()
+			sneaking, sprinting :=
+				player.IsSneaking(), player.IsSprinting()
+			s.broadcastSetEntityActionsEvent(
+				lg,
+				cid,
+				eid,
+				sneaking, sprinting,
+			)
+
+			lg.Debug(
+				"It is finished to process the event.",
+			)
+		}
+
+		if stop == true {
+			break
+		}
+	}
+
+	lg.Debug("It is finished to handle StopSprintingEvent.")
+}
+
 func (s *Server) handleConfirmKeepAliveEvent(
 	chanForEvent ChanForConfirmKeepAliveEvent,
 	uid uuid.UUID,
@@ -1387,6 +1724,11 @@ func (s *Server) initConnection(
 	ChanForUpdateLookEvent,
 	ChanForSetEntityRelativePosEvent,
 	ChanForUpdatePosEvent,
+	ChanForSetEntityActionsEvent,
+	ChanForStartSneakingEvent,
+	ChanForStopSneakingEvent,
+	ChanForStartSprintingEvent,
+	ChanForStopSprintingEvent,
 	ChanForConfirmKeepAliveEvent,
 	error,
 ) {
@@ -1417,7 +1759,7 @@ func (s *Server) initConnection(
 		spawnX, spawnY, spawnZ,
 		spawnYaw, spawnPitch,
 	); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 
 	chanForAddPlayerEvent := make(ChanForAddPlayerEvent, 1)
@@ -1448,7 +1790,7 @@ func (s *Server) initConnection(
 	)
 
 	if err := s.initPlayerList(lg, player, cnt); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 
 	chanForSpawnPlayerEvent :=
@@ -1516,13 +1858,54 @@ func (s *Server) initConnection(
 		chanForError,
 	)
 
+	chanForSetEntityActionsEvent := make(ChanForSetEntityActionsEvent, 1)
+	s.m12[cid] = chanForSetEntityActionsEvent
+	go s.handleSetEntityActionsEvent(
+		chanForSetEntityActionsEvent,
+		cnt,
+		player,
+		chanForError,
+	)
+
+	chanForStartSneakingEvent := make(ChanForStartSneakingEvent, 1)
+	go s.handleStartSneakingEvent(
+		chanForStartSneakingEvent,
+		cnt,
+		player,
+		chanForError,
+	)
+
+	chanForStopSneakingEvent := make(ChanForStopSneakingEvent, 1)
+	go s.handleStopSneakingEvent(
+		chanForStopSneakingEvent,
+		cnt,
+		player,
+		chanForError,
+	)
+
+	chanForStartSprintingEvent := make(ChanForStartSprintingEvent, 1)
+	go s.handleStartSprintingEvent(
+		chanForStartSprintingEvent,
+		cnt,
+		player,
+		chanForError,
+	)
+
+	chanForStopSprintingEvent := make(ChanForStopSprintingEvent, 1)
+	go s.handleStopSprintingEvent(
+		chanForStopSprintingEvent,
+		cnt,
+		player,
+		chanForError,
+	)
+
 	if err := s.initChunks(
 		lg,
 		chanForSpawnPlayerEvent,
 		cnt, player,
 		cx, cz,
 	); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 
 	chanForConfirmKeepAliveEvent := make(ChanForConfirmKeepAliveEvent, 1)
@@ -1547,6 +1930,11 @@ func (s *Server) initConnection(
 		chanForUpdateLookEvent,
 		chanForSetEntityRelativePosEvent,
 		chanForUpdatePosEvent,
+		chanForSetEntityActionsEvent,
+		chanForStartSneakingEvent,
+		chanForStopSneakingEvent,
+		chanForStartSprintingEvent,
+		chanForStopSprintingEvent,
 		chanForConfirmKeepAliveEvent,
 		nil
 }
@@ -1564,6 +1952,11 @@ func (s *Server) closeConnection(
 	chanForUpdateLookEvent ChanForUpdateLookEvent,
 	chanForSetEntityRelativePosEvent ChanForSetEntityRelativePosEvent,
 	chanForUpdatePosEvent ChanForUpdatePosEvent,
+	chanForSetEntityActionsEvent ChanForSetEntityActionsEvent,
+	chanForStartSneakingEvent ChanForStartSneakingEvent,
+	chanForStopSneakingEvent ChanForStopSneakingEvent,
+	chanForStartSprintingEvent ChanForStartSprintingEvent,
+	chanForStopSprintingEvent ChanForStopSprintingEvent,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 ) {
 	s.globalMutex.Lock()
@@ -1577,6 +1970,17 @@ func (s *Server) closeConnection(
 		lg,
 		cid, player,
 	)
+
+	close(chanForStopSprintingEvent)
+
+	close(chanForStartSprintingEvent)
+
+	close(chanForStopSneakingEvent)
+
+	close(chanForStartSneakingEvent)
+
+	delete(s.m12, cid)
+	close(chanForSetEntityActionsEvent)
 
 	close(chanForUpdatePosEvent)
 
@@ -1717,6 +2121,11 @@ func (s *Server) handleConnection(
 		chanForUpdateLookEvent,
 		chanForSetEntityRelativePosEvent,
 		chanForUpdatePosEvent,
+		chanForSetEntityActionsEvent,
+		chanForStartSneakingEvent,
+		chanForStopSneakingEvent,
+		chanForStartSprintingEvent,
+		chanForStopSprintingEvent,
 		chanForConfirmKeepAliveEvent,
 		err :=
 		s.initConnection(
@@ -1743,6 +2152,11 @@ func (s *Server) handleConnection(
 		chanForUpdateLookEvent,
 		chanForSetEntityRelativePosEvent,
 		chanForUpdatePosEvent,
+		chanForSetEntityActionsEvent,
+		chanForStartSneakingEvent,
+		chanForStopSneakingEvent,
+		chanForStartSprintingEvent,
+		chanForStopSprintingEvent,
 		chanForConfirmKeepAliveEvent,
 	)
 
@@ -1754,6 +2168,10 @@ func (s *Server) handleConnection(
 				lg,
 				chanForUpdatePosEvent,
 				chanForUpdateLookEvent,
+				chanForStartSneakingEvent,
+				chanForStopSneakingEvent,
+				chanForStartSprintingEvent,
+				chanForStopSprintingEvent,
 				chanForConfirmKeepAliveEvent,
 				state,
 			)

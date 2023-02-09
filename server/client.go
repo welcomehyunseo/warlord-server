@@ -535,6 +535,10 @@ func (cnt *Client) Loop3(
 	lg *Logger,
 	chanForUpdatePosEvent ChanForUpdatePosEvent,
 	chanForUpdateLookEvent ChanForUpdateLookEvent,
+	chanForStartSneakingEvent ChanForStartSneakingEvent,
+	chanForStopSneakingEvent ChanForStopSneakingEvent,
+	chanForStartSprintingEvent ChanForStartSprintingEvent,
+	chanForStopSprintingEvent ChanForStopSprintingEvent,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 	state State,
 ) (
@@ -611,8 +615,7 @@ func (cnt *Client) Loop3(
 		break
 	case ChangeLookPacketID:
 		packet := NewChangeLookPacket()
-		err := packet.Unpack(data)
-		if err != nil {
+		if err := packet.Unpack(data); err != nil {
 			return false, err
 		}
 		lg.Debug(
@@ -625,6 +628,29 @@ func (cnt *Client) Loop3(
 			yaw, pitch,
 			ground,
 		)
+		break
+	case HaveActionPacketID:
+		packet := NewHaveActionPacket()
+		if err := packet.Unpack(data); err != nil {
+			return false, err
+		}
+		lg.Debug(
+			"HaveActionPacket was created.",
+			NewLgElement("packet", packet),
+		)
+		if packet.IsSneakingStarted() == true {
+			event := NewStartSneakingEvent()
+			chanForStartSneakingEvent <- event
+		} else if packet.IsSneakingStopped() == true {
+			event := NewStopSneakingEvent()
+			chanForStopSneakingEvent <- event
+		} else if packet.IsSprintingStared() == true {
+			event := NewStartSprintingEvent()
+			chanForStartSprintingEvent <- event
+		} else if packet.IsSprintingStopped() == true {
+			event := NewStopSprintingEvent()
+			chanForStopSprintingEvent <- event
+		}
 		break
 	}
 
@@ -1015,6 +1041,41 @@ func (cnt *Client) SetEntityRelativePos(
 
 	lg.Debug(
 		"It is finished to set entity relative pos.",
+	)
+
+	return nil
+}
+
+func (cnt *Client) SetEntityActions(
+	lg *Logger,
+	eid int32,
+	sneaking bool,
+	sprinting bool,
+) error {
+	lg.Debug(
+		"It is started to set entity actions.",
+		NewLgElement("eid", eid),
+		NewLgElement("sneaking", sneaking),
+		NewLgElement("sprinting", sprinting),
+	)
+
+	metadata := NewEntityMetadata()
+	if err := metadata.SetActions(
+		sneaking,
+		sprinting,
+	); err != nil {
+		return err
+	}
+	packet := NewSetEntityMetadataPacket(
+		eid,
+		metadata,
+	)
+	if err := cnt.writeWithComp(lg, packet); err != nil {
+		return err
+	}
+
+	lg.Debug(
+		"It is finished to set entity actions.",
 	)
 
 	return nil

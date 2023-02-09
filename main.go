@@ -8,7 +8,8 @@ func main() {
 	lc := server.NewLoggerConfigurator()
 	lc.SetLogLevel(server.DebugLevel)
 	//lc.EnableReport()
-	//lc.SetFilter("server-renderer")
+	lc.SetFilter("server-renderer")
+	lc.SetFilter("connection-handler")
 
 	addr := ":9999"
 	max := 20

@@ -743,7 +743,7 @@ func (p *HaveActionPacket) Unpack(
 		p.startSneaking = true
 		break
 	case 1:
-		p.stopSprinting = true
+		p.stopSneaking = true
 		break
 	case 2:
 		p.leaveBed = true
@@ -778,31 +778,31 @@ func (p *HaveActionPacket) GetEid() int32 {
 	return p.eid
 }
 
-func (p *HaveActionPacket) GetStartSneaking() bool {
+func (p *HaveActionPacket) IsSneakingStarted() bool {
 	return p.startSneaking
 }
 
-func (p *HaveActionPacket) GetStopSneaking() bool {
+func (p *HaveActionPacket) IsSneakingStopped() bool {
 	return p.stopSneaking
 }
 
-func (p *HaveActionPacket) GetLeaveBed() bool {
+func (p *HaveActionPacket) IsLeavingBed() bool {
 	return p.leaveBed
 }
 
-func (p *HaveActionPacket) GetStartSprinting() bool {
+func (p *HaveActionPacket) IsSprintingStared() bool {
 	return p.startSprinting
 }
 
-func (p *HaveActionPacket) GetStopSprinting() bool {
+func (p *HaveActionPacket) IsSprintingStopped() bool {
 	return p.stopSprinting
 }
 
-func (p *HaveActionPacket) GetStartHorseJump() bool {
+func (p *HaveActionPacket) IsHorseJumpStarted() bool {
 	return p.startHorseJump
 }
 
-func (p *HaveActionPacket) GetStopHorseJump() bool {
+func (p *HaveActionPacket) IsHorseJumpStopped() bool {
 	return p.stopHorseJump
 }
 
@@ -810,11 +810,11 @@ func (p *HaveActionPacket) GetHorseJumpBoost() int32 {
 	return p.horseJumpBoost
 }
 
-func (p *HaveActionPacket) GetOpenHorseInventory() bool {
+func (p *HaveActionPacket) IsHorseInventoryOpened() bool {
 	return p.openHorseInventory
 }
 
-func (p *HaveActionPacket) GetStartElytraFlying() bool {
+func (p *HaveActionPacket) IsElytraFlyingStarted() bool {
 	return p.startElytraFlying
 }
 
