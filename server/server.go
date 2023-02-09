@@ -86,7 +86,7 @@ type Server struct {
 	m5     map[CID]ChanForUpdateLatencyEvent
 
 	mutex6 *sync.RWMutex
-	m6     map[CID]map[CID]types.Nil // for coupling
+	m6     map[CID]map[CID]types.Nil
 
 	mutex7 *sync.RWMutex
 	m7     map[ChunkPosStr]map[CID]types.Nil
@@ -96,6 +96,9 @@ type Server struct {
 	m10 map[CID]ChanForSetEntityLookEvent
 	m11 map[CID]ChanForSetEntityRelativePosEvent
 	m12 map[CID]ChanForSetEntityActionsEvent
+
+	mutex13 *sync.RWMutex
+	m13     map[EID]map[CID]types.Nil
 }
 
 func NewServer(
@@ -376,7 +379,7 @@ func (s *Server) handleRemovePlayerEvent(
 
 func (s *Server) handleUpdateLatencyEvent(
 	chanForEvent ChanForUpdateLatencyEvent,
-	uid uuid.UUID,
+	uid UID,
 	cnt *Client,
 	chanForError ChanForError,
 ) {
@@ -726,7 +729,7 @@ func (s *Server) closeChunks(
 
 func (s *Server) handleUpdateChunkPosEvent(
 	chanForEvent ChanForUpdateChunkPosEvent,
-	uid uuid.UUID,
+	uid UID,
 	cnt *Client,
 	chanForError ChanForError,
 ) {
@@ -789,7 +792,7 @@ func (s *Server) handleUpdateChunkPosEvent(
 func (s *Server) broadcastSpawnPlayerEvent(
 	lg *Logger,
 	cid CID,
-	eid int32, uid uuid.UUID,
+	eid int32, uid UID,
 	x, y, z float64,
 	yaw, pitch float32,
 ) {
@@ -897,7 +900,7 @@ func (s *Server) broadcastDespawnEntityEvent(
 
 func (s *Server) handleDespawnEntityEvent(
 	chanForEvent ChanForDespawnEntityEvent,
-	uid uuid.UUID,
+	uid UID,
 	cnt *Client,
 	chanForError ChanForError,
 ) {
@@ -989,7 +992,7 @@ func (s *Server) broadcastSetEntityLookEvent(
 
 func (s *Server) handleSetEntityLookEvent(
 	chanForEvent ChanForSetEntityLookEvent,
-	uid uuid.UUID,
+	uid UID,
 	cnt *Client,
 	chanForError ChanForError,
 ) {
@@ -1159,7 +1162,7 @@ func (s *Server) broadcastSetEntityRelativePosEvent(
 
 func (s *Server) handleSetEntityRelativePosEvent(
 	chanForEvent ChanForSetEntityRelativePosEvent,
-	uid uuid.UUID,
+	uid UID,
 	cnt *Client,
 	chanForError ChanForError,
 ) {
@@ -1632,7 +1635,7 @@ func (s *Server) handleStopSprintingEvent(
 
 func (s *Server) handleConfirmKeepAliveEvent(
 	chanForEvent ChanForConfirmKeepAliveEvent,
-	uid uuid.UUID,
+	uid UID,
 	cnt *Client,
 	chanForError ChanForError,
 ) {
@@ -1707,8 +1710,8 @@ func (s *Server) handleConfirmKeepAliveEvent(
 
 func (s *Server) initConnection(
 	lg *Logger,
-	cid uuid.UUID,
-	eid int32, uid uuid.UUID,
+	cid CID,
+	eid int32, uid UID,
 	username string,
 	cnt *Client,
 	chanForError ChanForError,
@@ -1941,7 +1944,7 @@ func (s *Server) initConnection(
 
 func (s *Server) closeConnection(
 	lg *Logger,
-	player *Player, cid uuid.UUID,
+	player *Player, cid CID,
 	chanForAddPlayerEvent ChanForAddPlayerEvent,
 	chanForRemovePlayerEvent ChanForRemovePlayerEvent,
 	chanForUpdateLatencyEvent ChanForUpdateLatencyEvent,
@@ -2252,7 +2255,7 @@ func (s *Server) AddChunk(
 }
 
 func (s *Server) addPlayer(
-	cid uuid.UUID,
+	cid CID,
 	player *Player,
 ) {
 	s.mutex1.Lock()
@@ -2262,7 +2265,7 @@ func (s *Server) addPlayer(
 }
 
 func (s *Server) removePlayer(
-	cid uuid.UUID,
+	cid CID,
 ) {
 	s.mutex1.Lock()
 	defer s.mutex1.Unlock()

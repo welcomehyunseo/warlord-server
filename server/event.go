@@ -125,18 +125,18 @@ func (e *UpdateLatencyEvent) String() string {
 }
 
 type DespawnEntityEvent struct {
-	eid int32
+	eid EID
 }
 
 func NewDespawnEntityEvent(
-	eid int32,
+	eid EID,
 ) *DespawnEntityEvent {
 	return &DespawnEntityEvent{
 		eid: eid,
 	}
 }
 
-func (e *DespawnEntityEvent) GetEID() int32 {
+func (e *DespawnEntityEvent) GetEID() EID {
 	return e.eid
 }
 
@@ -148,7 +148,7 @@ func (e *DespawnEntityEvent) String() string {
 }
 
 type SpawnPlayerEvent struct {
-	eid   int32
+	eid   EID
 	uid   uuid.UUID
 	x     float64
 	y     float64
@@ -158,7 +158,7 @@ type SpawnPlayerEvent struct {
 }
 
 func NewSpawnPlayerEvent(
-	eid int32,
+	eid EID,
 	uid uuid.UUID,
 	x, y, z float64,
 	yaw, pitch float32,
@@ -174,7 +174,7 @@ func NewSpawnPlayerEvent(
 	}
 }
 
-func (p *SpawnPlayerEvent) GetEID() int32 {
+func (p *SpawnPlayerEvent) GetEID() EID {
 	return p.eid
 }
 
@@ -266,14 +266,14 @@ func (e *UpdateChunkPosEvent) String() string {
 }
 
 type SetEntityLookEvent struct {
-	eid    int32
+	eid    EID
 	yaw    float32
 	pitch  float32
 	ground bool
 }
 
 func NewSetEntityLookEvent(
-	eid int32,
+	eid EID,
 	yaw, pitch float32,
 	ground bool,
 ) *SetEntityLookEvent {
@@ -285,7 +285,7 @@ func NewSetEntityLookEvent(
 	}
 }
 
-func (e *SetEntityLookEvent) GetEID() int32 {
+func (e *SetEntityLookEvent) GetEID() EID {
 	return e.eid
 }
 
@@ -359,7 +359,7 @@ func (e *UpdateLookEvent) String() string {
 }
 
 type SetEntityRelativePosEvent struct {
-	eid    int32
+	eid    EID
 	deltaX int16
 	deltaY int16
 	deltaZ int16
@@ -367,7 +367,7 @@ type SetEntityRelativePosEvent struct {
 }
 
 func NewSetEntityRelativePosEvent(
-	eid int32,
+	eid EID,
 	deltaX, deltaY, deltaZ int16,
 	ground bool,
 ) *SetEntityRelativePosEvent {
@@ -380,7 +380,7 @@ func NewSetEntityRelativePosEvent(
 	}
 }
 
-func (e *SetEntityRelativePosEvent) GetEID() int32 {
+func (e *SetEntityRelativePosEvent) GetEID() EID {
 	return e.eid
 }
 
@@ -460,13 +460,13 @@ func (e *UpdatePosEvent) String() string {
 }
 
 type SetEntityActionsEvent struct {
-	eid       int32
+	eid       EID
 	sneaking  bool
 	sprinting bool
 }
 
 func NewSetEntityActionsEvent(
-	eid int32,
+	eid EID,
 	sneaking bool,
 	sprinting bool,
 ) *SetEntityActionsEvent {
@@ -477,7 +477,7 @@ func NewSetEntityActionsEvent(
 	}
 }
 
-func (e *SetEntityActionsEvent) GetEID() int32 {
+func (e *SetEntityActionsEvent) GetEID() EID {
 	return e.eid
 }
 
