@@ -80,22 +80,25 @@ type Server struct {
 	m1     map[EID]*Player
 
 	mutex2 *sync.RWMutex
-	m2     map[EID]types.Nil
+	m2     map[EID]types.Nil // player list
 	m3     map[EID]ChanForAddPlayerEvent
 	m4     map[EID]ChanForRemovePlayerEvent
 	m5     map[EID]ChanForUpdateLatencyEvent
 
-	mutex6 *sync.RWMutex
-	m6     map[EID]map[EID]types.Nil
-
-	mutex7 *sync.RWMutex
-	m7     map[ChunkPosStr]map[EID]types.Nil
-	m8     map[EID]ChanForSpawnPlayerEvent
-	m9     map[EID]ChanForDespawnEntityEvent
-
-	m10 map[EID]ChanForSetEntityLookEvent
-	m11 map[EID]ChanForSetEntityRelativePosEvent
-	m12 map[EID]ChanForSetEntityActionsEvent
+	mutex6  *sync.RWMutex
+	m6      map[EID]map[EID]types.Nil // interconnections between player and players in visible range, bidirectional way
+	mutex13 *sync.RWMutex
+	m13     map[EID]map[EID]types.Nil // interconnections between mob and players in visible range, unidirectional way
+	mutex7  *sync.RWMutex
+	m7      map[ChunkPosStr]map[EID]types.Nil // players by chunk pos
+	mutex14 *sync.RWMutex
+	m14     map[ChunkPosStr]map[EID]types.Nil // mobs by chunk pos
+	m15     map[EID]ChanForSpawnMobEvent
+	m8      map[EID]ChanForSpawnPlayerEvent
+	m9      map[EID]ChanForDespawnEntityEvent
+	m10     map[EID]ChanForSetEntityLookEvent
+	m11     map[EID]ChanForSetEntityRelativePosEvent
+	m12     map[EID]ChanForSetEntityActionsEvent
 }
 
 func NewServer(
@@ -149,15 +152,13 @@ func NewServer(
 
 		mutex6: &mutex6,
 		m6:     make(map[EID]map[EID]types.Nil),
-
 		mutex7: &mutex7,
 		m7:     make(map[ChunkPosStr]map[EID]types.Nil),
 		m8:     make(map[EID]ChanForSpawnPlayerEvent),
 		m9:     make(map[EID]ChanForDespawnEntityEvent),
-
-		m10: make(map[EID]ChanForSetEntityLookEvent),
-		m11: make(map[EID]ChanForSetEntityRelativePosEvent),
-		m12: make(map[EID]ChanForSetEntityActionsEvent),
+		m10:    make(map[EID]ChanForSetEntityLookEvent),
+		m11:    make(map[EID]ChanForSetEntityRelativePosEvent),
+		m12:    make(map[EID]ChanForSetEntityActionsEvent),
 	}, nil
 }
 
@@ -429,8 +430,8 @@ func (s *Server) handleUpdateLatencyEvent(
 
 func (s *Server) initChunks(
 	lg *Logger,
-	chan0 ChanForSpawnPlayerEvent,
-	cnt *Client, player0 *Player,
+	ch0 ChanForSpawnPlayerEvent,
+	cnt *Client, p0 *Player,
 	cx, cz int,
 ) error {
 	s.mutex6.Lock()
@@ -440,17 +441,17 @@ func (s *Server) initChunks(
 
 	lg.Debug(
 		"It is started to init chunks.",
-		NewLgElement("player0", player0),
+		NewLgElement("p0", p0),
 		NewLgElement("cnt", cnt),
 		NewLgElement("cx", cx),
 		NewLgElement("cz", cz),
 	)
 
-	eid0, uid0 := player0.GetEid(), player0.GetUid()
+	eid0, uid0 := p0.GetEid(), p0.GetUid()
 	x0, y0, z0 :=
-		player0.GetX(), player0.GetY(), player0.GetZ()
+		p0.GetX(), p0.GetY(), p0.GetZ()
 	yaw0, pitch0 :=
-		player0.GetYaw(), player0.GetPitch()
+		p0.GetYaw(), p0.GetPitch()
 	event0 := NewSpawnPlayerEvent(
 		eid0, uid0,
 		x0, y0, z0,
@@ -459,11 +460,11 @@ func (s *Server) initChunks(
 
 	// init coupling
 	s.m6[eid0] = make(map[EID]types.Nil)
+
 	dist := s.rndDist
 	maxCx, maxCz, minCx, minCz := findRect(
 		cx, cz, dist,
 	)
-
 	for cz := maxCz; cz >= minCz; cz-- {
 		for cx := maxCx; cx >= minCx; cx-- {
 			key := toChunkPosStr(cx, cz)
@@ -472,7 +473,6 @@ func (s *Server) initChunks(
 			if has == false {
 				chunk = NewChunk()
 			}
-
 			if err := cnt.LoadChunk(
 				lg,
 				true,
@@ -504,7 +504,7 @@ func (s *Server) initChunks(
 					x1, y1, z1,
 					yaw1, pitch1,
 				)
-				chan0 <- event1
+				ch0 <- event1
 
 				s.m6[eid0][eid1] = types.Nil{}
 				s.m6[eid1][eid0] = types.Nil{}
@@ -598,7 +598,6 @@ func (s *Server) updateChunks(
 			if has == false {
 				chunk = NewChunk()
 			}
-
 			if err := cnt.LoadChunk(
 				lg,
 				true,
@@ -732,6 +731,7 @@ func (s *Server) handleUpdateChunkPosEvent(
 		"update-chunk-pos-event-handler",
 		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
+		NewLgElement("player", player),
 	)
 	defer lg.Close()
 	lg.Debug(
