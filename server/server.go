@@ -96,9 +96,6 @@ type Server struct {
 	m10 map[CID]ChanForSetEntityLookEvent
 	m11 map[CID]ChanForSetEntityRelativePosEvent
 	m12 map[CID]ChanForSetEntityActionsEvent
-
-	mutex13 *sync.RWMutex
-	m13     map[EID]map[CID]types.Nil
 }
 
 func NewServer(

@@ -12,6 +12,10 @@ type Mob interface {
 	GetType() int32
 	GetName() string
 	GetMinecraftID() string
+
+	Init() error
+	Loop() error
+	Close() error
 }
 
 type Object interface {
