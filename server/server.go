@@ -77,25 +77,25 @@ type Server struct {
 	m0     map[ChunkPosStr]*Chunk
 
 	mutex1 *sync.RWMutex
-	m1     map[CID]*Player
+	m1     map[EID]*Player
 
 	mutex2 *sync.RWMutex
-	m2     map[CID]types.Nil
-	m3     map[CID]ChanForAddPlayerEvent
-	m4     map[CID]ChanForRemovePlayerEvent
-	m5     map[CID]ChanForUpdateLatencyEvent
+	m2     map[EID]types.Nil
+	m3     map[EID]ChanForAddPlayerEvent
+	m4     map[EID]ChanForRemovePlayerEvent
+	m5     map[EID]ChanForUpdateLatencyEvent
 
 	mutex6 *sync.RWMutex
-	m6     map[CID]map[CID]types.Nil
+	m6     map[EID]map[EID]types.Nil
 
 	mutex7 *sync.RWMutex
-	m7     map[ChunkPosStr]map[CID]types.Nil
-	m8     map[CID]ChanForSpawnPlayerEvent
-	m9     map[CID]ChanForDespawnEntityEvent
+	m7     map[ChunkPosStr]map[EID]types.Nil
+	m8     map[EID]ChanForSpawnPlayerEvent
+	m9     map[EID]ChanForDespawnEntityEvent
 
-	m10 map[CID]ChanForSetEntityLookEvent
-	m11 map[CID]ChanForSetEntityRelativePosEvent
-	m12 map[CID]ChanForSetEntityActionsEvent
+	m10 map[EID]ChanForSetEntityLookEvent
+	m11 map[EID]ChanForSetEntityRelativePosEvent
+	m12 map[EID]ChanForSetEntityActionsEvent
 }
 
 func NewServer(
@@ -139,25 +139,25 @@ func NewServer(
 		m0:     make(map[ChunkPosStr]*Chunk),
 
 		mutex1: &mutex1,
-		m1:     make(map[CID]*Player),
+		m1:     make(map[EID]*Player),
 
 		mutex2: &mutex2,
-		m2:     make(map[CID]types.Nil),
-		m3:     make(map[CID]ChanForAddPlayerEvent),
-		m4:     make(map[CID]ChanForRemovePlayerEvent),
-		m5:     make(map[CID]ChanForUpdateLatencyEvent),
+		m2:     make(map[EID]types.Nil),
+		m3:     make(map[EID]ChanForAddPlayerEvent),
+		m4:     make(map[EID]ChanForRemovePlayerEvent),
+		m5:     make(map[EID]ChanForUpdateLatencyEvent),
 
 		mutex6: &mutex6,
-		m6:     make(map[CID]map[CID]types.Nil),
+		m6:     make(map[EID]map[EID]types.Nil),
 
 		mutex7: &mutex7,
-		m7:     make(map[ChunkPosStr]map[CID]types.Nil),
-		m8:     make(map[CID]ChanForSpawnPlayerEvent),
-		m9:     make(map[CID]ChanForDespawnEntityEvent),
+		m7:     make(map[ChunkPosStr]map[EID]types.Nil),
+		m8:     make(map[EID]ChanForSpawnPlayerEvent),
+		m9:     make(map[EID]ChanForDespawnEntityEvent),
 
-		m10: make(map[CID]ChanForSetEntityLookEvent),
-		m11: make(map[CID]ChanForSetEntityRelativePosEvent),
-		m12: make(map[CID]ChanForSetEntityActionsEvent),
+		m10: make(map[EID]ChanForSetEntityLookEvent),
+		m11: make(map[EID]ChanForSetEntityRelativePosEvent),
+		m12: make(map[EID]ChanForSetEntityActionsEvent),
 	}, nil
 }
 
@@ -181,13 +181,13 @@ func (s *Server) initPlayerList(
 		NewLgElement("cnt", cnt),
 	)
 
-	cid0 := cnt.GetCID()
-	s.m2[cid0] = types.Nil{}
+	eid0 := player.GetEid()
+	s.m2[eid0] = types.Nil{}
 
 	uid0, username0 := player.GetUid(), player.GetUsername()
-	for cid1, _ := range s.m2 {
+	for eid1, _ := range s.m2 {
 
-		player1 := s.m1[cid1]
+		player1 := s.m1[eid1]
 		uid1, username1 :=
 			player1.GetUid(),
 			player1.GetUsername()
@@ -197,11 +197,11 @@ func (s *Server) initPlayerList(
 			return err
 		}
 
-		if cid0 == cid1 {
+		if eid0 == eid1 {
 			continue
 		}
 		event0 := NewAddPlayerEvent(uid0, username0)
-		ch := s.m3[cid1]
+		ch := s.m3[eid1]
 		ch <- event0
 		event0.Wait()
 	}
@@ -214,7 +214,7 @@ func (s *Server) initPlayerList(
 
 func (s *Server) updateLatencyOfPlayerList(
 	lg *Logger,
-	uid0 uuid.UUID,
+	uid uuid.UUID,
 	latency int32,
 ) {
 	s.mutex2.RLock()
@@ -222,13 +222,13 @@ func (s *Server) updateLatencyOfPlayerList(
 
 	lg.Debug(
 		"It is started to update latency.",
-		NewLgElement("uid0", uid0),
+		NewLgElement("uid", uid),
 		NewLgElement("latency", latency),
 	)
 
-	event0 := NewUpdateLatencyEvent(uid0, latency)
-	for cid1, _ := range s.m2 {
-		ch1 := s.m5[cid1]
+	event0 := NewUpdateLatencyEvent(uid, latency)
+	for key, _ := range s.m2 {
+		ch1 := s.m5[key]
 		ch1 <- event0
 	}
 
@@ -239,7 +239,7 @@ func (s *Server) updateLatencyOfPlayerList(
 
 func (s *Server) closePlayerList(
 	lg *Logger,
-	uid0 uuid.UUID, cid0 CID,
+	uid0 uuid.UUID, eid0 EID,
 ) {
 	s.mutex2.Lock()
 	defer s.mutex2.Unlock()
@@ -248,12 +248,12 @@ func (s *Server) closePlayerList(
 		"It is started to reportChan player report.",
 	)
 
-	delete(s.m2, cid0)
+	delete(s.m2, eid0)
 
 	event0 := NewRemovePlayerEvent(uid0)
-	for cid1, _ := range s.m2 {
-		ch1 := s.m4[cid1]
-		ch1 <- event0
+	for key, _ := range s.m2 {
+		ch := s.m4[key]
+		ch <- event0
 	}
 
 	lg.Debug(
@@ -446,14 +446,6 @@ func (s *Server) initChunks(
 		NewLgElement("cz", cz),
 	)
 
-	cid0 := cnt.GetCID()
-
-	// init coupling
-	s.m6[cid0] = make(map[CID]types.Nil)
-	dist := s.rndDist
-	maxCx, maxCz, minCx, minCz := findRect(
-		cx, cz, dist,
-	)
 	eid0, uid0 := player0.GetEid(), player0.GetUid()
 	x0, y0, z0 :=
 		player0.GetX(), player0.GetY(), player0.GetZ()
@@ -464,6 +456,14 @@ func (s *Server) initChunks(
 		x0, y0, z0,
 		yaw0, pitch0,
 	)
+
+	// init coupling
+	s.m6[eid0] = make(map[EID]types.Nil)
+	dist := s.rndDist
+	maxCx, maxCz, minCx, minCz := findRect(
+		cx, cz, dist,
+	)
+
 	for cz := maxCz; cz >= minCz; cz-- {
 		for cx := maxCx; cx >= minCx; cx-- {
 			key := toChunkPosStr(cx, cz)
@@ -488,11 +488,11 @@ func (s *Server) initChunks(
 			if has == false {
 				continue
 			}
-			for cid1, _ := range m {
-				chan1 := s.m8[cid1]
+			for eid1, _ := range m {
+				chan1 := s.m8[eid1]
 				chan1 <- event0
 
-				player1 := s.m1[cid1]
+				player1 := s.m1[eid1]
 				eid1, uid1 :=
 					player1.GetEid(), player1.GetUid()
 				x1, y1, z1 :=
@@ -506,8 +506,8 @@ func (s *Server) initChunks(
 				)
 				chan0 <- event1
 
-				s.m6[cid0][cid1] = types.Nil{}
-				s.m6[cid1][cid0] = types.Nil{}
+				s.m6[eid0][eid1] = types.Nil{}
+				s.m6[eid1][eid0] = types.Nil{}
 			}
 		}
 	}
@@ -516,11 +516,11 @@ func (s *Server) initChunks(
 	chunkPosStr := toChunkPosStr(cx, cz)
 	m, has := s.m7[chunkPosStr]
 	if has == false {
-		newMap := make(map[uuid.UUID]types.Nil)
+		newMap := make(map[EID]types.Nil)
 		s.m7[chunkPosStr] = newMap
 		m = newMap
 	}
-	m[cid0] = types.Nil{}
+	m[eid0] = types.Nil{}
 
 	lg.Debug(
 		"It is finished to init chunks.",
@@ -532,6 +532,7 @@ func (s *Server) initChunks(
 func (s *Server) updateChunks(
 	lg *Logger,
 	cnt *Client,
+	player *Player,
 	currCx, currCz int,
 	prevCx, prevCz int,
 ) error {
@@ -549,20 +550,20 @@ func (s *Server) updateChunks(
 		NewLgElement("prevCz", prevCz),
 	)
 
-	cid0 := cnt.GetCID()
+	eid0 := player.GetEid()
 
 	prevChunkPosStr := toChunkPosStr(prevCx, prevCz)
 	m0 := s.m7[prevChunkPosStr]
-	delete(m0, cid0)
+	delete(m0, eid0)
 
 	currChunkPosStr := toChunkPosStr(currCx, currCz)
 	m1, has1 := s.m7[currChunkPosStr]
 	if has1 == false {
-		m2 := make(map[uuid.UUID]types.Nil)
-		s.m7[currChunkPosStr] = m2
-		m1 = m2
+		newMap := make(map[EID]types.Nil)
+		s.m7[currChunkPosStr] = newMap
+		m1 = newMap
 	}
-	m1[cid0] = types.Nil{}
+	m1[eid0] = types.Nil{}
 
 	dist := s.rndDist
 	maxCurrCx, maxCurrCz, minCurrCx, minCurrCz :=
@@ -574,11 +575,11 @@ func (s *Server) updateChunks(
 		maxPrevCx, maxPrevCz, minPrevCx, minPrevCz,
 	)
 
-	p := s.m1[cid0]
-	eid, uid := p.GetEid(), p.GetUid()
-	x, y, z := p.GetX(), p.GetY(), p.GetZ()
-	yaw, pitch := p.GetYaw(), p.GetPitch()
-	chan0 := s.m8[cid0]
+	p0 := s.m1[eid0]
+	eid, uid := p0.GetEid(), p0.GetUid()
+	x, y, z := p0.GetX(), p0.GetY(), p0.GetZ()
+	yaw, pitch := p0.GetYaw(), p0.GetPitch()
+	ch0 := s.m8[eid0]
 	event0 := NewSpawnPlayerEvent(
 		eid, uid,
 		x, y, z,
@@ -613,13 +614,12 @@ func (s *Server) updateChunks(
 			if has == false {
 				continue
 			}
-			for cid1, _ := range m {
-				chan1 := s.m8[cid1]
-				chan1 <- event0
+			for eid1, _ := range m {
+				ch1 := s.m8[eid1]
+				ch1 <- event0
 
-				p1 := s.m1[cid1]
-				eid1, uid1 :=
-					p1.GetEid(), p1.GetUid()
+				p1 := s.m1[eid1]
+				uid1 := p1.GetUid()
 				x1, y1, z1 :=
 					p1.GetX(), p1.GetY(), p1.GetZ()
 				yaw1, pitch1 :=
@@ -629,15 +629,15 @@ func (s *Server) updateChunks(
 					x1, y1, z1,
 					yaw1, pitch1,
 				)
-				chan0 <- event1
+				ch0 <- event1
 
-				s.m6[cid0][cid1] = types.Nil{}
-				s.m6[cid1][cid0] = types.Nil{}
+				s.m6[eid0][eid1] = types.Nil{}
+				s.m6[eid1][eid0] = types.Nil{}
 			}
 		}
 	}
 
-	chan1 := s.m9[cid0]
+	ch1 := s.m9[eid0]
 	event1 := NewDespawnEntityEvent(
 		eid,
 	)
@@ -661,19 +661,17 @@ func (s *Server) updateChunks(
 			if has == false {
 				continue
 			}
-			for cid1, _ := range m {
-				chan2 := s.m9[cid1]
-				chan2 <- event1
+			for eid1, _ := range m {
+				ch2 := s.m9[eid1]
+				ch2 <- event1
 
-				p1 := s.m1[cid1]
-				eid1 := p1.GetEid()
 				event2 := NewDespawnEntityEvent(
 					eid1,
 				)
-				chan1 <- event2
+				ch1 <- event2
 
-				delete(s.m6[cid0], cid1)
-				delete(s.m6[cid1], cid0)
+				delete(s.m6[eid0], eid1)
+				delete(s.m6[eid1], eid0)
 			}
 		}
 	}
@@ -684,7 +682,7 @@ func (s *Server) updateChunks(
 
 func (s *Server) closeChunks(
 	lg *Logger,
-	cid0 CID, player *Player,
+	player *Player,
 ) {
 	s.mutex6.Lock()
 	defer s.mutex6.Unlock()
@@ -693,29 +691,28 @@ func (s *Server) closeChunks(
 
 	lg.Debug(
 		"It is started to reportChan chunks.",
-		NewLgElement("cid0", cid0),
 		NewLgElement("player", player),
 	)
 
-	x, z := player.GetX(), player.GetZ()
-	cx, cz := toChunkPos(x, z)
+	eid0 := player.GetEid()
+	x0, z0 := player.GetX(), player.GetZ()
+	cx0, cz0 := toChunkPos(x0, z0)
 
 	// reportChan client ID by chunk pos
-	chunkPosStr := toChunkPosStr(cx, cz)
+	chunkPosStr := toChunkPosStr(cx0, cz0)
 	m := s.m7[chunkPosStr]
-	delete(m, cid0)
+	delete(m, eid0)
 
 	// reportChan interactions
-	eid0 := player.GetEid()
 	event0 := NewDespawnEntityEvent(eid0)
-	for cid1, _ := range s.m6[cid0] {
-		m := s.m6[cid1]
-		delete(m, cid0)
+	for eid1, _ := range s.m6[eid0] {
+		m := s.m6[eid1]
+		delete(m, eid0)
 
-		chan1 := s.m9[cid1]
-		chan1 <- event0
+		ch1 := s.m9[eid1]
+		ch1 <- event0
 	}
-	delete(s.m6, cid0)
+	delete(s.m6, eid0)
 
 	lg.Debug(
 		"It is finished to reportChan chunks.",
@@ -728,6 +725,7 @@ func (s *Server) handleUpdateChunkPosEvent(
 	chanForEvent ChanForUpdateChunkPosEvent,
 	uid UID,
 	cnt *Client,
+	player *Player,
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
@@ -767,6 +765,7 @@ func (s *Server) handleUpdateChunkPosEvent(
 			if err := s.updateChunks(
 				lg,
 				cnt,
+				player,
 				currCx, currCz,
 				prevCx, prevCz,
 			); err != nil {
@@ -784,30 +783,6 @@ func (s *Server) handleUpdateChunkPosEvent(
 	}
 
 	lg.Debug("It is finished to handle UpdateChunkPosEvent.")
-}
-
-func (s *Server) broadcastSpawnPlayerEvent(
-	lg *Logger,
-	cid CID,
-	eid int32, uid UID,
-	x, y, z float64,
-	yaw, pitch float32,
-) {
-	lg.Debug(
-		"It is started to broadcast SpawnPlayerEvent.",
-	)
-
-	chanForEvent := s.m8[cid]
-	event := NewSpawnPlayerEvent(
-		eid, uid,
-		x, y, z,
-		yaw, pitch,
-	)
-	chanForEvent <- event
-
-	lg.Debug(
-		"It is finished to broadcast SpawnPlayerEvent.",
-	)
 }
 
 func (s *Server) handleSpawnPlayerEvent(
@@ -872,38 +847,13 @@ func (s *Server) handleSpawnPlayerEvent(
 	lg.Debug("The handler for SpawnPlayerEvent was ended")
 }
 
-func (s *Server) broadcastDespawnEntityEvent(
-	lg *Logger,
-	cid CID,
-	eid int32,
-) {
-	s.mutex6.RLock()
-	defer s.mutex6.RUnlock()
-
-	lg.Debug(
-		"It is started to broadcast DespawnEntityEvent.",
-	)
-
-	chanForEvent := s.m9[cid]
-	event := NewDespawnEntityEvent(
-		eid,
-	)
-	chanForEvent <- event
-
-	lg.Debug(
-		"It is finished to broadcast DespawnEntityEvent.",
-	)
-}
-
 func (s *Server) handleDespawnEntityEvent(
 	chanForEvent ChanForDespawnEntityEvent,
-	uid UID,
 	cnt *Client,
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
 		"despawn-entity-event-handler",
-		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
 	)
 	defer lg.Close()
@@ -954,7 +904,7 @@ func (s *Server) handleDespawnEntityEvent(
 
 func (s *Server) broadcastSetEntityLookEvent(
 	lg *Logger,
-	cid CID, eid int32,
+	eid int32,
 	yaw, pitch float32,
 	ground bool,
 ) {
@@ -963,7 +913,6 @@ func (s *Server) broadcastSetEntityLookEvent(
 
 	lg.Debug(
 		"It is started to broadcast SetEntityLookEvent.",
-		NewLgElement("cid", cid),
 		NewLgElement("eid", eid),
 		NewLgElement("yaw", yaw),
 		NewLgElement("pitch", pitch),
@@ -976,10 +925,10 @@ func (s *Server) broadcastSetEntityLookEvent(
 		ground,
 	)
 
-	m := s.m6[cid]
-	for cid, _ := range m {
-		ch := s.m10[cid]
-		ch <- event
+	m := s.m6[eid]
+	for eid1, _ := range m {
+		ch1 := s.m10[eid1]
+		ch1 <- event
 	}
 
 	lg.Debug(
@@ -1072,8 +1021,6 @@ func (s *Server) handleUpdateLookEvent(
 		}
 	}()
 
-	cid := cnt.GetCID()
-
 	stop := false
 	for {
 		select {
@@ -1095,7 +1042,6 @@ func (s *Server) handleUpdateLookEvent(
 
 			s.broadcastSetEntityLookEvent(
 				lg,
-				cid,
 				eid,
 				yaw, pitch,
 				ground,
@@ -1116,7 +1062,7 @@ func (s *Server) handleUpdateLookEvent(
 
 func (s *Server) broadcastSetEntityRelativePosEvent(
 	lg *Logger,
-	cid CID, eid int32,
+	eid int32,
 	x, y, z float64,
 	prevX, prevY, prevZ float64,
 ) {
@@ -1125,7 +1071,6 @@ func (s *Server) broadcastSetEntityRelativePosEvent(
 
 	lg.Debug(
 		"It is started to broadcast SetEntityRelativePosEvent.",
-		NewLgElement("cid", cid),
 		NewLgElement("eid", eid),
 		NewLgElement("x", x),
 		NewLgElement("y", y),
@@ -1146,10 +1091,10 @@ func (s *Server) broadcastSetEntityRelativePosEvent(
 		true, // TODO
 	)
 
-	m := s.m6[cid]
-	for cid, _ := range m {
-		ch := s.m11[cid]
-		ch <- event
+	m := s.m6[eid]
+	for eid1, _ := range m {
+		ch1 := s.m11[eid1]
+		ch1 <- event
 	}
 
 	lg.Debug(
@@ -1223,13 +1168,11 @@ func (s *Server) handleSetEntityRelativePosEvent(
 func (s *Server) handleUpdatePosEvent(
 	chan0 ChanForUpdatePosEvent,
 	chan1 ChanForUpdateChunkPosEvent,
-	cnt *Client,
 	player *Player,
 	chanForError ChanForError,
 ) {
 	lg := NewLogger(
 		"update-pos-event-handler",
-		NewLgElement("cnt", cnt),
 		NewLgElement("player", player),
 	)
 	defer lg.Close()
@@ -1243,8 +1186,6 @@ func (s *Server) handleUpdatePosEvent(
 			chanForError <- err
 		}
 	}()
-
-	cid := cnt.GetCID()
 
 	stop := false
 	for {
@@ -1269,7 +1210,7 @@ func (s *Server) handleUpdatePosEvent(
 
 			s.broadcastSetEntityRelativePosEvent(
 				lg,
-				cid, eid,
+				eid,
 				x, y, z,
 				prevX, prevY, prevZ,
 			)
@@ -1299,7 +1240,6 @@ func (s *Server) handleUpdatePosEvent(
 
 func (s *Server) broadcastSetEntityActionsEvent(
 	lg *Logger,
-	cid CID,
 	eid int32,
 	sneaking bool,
 	sprinting bool,
@@ -1309,7 +1249,6 @@ func (s *Server) broadcastSetEntityActionsEvent(
 
 	lg.Debug(
 		"It is started to broadcast SetEntityActionsEvent.",
-		NewLgElement("cid", cid),
 		NewLgElement("eid", eid),
 		NewLgElement("sneaking", sneaking),
 		NewLgElement("sprinting", sprinting),
@@ -1319,10 +1258,10 @@ func (s *Server) broadcastSetEntityActionsEvent(
 		eid,
 		sneaking, sprinting,
 	)
-	m := s.m6[cid]
-	for cid, _ := range m {
-		ch := s.m12[cid]
-		ch <- event
+	m := s.m6[eid]
+	for eid1, _ := range m {
+		ch1 := s.m12[eid1]
+		ch1 <- event
 	}
 
 	lg.Debug(
@@ -1350,8 +1289,6 @@ func (s *Server) handleSetEntityActionsEvent(
 			chanForError <- err
 		}
 	}()
-
-	//cid := cnt.GetCID()
 
 	stop := false
 	for {
@@ -1412,7 +1349,6 @@ func (s *Server) handleStartSneakingEvent(
 	}()
 
 	eid := player.GetEid()
-	cid := cnt.GetCID()
 
 	stop := false
 	for {
@@ -1432,7 +1368,6 @@ func (s *Server) handleStartSneakingEvent(
 				player.IsSneaking(), player.IsSprinting()
 			s.broadcastSetEntityActionsEvent(
 				lg,
-				cid,
 				eid,
 				sneaking, sprinting,
 			)
@@ -1471,7 +1406,6 @@ func (s *Server) handleStopSneakingEvent(
 		}
 	}()
 
-	cid := cnt.GetCID()
 	eid := player.GetEid()
 
 	stop := false
@@ -1492,7 +1426,6 @@ func (s *Server) handleStopSneakingEvent(
 				player.IsSneaking(), player.IsSprinting()
 			s.broadcastSetEntityActionsEvent(
 				lg,
-				cid,
 				eid,
 				sneaking, sprinting,
 			)
@@ -1532,7 +1465,6 @@ func (s *Server) handleStartSprintingEvent(
 	}()
 
 	eid := player.GetEid()
-	cid := cnt.GetCID()
 
 	stop := false
 	for {
@@ -1552,7 +1484,6 @@ func (s *Server) handleStartSprintingEvent(
 				player.IsSneaking(), player.IsSprinting()
 			s.broadcastSetEntityActionsEvent(
 				lg,
-				cid,
 				eid,
 				sneaking, sprinting,
 			)
@@ -1591,7 +1522,6 @@ func (s *Server) handleStopSprintingEvent(
 		}
 	}()
 
-	cid := cnt.GetCID()
 	eid := player.GetEid()
 
 	stop := false
@@ -1612,7 +1542,6 @@ func (s *Server) handleStopSprintingEvent(
 				player.IsSneaking(), player.IsSprinting()
 			s.broadcastSetEntityActionsEvent(
 				lg,
-				cid,
 				eid,
 				sneaking, sprinting,
 			)
@@ -1707,7 +1636,6 @@ func (s *Server) handleConfirmKeepAliveEvent(
 
 func (s *Server) initConnection(
 	lg *Logger,
-	cid CID,
 	eid int32, uid UID,
 	username string,
 	cnt *Client,
@@ -1752,7 +1680,7 @@ func (s *Server) initConnection(
 		spawnX, spawnY, spawnZ,
 		spawnYaw, spawnPitch,
 	)
-	s.addPlayer(cid, player)
+	s.addPlayer(eid, player)
 
 	if err := cnt.Init(
 		lg, eid,
@@ -1763,7 +1691,7 @@ func (s *Server) initConnection(
 	}
 
 	chanForAddPlayerEvent := make(ChanForAddPlayerEvent, 1)
-	s.m3[cid] = chanForAddPlayerEvent
+	s.m3[eid] = chanForAddPlayerEvent
 	go s.handleAddPlayerEvent(
 		chanForAddPlayerEvent,
 		player,
@@ -1772,7 +1700,7 @@ func (s *Server) initConnection(
 	)
 
 	chanForRemovePlayerEvent := make(ChanForRemovePlayerEvent, 1)
-	s.m4[cid] = chanForRemovePlayerEvent
+	s.m4[eid] = chanForRemovePlayerEvent
 	go s.handleRemovePlayerEvent(
 		chanForRemovePlayerEvent,
 		player,
@@ -1781,7 +1709,7 @@ func (s *Server) initConnection(
 	)
 
 	chanForUpdateLatencyEvent := make(ChanForUpdateLatencyEvent, 1)
-	s.m5[cid] = chanForUpdateLatencyEvent
+	s.m5[eid] = chanForUpdateLatencyEvent
 	go s.handleUpdateLatencyEvent(
 		chanForUpdateLatencyEvent,
 		uid,
@@ -1795,7 +1723,7 @@ func (s *Server) initConnection(
 
 	chanForSpawnPlayerEvent :=
 		make(ChanForSpawnPlayerEvent, 1)
-	s.m8[cid] = chanForSpawnPlayerEvent
+	s.m8[eid] = chanForSpawnPlayerEvent
 	go s.handleSpawnPlayerEvent(
 		chanForSpawnPlayerEvent,
 		player,
@@ -1805,10 +1733,9 @@ func (s *Server) initConnection(
 
 	chanForDespawnEntityEvent :=
 		make(ChanForDespawnEntityEvent, 1)
-	s.m9[cid] = chanForDespawnEntityEvent
+	s.m9[eid] = chanForDespawnEntityEvent
 	go s.handleDespawnEntityEvent(
 		chanForDespawnEntityEvent,
-		uid,
 		cnt,
 		chanForError,
 	)
@@ -1819,11 +1746,12 @@ func (s *Server) initConnection(
 		chanForUpdateChunkPosEvent,
 		uid,
 		cnt,
+		player,
 		chanForError,
 	)
 
 	chanForSetEntityLookEvent := make(ChanForSetEntityLookEvent, 1)
-	s.m10[cid] = chanForSetEntityLookEvent
+	s.m10[eid] = chanForSetEntityLookEvent
 	go s.handleSetEntityLookEvent(
 		chanForSetEntityLookEvent,
 		uid,
@@ -1841,7 +1769,7 @@ func (s *Server) initConnection(
 
 	chanForSetEntityRelativePosEvent :=
 		make(ChanForSetEntityRelativePosEvent, 1)
-	s.m11[cid] = chanForSetEntityRelativePosEvent
+	s.m11[eid] = chanForSetEntityRelativePosEvent
 	go s.handleSetEntityRelativePosEvent(
 		chanForSetEntityRelativePosEvent,
 		uid,
@@ -1853,13 +1781,12 @@ func (s *Server) initConnection(
 	go s.handleUpdatePosEvent(
 		chanForUpdatePosEvent,
 		chanForUpdateChunkPosEvent,
-		cnt,
 		player,
 		chanForError,
 	)
 
 	chanForSetEntityActionsEvent := make(ChanForSetEntityActionsEvent, 1)
-	s.m12[cid] = chanForSetEntityActionsEvent
+	s.m12[eid] = chanForSetEntityActionsEvent
 	go s.handleSetEntityActionsEvent(
 		chanForSetEntityActionsEvent,
 		cnt,
@@ -1941,7 +1868,7 @@ func (s *Server) initConnection(
 
 func (s *Server) closeConnection(
 	lg *Logger,
-	player *Player, cid CID,
+	player *Player,
 	chanForAddPlayerEvent ChanForAddPlayerEvent,
 	chanForRemovePlayerEvent ChanForRemovePlayerEvent,
 	chanForUpdateLatencyEvent ChanForUpdateLatencyEvent,
@@ -1962,13 +1889,13 @@ func (s *Server) closeConnection(
 	s.globalMutex.Lock()
 	defer s.globalMutex.Unlock()
 
-	uid := player.GetUid()
+	eid, uid := player.GetEid(), player.GetUid()
 
 	close(chanForConfirmKeepAliveEvent)
 
 	s.closeChunks(
 		lg,
-		cid, player,
+		player,
 	)
 
 	close(chanForStopSprintingEvent)
@@ -1979,41 +1906,41 @@ func (s *Server) closeConnection(
 
 	close(chanForStartSneakingEvent)
 
-	delete(s.m12, cid)
+	delete(s.m12, eid)
 	close(chanForSetEntityActionsEvent)
 
 	close(chanForUpdatePosEvent)
 
-	delete(s.m11, cid)
+	delete(s.m11, eid)
 	close(chanForSetEntityRelativePosEvent)
 
 	close(chanForUpdateLookEvent)
 
-	delete(s.m10, cid)
+	delete(s.m10, eid)
 	close(chanForSetEntityLookEvent)
 
 	close(chanForUpdateChunkPosEvent)
 
-	delete(s.m9, cid)
+	delete(s.m9, eid)
 	close(chanForDespawnEntityEvent)
 
-	delete(s.m8, cid)
+	delete(s.m8, eid)
 	close(chanForSpawnPlayerEvent)
 
 	s.closePlayerList(
-		lg, uid, cid,
+		lg, uid, eid,
 	)
 
-	delete(s.m5, cid)
+	delete(s.m5, eid)
 	close(chanForUpdateLatencyEvent)
 
-	delete(s.m4, cid)
+	delete(s.m4, eid)
 	close(chanForRemovePlayerEvent)
 
-	delete(s.m3, cid)
+	delete(s.m3, eid)
 	close(chanForAddPlayerEvent)
 
-	s.removePlayer(cid)
+	s.removePlayer(eid)
 
 }
 
@@ -2130,7 +2057,6 @@ func (s *Server) handleConnection(
 		err :=
 		s.initConnection(
 			lg,
-			cid,
 			eid, uid,
 			username,
 			cnt,
@@ -2141,7 +2067,7 @@ func (s *Server) handleConnection(
 	}
 	defer s.closeConnection(
 		lg,
-		player, cid,
+		player,
 		chanForAddPlayerEvent,
 		chanForRemovePlayerEvent,
 		chanForUpdateLatencyEvent,
@@ -2252,20 +2178,20 @@ func (s *Server) AddChunk(
 }
 
 func (s *Server) addPlayer(
-	cid CID,
+	eid EID,
 	player *Player,
 ) {
 	s.mutex1.Lock()
 	defer s.mutex1.Unlock()
 
-	s.m1[cid] = player
+	s.m1[eid] = player
 }
 
 func (s *Server) removePlayer(
-	cid CID,
+	eid EID,
 ) {
 	s.mutex1.Lock()
 	defer s.mutex1.Unlock()
 
-	delete(s.m1, cid)
+	delete(s.m1, eid)
 }
