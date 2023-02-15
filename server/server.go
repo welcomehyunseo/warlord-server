@@ -85,20 +85,16 @@ type Server struct {
 	m4     map[EID]ChanForRemovePlayerEvent
 	m5     map[EID]ChanForUpdateLatencyEvent
 
-	mutex6  *sync.RWMutex
-	m6      map[EID]map[EID]types.Nil // interconnections between player and players in visible range, bidirectional way
-	mutex13 *sync.RWMutex
-	m13     map[EID]map[EID]types.Nil // interconnections between mob and players in visible range, unidirectional way
-	mutex7  *sync.RWMutex
-	m7      map[ChunkPosStr]map[EID]types.Nil // players by chunk pos
-	mutex14 *sync.RWMutex
-	m14     map[ChunkPosStr]map[EID]types.Nil // mobs by chunk pos
-	m15     map[EID]ChanForSpawnMobEvent
-	m8      map[EID]ChanForSpawnPlayerEvent
-	m9      map[EID]ChanForDespawnEntityEvent
-	m10     map[EID]ChanForSetEntityLookEvent
-	m11     map[EID]ChanForSetEntityRelativePosEvent
-	m12     map[EID]ChanForSetEntityActionsEvent
+	mutex6 *sync.RWMutex
+	m6     map[EID]map[EID]types.Nil // interconnections between player and players in visible range, bidirectional way
+	mutex7 *sync.RWMutex
+	m7     map[ChunkPosStr]map[EID]types.Nil // players by chunk pos
+	m15    map[EID]ChanForSpawnMobEvent
+	m8     map[EID]ChanForSpawnPlayerEvent
+	m9     map[EID]ChanForDespawnEntityEvent
+	m10    map[EID]ChanForSetEntityLookEvent
+	m11    map[EID]ChanForSetEntityRelativePosEvent
+	m12    map[EID]ChanForSetEntityActionsEvent
 }
 
 func NewServer(
