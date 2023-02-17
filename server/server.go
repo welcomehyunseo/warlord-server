@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -25,6 +26,8 @@ var OutOfRndDistRangeError = errors.New("it is out of maximum and minimum value 
 type ChanForError chan any
 
 type Server struct {
+	sync.RWMutex
+
 	addr string // address
 
 	max    int   // maximum number of players
@@ -43,7 +46,6 @@ func NewServer(
 	favicon, text string,
 	world *Overworld,
 ) *Server {
-
 	return &Server{
 		addr: addr,
 
@@ -68,7 +70,13 @@ func (s *Server) handleSpawnPlayerEvent(
 	chanForEvent ChanForSpawnPlayerEvent,
 	cnt *Client,
 	chanForError ChanForError,
+	wg *sync.WaitGroup,
 ) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
 	lg := NewLogger(
 		"spawn-player-event-handler",
 		NewLgElement("cnt", cnt),
@@ -81,6 +89,7 @@ func (s *Server) handleSpawnPlayerEvent(
 		}
 
 		lg.Debug("it is finished to handle SpawnPlayerEvent")
+		lg.Close()
 	}()
 
 	var stop bool
@@ -128,7 +137,13 @@ func (s *Server) handleDespawnEntityEvent(
 	chanForEvent ChanForDespawnEntityEvent,
 	cnt *Client,
 	chanForError ChanForError,
+	wg *sync.WaitGroup,
 ) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
 	lg := NewLogger(
 		"despawn-entity-event-handler",
 		NewLgElement("cnt", cnt),
@@ -141,6 +156,7 @@ func (s *Server) handleDespawnEntityEvent(
 		}
 
 		lg.Debug("it is finished to handle DespawnEntityEvent")
+		lg.Close()
 	}()
 
 	var stop bool
@@ -181,7 +197,13 @@ func (s *Server) handleLoadChunkEvent(
 	chanForEvent ChanForLoadChunkEvent,
 	cnt *Client,
 	chanForError ChanForError,
+	wg *sync.WaitGroup,
 ) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
 	lg := NewLogger(
 		"load-chunk-event-handler",
 		NewLgElement("cnt", cnt),
@@ -194,6 +216,7 @@ func (s *Server) handleLoadChunkEvent(
 		}
 
 		lg.Debug("it is finished to handle LoadChunkEvent")
+		lg.Close()
 	}()
 
 	var stop bool
@@ -240,7 +263,13 @@ func (s *Server) handleUnloadChunkEvent(
 	chanForEvent ChanForUnloadChunkEvent,
 	cnt *Client,
 	chanForError ChanForError,
+	wg *sync.WaitGroup,
 ) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
 	lg := NewLogger(
 		"upload-chunk-event-handler",
 		NewLgElement("cnt", cnt),
@@ -253,6 +282,7 @@ func (s *Server) handleUnloadChunkEvent(
 		}
 
 		lg.Debug("it is finished to handle UnloadChunkEvent")
+		lg.Close()
 	}()
 
 	var stop bool
@@ -293,7 +323,13 @@ func (s *Server) handleSetEntityLookEvent(
 	chanForEvent ChanForSetEntityLookEvent,
 	cnt *Client,
 	chanForError ChanForError,
+	wg *sync.WaitGroup,
 ) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
 	lg := NewLogger(
 		"set-entity-look-event-handler",
 		NewLgElement("cnt", cnt),
@@ -306,6 +342,7 @@ func (s *Server) handleSetEntityLookEvent(
 		}
 
 		lg.Debug("it is finished to handle SetEntityLookEvent")
+		lg.Close()
 	}()
 
 	var stop bool
@@ -350,7 +387,13 @@ func (s *Server) handleSetEntityRelativePosEvent(
 	chanForEvent ChanForSetEntityRelativePosEvent,
 	cnt *Client,
 	chanForError ChanForError,
+	wg *sync.WaitGroup,
 ) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
 	lg := NewLogger(
 		"set-entity-relative-pos-event-handler",
 		NewLgElement("cnt", cnt),
@@ -363,6 +406,7 @@ func (s *Server) handleSetEntityRelativePosEvent(
 		}
 
 		lg.Debug("it is finished to handle SetEntityRelativePosEvent")
+		lg.Close()
 	}()
 
 	var stop bool
@@ -404,6 +448,153 @@ func (s *Server) handleSetEntityRelativePosEvent(
 
 }
 
+func (s *Server) initClient(
+	lg *Logger,
+	cnt *Client,
+	eid EID,
+	uid UID, username string,
+	wg *sync.WaitGroup,
+) (
+	ChanForSpawnPlayerEvent,
+	ChanForDespawnEntityEvent,
+	ChanForLoadChunkEvent,
+	ChanForUnloadChunkEvent,
+	ChanForSetEntityLookEvent,
+	ChanForSetEntityRelativePosEvent,
+	ChanForError,
+	error,
+) {
+	s.Lock()
+	defer s.Unlock()
+
+	lg.Debug("it is started to init client")
+	defer func() {
+		lg.Debug("it is finished to init client")
+	}()
+
+	world := s.world
+	spawnX, spawnY, spawnZ :=
+		world.GetSpawnX(), world.GetSpawnY(), world.GetSpawnZ()
+	spawnYaw, spawnPitch :=
+		world.GetSpawnYaw(), world.GetSpawnPitch()
+	if err := cnt.JoinGame(
+		eid,
+		spawnX, spawnY, spawnZ,
+		spawnYaw, spawnPitch,
+	); err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, err
+	}
+
+	chanForError := make(ChanForError, 1)
+
+	// TODO: set chan size in best practices
+	chanForSpawnPlayerEvent := make(ChanForSpawnPlayerEvent, 16)
+	go s.handleSpawnPlayerEvent(
+		chanForSpawnPlayerEvent,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	chanForDespawnEntityEvent := make(ChanForDespawnEntityEvent, 16)
+	go s.handleDespawnEntityEvent(
+		chanForDespawnEntityEvent,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	chanForLoadChunkEvent := make(ChanForLoadChunkEvent, 16)
+	go s.handleLoadChunkEvent(
+		chanForLoadChunkEvent,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	chanForUnloadChunkEvent := make(ChanForUnloadChunkEvent, 16)
+	go s.handleUnloadChunkEvent(
+		chanForUnloadChunkEvent,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	chanForSetEntityLookEvent :=
+		make(ChanForSetEntityLookEvent, 16)
+	go s.handleSetEntityLookEvent(
+		chanForSetEntityLookEvent,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	chanForSetEntityRelativePosEvent :=
+		make(ChanForSetEntityRelativePosEvent, 16)
+	go s.handleSetEntityRelativePosEvent(
+		chanForSetEntityRelativePosEvent,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	if err := world.InitPlayer(
+		eid,
+		uid, username,
+		chanForSpawnPlayerEvent,
+		chanForDespawnEntityEvent,
+		chanForLoadChunkEvent,
+		chanForUnloadChunkEvent,
+		chanForSetEntityLookEvent,
+		chanForSetEntityRelativePosEvent,
+	); err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, err
+	}
+
+	return chanForSpawnPlayerEvent,
+		chanForDespawnEntityEvent,
+		chanForLoadChunkEvent,
+		chanForUnloadChunkEvent,
+		chanForSetEntityLookEvent,
+		chanForSetEntityRelativePosEvent,
+		chanForError,
+		nil
+}
+
+func (s *Server) closeClient(
+	lg *Logger,
+	eid EID,
+	chanForSpawnPlayerEvent ChanForSpawnPlayerEvent,
+	chanForDespawnEntityEvent ChanForDespawnEntityEvent,
+	chanForLoadChunkEvent ChanForLoadChunkEvent,
+	chanForUnloadChunkEvent ChanForUnloadChunkEvent,
+	chanForSetEntityLookEvent ChanForSetEntityLookEvent,
+	chanForSetEntityRelativePosEvent ChanForSetEntityRelativePosEvent,
+	chanForError ChanForError,
+	wg *sync.WaitGroup,
+) {
+	s.Lock()
+	defer s.Unlock()
+
+	lg.Debug("it is started to close client")
+	defer func() {
+		lg.Debug("it is finished to close client")
+	}()
+
+	world := s.world
+	world.ClosePlayer(eid)
+
+	close(chanForSpawnPlayerEvent)
+	close(chanForDespawnEntityEvent)
+	close(chanForLoadChunkEvent)
+	close(chanForUnloadChunkEvent)
+	close(chanForSetEntityLookEvent)
+	close(chanForSetEntityRelativePosEvent)
+
+	wg.Wait()
+	close(chanForError)
+}
+
 func (s *Server) handleClient(
 	cnt *Client,
 ) {
@@ -415,14 +606,15 @@ func (s *Server) handleClient(
 		"client-handler",
 		NewLgElement("addr", addr),
 	)
+	lg.Debug("it is started to handle Client")
 	defer func() {
+
 		if err := recover(); err != nil {
 			lg.Error(err)
 		}
-	}()
-	lg.Debug("it is started to handle Client")
-	defer func() {
+
 		lg.Debug("it is finished to handle Client")
+		lg.Close()
 	}()
 
 	max, online :=
@@ -454,92 +646,46 @@ func (s *Server) handleClient(
 		NewLgElement("username", username),
 	)
 
+	//ctx := context.Background()
+	//ctx, cancel := context.WithCancel(ctx)
+	//defer func() {
+	//	cancel()
+	//}()
+
+	wg := new(sync.WaitGroup)
+
 	eid := s.countEID()
-	world := s.world
-	spawnX, spawnY, spawnZ :=
-		world.GetSpawnX(), world.GetSpawnY(), world.GetSpawnZ()
-	spawnYaw, spawnPitch :=
-		world.GetSpawnYaw(), world.GetSpawnPitch()
-	if err := cnt.JoinGame(
-		eid,
-		spawnX, spawnY, spawnZ,
-		spawnYaw, spawnPitch,
-	); err != nil {
-		panic(err)
-	}
-
-	chanForError := make(ChanForError, 1)
-
-	// TODO: set chan size in best practices
-	chanForSpawnPlayerEvent := make(ChanForSpawnPlayerEvent, 4)
-	go s.handleSpawnPlayerEvent(
-		chanForSpawnPlayerEvent,
-		cnt,
-		chanForError,
-	)
-
-	chanForDespawnEntityEvent := make(ChanForDespawnEntityEvent, 4)
-	go s.handleDespawnEntityEvent(
+	chanForSpawnPlayerEvent,
 		chanForDespawnEntityEvent,
-		cnt,
-		chanForError,
-	)
-
-	chanForLoadChunkEvent := make(ChanForLoadChunkEvent, 4)
-	go s.handleLoadChunkEvent(
 		chanForLoadChunkEvent,
-		cnt,
-		chanForError,
-	)
-
-	chanForUnloadChunkEvent := make(ChanForUnloadChunkEvent, 4)
-	go s.handleUnloadChunkEvent(
 		chanForUnloadChunkEvent,
-		cnt,
-		chanForError,
-	)
-
-	chanForSetEntityLookEvent :=
-		make(ChanForSetEntityLookEvent, 4)
-	go s.handleSetEntityLookEvent(
 		chanForSetEntityLookEvent,
-		cnt,
-		chanForError,
-	)
-
-	chanForSetEntityRelativePosEvent :=
-		make(ChanForSetEntityRelativePosEvent, 4)
-	go s.handleSetEntityRelativePosEvent(
 		chanForSetEntityRelativePosEvent,
-		cnt,
 		chanForError,
-	)
-
-	if err := world.InitPlayer(
+		err := s.initClient(
+		lg,
+		cnt,
 		eid,
 		uid, username,
+		wg,
+	)
+	if err != nil {
+		panic(err)
+	}
+	defer s.closeClient(
+		lg,
+		eid,
 		chanForSpawnPlayerEvent,
 		chanForDespawnEntityEvent,
 		chanForLoadChunkEvent,
 		chanForUnloadChunkEvent,
 		chanForSetEntityLookEvent,
 		chanForSetEntityRelativePosEvent,
-	); err != nil {
-		panic(err)
-	}
-	defer func() {
-		world.ClosePlayer(eid)
+		chanForError,
+		wg,
+	)
 
-		close(chanForSpawnPlayerEvent)
-		close(chanForDespawnEntityEvent)
-		close(chanForLoadChunkEvent)
-		close(chanForUnloadChunkEvent)
-		close(chanForSetEntityLookEvent)
-		close(chanForSetEntityRelativePosEvent)
-
-		close(chanForError)
-	}()
-
+	world := s.world
 	go cnt.HandlePlayState(
 		eid,
 		world,
@@ -559,22 +705,20 @@ func (s *Server) handleClient(
 			break
 		}
 	}
-
 }
 
 func (s *Server) Render() {
-	lg := NewLogger(
-		"server-renderer",
-	)
-	defer lg.Close()
+
 	addr := s.addr
 	network := Network
-
-	lg.Info(
-		"It is started to render.",
+	lg := NewLogger(
+		"server-renderer",
 		NewLgElement("addr", addr),
 		NewLgElement("network", network),
 	)
+	defer lg.Close()
+
+	lg.Info("It is started to render.")
 
 	ln, err := net.Listen(network, addr)
 

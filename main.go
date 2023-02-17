@@ -11,17 +11,13 @@ func main() {
 	//lc.SetFilter("server-renderer")
 	//lc.SetFilter("client-handler")
 	//lc.SetFilter("load-chunk-event-handler")
-	lc.SetFilter("play-state-handler")
+	//lc.SetFilter("play-state-handler")
 
-	addr := ":9999"
-	max := 20
-	favicon, desc := "", "Warlord Server for Dev"
+	rndDist := 4
 	spawnX, spawnY, spawnZ :=
 		float64(0), float64(70), float64(0)
 	spawnYaw, spawnPitch :=
 		float32(0), float32(0)
-
-	rndDist := 4
 	world := server.NewOverworld(
 		rndDist,
 		spawnX, spawnY, spawnZ,
@@ -29,14 +25,16 @@ func main() {
 	)
 	world.MakeFlat()
 
-	server := server.NewServer(
+	addr := ":9999"
+	max := 20
+	favicon, desc := "", "Warlord Server for Dev"
+	srv := server.NewServer(
 		addr,
 		max,
 		favicon,
 		desc,
 		world,
 	)
-
-	server.Render()
+	srv.Render()
 
 }

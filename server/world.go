@@ -160,8 +160,8 @@ func (w *Overworld) InitPlayer(
 		spawnX, spawnY, spawnZ,
 		spawnYaw, spawnPitch,
 	)
-
 	w.players[eid] = player
+
 	w.chansForSpawnPlayerEvent[eid] = chanForSpawnPlayerEvent
 	w.chansForDespawnEntityEvent[eid] = chanForDespawnEntityEvent
 	w.chansForLoadChunkEvent[eid] = chanForLoadChunkEvent
@@ -171,17 +171,20 @@ func (w *Overworld) InitPlayer(
 
 	w.connsBetweenPlayers[eid] = make(map[EID]types.Nil)
 
-	x, y, z := player.GetX(), player.GetY(), player.GetZ()
-	yaw, pitch := player.GetYaw(), player.GetPitch()
-	spawnPlayerEvent := NewSpawnPlayerEvent(
-		eid,
-		uid,
-		x, y, z,
-		yaw, pitch,
-	)
+	x, y, z :=
+		player.GetX(), player.GetY(), player.GetZ()
+	yaw, pitch :=
+		player.GetYaw(), player.GetPitch()
+	spawnPlayerEvent :=
+		NewSpawnPlayerEvent(
+			eid,
+			uid,
+			x, y, z,
+			yaw, pitch,
+		)
 
 	dist := w.rndDist
-	cx, cz := toChunkPos(x, z)
+	cx, cz := player.GetCx(), player.GetCz()
 	maxCx, maxCz, minCx, minCz := findRect(
 		cx, cz, dist,
 	)
@@ -447,13 +450,11 @@ func (w *Overworld) ClosePlayer(
 	defer w.Unlock()
 
 	player := w.players[eid]
-	x, z := player.GetX(), player.GetZ()
-	cx, cz := toChunkPos(x, z)
+	cx, cz := player.GetCx(), player.GetCz()
 	delete(w.playersByChunkPos[cx][cz], eid)
 
 	event := NewDespawnEntityEvent(eid)
-	m := w.connsBetweenPlayers[eid]
-	for eid1, _ := range m {
+	for eid1, _ := range w.connsBetweenPlayers[eid] {
 		delete(w.connsBetweenPlayers[eid1], eid)
 
 		w.chansForDespawnEntityEvent[eid1] <- event
@@ -467,6 +468,7 @@ func (w *Overworld) ClosePlayer(
 	delete(w.chansForUnloadChunkEvent, eid)
 	delete(w.chansForSetEntityLookEvent, eid)
 	delete(w.chansForSetEntityRelativePosEvent, eid)
+
 	delete(w.players, eid)
 }
 
