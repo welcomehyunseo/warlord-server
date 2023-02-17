@@ -214,11 +214,12 @@ func (c *Logger) Debug(
 		return
 	}
 
+	prefix := c.prefix
 	ms := time.Now().UnixMilli()
 	str := lgElementsToString(elements)
 	fmt.Printf(
-		"{ timestamp: %d, level: %s, %s, message: %s, %s }\n",
-		ms, DebugLevelStr, c.prefix, message, str,
+		"{ timestamp: %d, level: %s, name: %s, %s, message: %s, %s }\n",
+		ms, DebugLevelStr, name, prefix, message, str,
 	)
 }
 
@@ -236,11 +237,12 @@ func (c *Logger) Info(
 		return
 	}
 
+	prefix := c.prefix
 	ms := time.Now().UnixMilli()
 	str := lgElementsToString(elements)
 	fmt.Printf(
-		"{ timestamp: %d, level: %s, %s, message: %s, %s }\n",
-		ms, InfoLevelStr, c.prefix, message, str,
+		"{ timestamp: %d, level: %s, name: %s, %s, message: %s, %s }\n",
+		ms, InfoLevelStr, name, prefix, message, str,
 	)
 }
 
@@ -257,10 +259,11 @@ func (c *Logger) Error(
 		return
 	}
 
+	prefix := c.prefix
 	ms := time.Now().UnixMilli()
 	fmt.Printf(
-		"{ timestamp: %d, level: %s, %s, error: %s }\n",
-		ms, ErrorLevelStr, c.prefix, err,
+		"{ timestamp: %d, level: %s, name: %s, %s, error: %s }\n",
+		ms, ErrorLevelStr, name, prefix, err,
 	)
 }
 

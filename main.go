@@ -8,45 +8,35 @@ func main() {
 	lc := server.NewLoggerConfigurator()
 	lc.SetLogLevel(server.DebugLevel)
 	//lc.EnableReport()
-	lc.SetFilter("server-renderer")
-	lc.SetFilter("connection-handler")
+	//lc.SetFilter("server-renderer")
+	//lc.SetFilter("client-handler")
+	//lc.SetFilter("load-chunk-event-handler")
+	lc.SetFilter("play-state-handler")
 
 	addr := ":9999"
 	max := 20
 	favicon, desc := "", "Warlord Server for Dev"
-	rndDist := 4
 	spawnX, spawnY, spawnZ :=
 		float64(0), float64(70), float64(0)
 	spawnYaw, spawnPitch :=
 		float32(0), float32(0)
 
-	s, err := server.NewServer(
-		addr,
-		max,
-		favicon,
-		desc,
+	rndDist := 4
+	world := server.NewOverworld(
 		rndDist,
 		spawnX, spawnY, spawnZ,
 		spawnYaw, spawnPitch,
 	)
-	if err != nil {
-		panic(err)
-	}
+	world.MakeFlat()
 
-	for cz := 10; cz >= -10; cz-- {
-		for cx := 10; cx >= -10; cx-- {
-			chunk := server.NewChunk()
-			part := server.NewChunkPart()
-			for z := 0; z < server.ChunkPartWidth; z++ {
-				for x := 0; x < server.ChunkPartWidth; x++ {
-					part.SetBlock(uint8(x), 0, uint8(z), server.StoneBlock)
-				}
-			}
+	server := server.NewServer(
+		addr,
+		max,
+		favicon,
+		desc,
+		world,
+	)
 
-			chunk.SetChunkPart(4, part)
-			s.AddChunk(cx, cz, chunk)
-		}
-	}
-	s.Render()
+	server.Render()
 
 }

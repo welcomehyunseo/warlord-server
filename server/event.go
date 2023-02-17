@@ -9,8 +9,8 @@ type ChanForAddPlayerEvent chan *AddPlayerEvent
 type ChanForRemovePlayerEvent chan *RemovePlayerEvent
 type ChanForUpdateLatencyEvent chan *UpdateLatencyEvent
 
-type ChanForDespawnEntityEvent chan *DespawnEntityEvent
 type ChanForSpawnPlayerEvent chan *SpawnPlayerEvent
+type ChanForDespawnEntityEvent chan *DespawnEntityEvent
 type ChanForUpdateChunkPosEvent chan *UpdateChunkPosEvent
 
 type ChanForSetEntityLookEvent chan *SetEntityLookEvent
@@ -23,6 +23,9 @@ type ChanForStartSneakingEvent chan *StartSneakingEvent
 type ChanForStopSneakingEvent chan *StopSneakingEvent
 type ChanForStartSprintingEvent chan *StartSprintingEvent
 type ChanForStopSprintingEvent chan *StopSprintingEvent
+
+type ChanForLoadChunkEvent chan *LoadChunkEvent
+type ChanForUnloadChunkEvent chan *UnloadChunkEvent
 
 type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
 
@@ -545,6 +548,78 @@ func NewStopSprintingEvent() *StopSprintingEvent {
 func (e *StopSprintingEvent) String() string {
 	return fmt.Sprintf(
 		"{ }",
+	)
+}
+
+type LoadChunkEvent struct {
+	overworld, init bool
+	cx, cz          int32
+	chunk           *Chunk
+}
+
+func NewLoadChunkEvent(
+	overworld, init bool,
+	cx, cz int32,
+	chunk *Chunk,
+) *LoadChunkEvent {
+	return &LoadChunkEvent{
+		overworld, init,
+		cx, cz,
+		chunk,
+	}
+}
+
+func (e *LoadChunkEvent) IsOverworld() bool {
+	return e.overworld
+}
+
+func (e *LoadChunkEvent) IsInit() bool {
+	return e.init
+}
+
+func (e *LoadChunkEvent) GetCX() int32 {
+	return e.cx
+}
+
+func (e *LoadChunkEvent) GetCZ() int32 {
+	return e.cz
+}
+
+func (e *LoadChunkEvent) GetChunk() *Chunk {
+	return e.chunk
+}
+
+func (e *LoadChunkEvent) String() string {
+	return fmt.Sprintf(
+		"{ overworld: %v, init: %v, cx: %d, cz: %d, chunk: %+v }",
+		e.overworld, e.init, e.cx, e.cz, e.chunk,
+	)
+}
+
+type UnloadChunkEvent struct {
+	cx, cz int32
+}
+
+func NewUnloadChunkEvent(
+	cx, cz int32,
+) *UnloadChunkEvent {
+	return &UnloadChunkEvent{
+		cx, cz,
+	}
+}
+
+func (e *UnloadChunkEvent) GetCX() int32 {
+	return e.cx
+}
+
+func (e *UnloadChunkEvent) GetCZ() int32 {
+	return e.cz
+}
+
+func (e *UnloadChunkEvent) String() string {
+	return fmt.Sprintf(
+		"{ cx: %d, cz: %d }",
+		e.cx, e.cz,
 	)
 }
 

@@ -21,21 +21,6 @@ func toChunkPosStr(
 	return fmt.Sprintf("(%d,%d)", cx, cz)
 }
 
-func toChunkPos(
-	x, z float64,
-) (int, int) {
-	if x < 0 {
-		x = x - 16
-	}
-	if z < 0 {
-		z = z - 16
-	}
-
-	cx, cz := int(x)/16, int(z)/16
-
-	return cx, cz
-}
-
 type BiomeID = uint8
 
 const (

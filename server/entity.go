@@ -8,22 +8,6 @@ import (
 type EID = int32
 type UID = uuid.UUID
 
-type Mob interface {
-	GetType() int32
-	GetName() string
-	GetMinecraftID() string
-
-	Init() error
-	Loop() error
-	Close() error
-}
-
-type Object interface {
-	GetType() uint8
-	GetName() string
-	GetBoundingBox() (float32, float32) // XZ and Y
-}
-
 type entity struct {
 	eid       EID
 	uid       UID
@@ -33,6 +17,10 @@ type entity struct {
 	prevX     float64
 	prevY     float64
 	prevZ     float64
+	cx        int32
+	cz        int32
+	prevCx    int32
+	prevCz    int32
 	yaw       float32
 	pitch     float32
 	sneaking  bool
@@ -45,17 +33,23 @@ func newEntity(
 	x, y, z float64,
 	yaw, pitch float32,
 ) *entity {
+	cx, cz := toChunkPos(x, z)
+
 	return &entity{
-		eid:   eid,
-		uid:   uid,
-		x:     x,
-		y:     y,
-		z:     z,
-		prevX: x,
-		prevY: y,
-		prevZ: z,
-		yaw:   yaw,
-		pitch: pitch,
+		eid:    eid,
+		uid:    uid,
+		x:      x,
+		y:      y,
+		z:      z,
+		prevX:  x,
+		prevY:  y,
+		prevZ:  z,
+		cx:     int32(cx),
+		cz:     int32(cz),
+		prevCx: int32(cx),
+		prevCz: int32(cz),
+		yaw:    yaw,
+		pitch:  pitch,
 	}
 }
 
@@ -91,6 +85,38 @@ func (e *entity) GetPrevZ() float64 {
 	return e.prevZ
 }
 
+func (e *entity) GetDeltaX() int16 {
+	return int16(((e.x * 32) - (e.prevX * 32)) * 128)
+}
+
+func (e *entity) GetDeltaY() int16 {
+	return int16(((e.y * 32) - (e.prevY * 32)) * 128)
+}
+
+func (e *entity) GetDeltaZ() int16 {
+	return int16(((e.y * 32) - (e.prevY * 32)) * 128)
+}
+
+func (e *entity) GetCx() int32 {
+	return e.cx
+}
+
+func (e *entity) GetCz() int32 {
+	return e.cz
+}
+
+func (e *entity) GetPrevCx() int32 {
+	return e.prevCx
+}
+
+func (e *entity) GetPrevCz() int32 {
+	return e.prevCz
+}
+
+func (e *entity) IsChunkPosChanged() bool {
+	return e.cx != e.prevCx || e.cz != e.prevCz
+}
+
 func (e *entity) UpdatePos(
 	x, y, z float64,
 ) {
@@ -100,6 +126,12 @@ func (e *entity) UpdatePos(
 	e.x = x
 	e.y = y
 	e.z = z
+
+	cx, cz := toChunkPos(x, z)
+	e.prevCx = e.cx
+	e.prevCz = e.cz
+	e.cx = cx
+	e.cz = cz
 }
 
 func (e *entity) GetYaw() float32 {

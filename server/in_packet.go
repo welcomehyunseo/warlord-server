@@ -10,16 +10,16 @@ const PingPacketID = 0x01
 const StartLoginPacketID = 0x00
 
 const FinishTeleportPacketID = 0x00
-const DemandPacketID = 0x03
+const ClickButtonPacketID = 0x03
 const ChangeSettingsPacketID = 0x04
 const ConfirmKeepAlivePacketID = 0x0B
 const ChangePosPacketID = 0x0D
 const ChangePosAndLookPacketID = 0x0E
 const ChangeLookPacketID = 0x0F
-const HaveActionPacketID = 0x15
+const TakeActionPacketID = 0x15
 
 type InPacket interface {
-	*Packet
+	Packet
 
 	Unpack(*Data) error
 }
@@ -233,23 +233,24 @@ func (p *FinishTeleportPacket) String() string {
 	)
 }
 
-type DemandPacket struct {
+type ClickButtonPacket struct {
 	*packet
+
 	respawn bool // when the client is ready to complete login and respawn after death
 	stats   bool // when the client opens the statistics menu
 }
 
-func NewDemandPacket() *DemandPacket {
-	return &DemandPacket{
+func NewClickButtonPacket() *ClickButtonPacket {
+	return &ClickButtonPacket{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			DemandPacketID,
+			ClickButtonPacketID,
 		),
 	}
 }
 
-func (p *DemandPacket) Unpack(
+func (p *ClickButtonPacket) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -267,15 +268,15 @@ func (p *DemandPacket) Unpack(
 	return err
 }
 
-func (p *DemandPacket) GetRespawn() bool {
+func (p *ClickButtonPacket) IsRespawnStarted() bool {
 	return p.respawn
 }
 
-func (p *DemandPacket) GetStats() bool {
+func (p *ClickButtonPacket) IsStatsMenuOpened() bool {
 	return p.stats
 }
 
-func (p *DemandPacket) String() string {
+func (p *ClickButtonPacket) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, respawn: %v, stats: %v }",
 		p.packet, p.respawn, p.stats,
@@ -494,7 +495,7 @@ type ChangePosPacket struct {
 	ground bool
 }
 
-func NewChangePlayerPosPacket() *ChangePosPacket {
+func NewChangePosPacket() *ChangePosPacket {
 	return &ChangePosPacket{
 		packet: newPacket(
 			Inbound,
@@ -701,7 +702,7 @@ func (p *ChangeLookPacket) String() string {
 	)
 }
 
-type HaveActionPacket struct {
+type TakeActionPacket struct {
 	*packet
 	eid                int32
 	startSneaking      bool
@@ -716,17 +717,17 @@ type HaveActionPacket struct {
 	startElytraFlying  bool
 }
 
-func NewHaveActionPacket() *HaveActionPacket {
-	return &HaveActionPacket{
+func NewTakeActionPacket() *TakeActionPacket {
+	return &TakeActionPacket{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			HaveActionPacketID,
+			TakeActionPacketID,
 		),
 	}
 }
 
-func (p *HaveActionPacket) Unpack(
+func (p *TakeActionPacket) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -774,51 +775,51 @@ func (p *HaveActionPacket) Unpack(
 	return err
 }
 
-func (p *HaveActionPacket) GetEid() int32 {
+func (p *TakeActionPacket) GetEid() int32 {
 	return p.eid
 }
 
-func (p *HaveActionPacket) IsSneakingStarted() bool {
+func (p *TakeActionPacket) IsSneakingStarted() bool {
 	return p.startSneaking
 }
 
-func (p *HaveActionPacket) IsSneakingStopped() bool {
+func (p *TakeActionPacket) IsSneakingStopped() bool {
 	return p.stopSneaking
 }
 
-func (p *HaveActionPacket) IsLeavingBed() bool {
+func (p *TakeActionPacket) IsLeavingBed() bool {
 	return p.leaveBed
 }
 
-func (p *HaveActionPacket) IsSprintingStared() bool {
+func (p *TakeActionPacket) IsSprintingStared() bool {
 	return p.startSprinting
 }
 
-func (p *HaveActionPacket) IsSprintingStopped() bool {
+func (p *TakeActionPacket) IsSprintingStopped() bool {
 	return p.stopSprinting
 }
 
-func (p *HaveActionPacket) IsHorseJumpStarted() bool {
+func (p *TakeActionPacket) IsHorseJumpStarted() bool {
 	return p.startHorseJump
 }
 
-func (p *HaveActionPacket) IsHorseJumpStopped() bool {
+func (p *TakeActionPacket) IsHorseJumpStopped() bool {
 	return p.stopHorseJump
 }
 
-func (p *HaveActionPacket) GetHorseJumpBoost() int32 {
+func (p *TakeActionPacket) GetHorseJumpBoost() int32 {
 	return p.horseJumpBoost
 }
 
-func (p *HaveActionPacket) IsHorseInventoryOpened() bool {
+func (p *TakeActionPacket) IsHorseInventoryOpened() bool {
 	return p.openHorseInventory
 }
 
-func (p *HaveActionPacket) IsElytraFlyingStarted() bool {
+func (p *TakeActionPacket) IsElytraFlyingStarted() bool {
 	return p.startElytraFlying
 }
 
-func (p *HaveActionPacket) String() string {
+func (p *TakeActionPacket) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"packet: %+v, "+
