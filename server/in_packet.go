@@ -19,9 +19,11 @@ const ChangeLookPacketID = 0x0F
 const HaveActionPacketID = 0x15
 
 type InPacket interface {
-	*Packet
+	Packet
 
-	Unpack(*Data) error
+	Unpack(
+		*Data,
+	) error
 }
 
 type HandshakePacket struct {
@@ -494,7 +496,7 @@ type ChangePosPacket struct {
 	ground bool
 }
 
-func NewChangePlayerPosPacket() *ChangePosPacket {
+func NewChangePosPacket() *ChangePosPacket {
 	return &ChangePosPacket{
 		packet: newPacket(
 			Inbound,

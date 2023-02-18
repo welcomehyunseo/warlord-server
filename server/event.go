@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 )
 
 type ChanForAddPlayerEvent chan *AddPlayerEvent
@@ -27,13 +26,13 @@ type ChanForStopSprintingEvent chan *StopSprintingEvent
 type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
 
 type AddPlayerEvent struct {
-	uid      uuid.UUID
+	uid      UID
 	username string
 	ctx      chan bool
 }
 
 func NewAddPlayerEvent(
-	uid uuid.UUID,
+	uid UID,
 	username string,
 ) *AddPlayerEvent {
 	return &AddPlayerEvent{
@@ -43,7 +42,7 @@ func NewAddPlayerEvent(
 	}
 }
 
-func (e *AddPlayerEvent) GetUUID() uuid.UUID {
+func (e *AddPlayerEvent) GetUUID() UID {
 	return e.uid
 }
 
@@ -72,18 +71,18 @@ func (e *AddPlayerEvent) String() string {
 }
 
 type RemovePlayerEvent struct {
-	uid uuid.UUID
+	uid UID
 }
 
 func NewRemovePlayerEvent(
-	uid uuid.UUID,
+	uid UID,
 ) *RemovePlayerEvent {
 	return &RemovePlayerEvent{
 		uid: uid,
 	}
 }
 
-func (e *RemovePlayerEvent) GetUUID() uuid.UUID {
+func (e *RemovePlayerEvent) GetUUID() UID {
 	return e.uid
 }
 
@@ -95,12 +94,12 @@ func (e *RemovePlayerEvent) String() string {
 }
 
 type UpdateLatencyEvent struct {
-	uid     uuid.UUID
+	uid     UID
 	latency int32
 }
 
 func NewUpdateLatencyEvent(
-	uid uuid.UUID,
+	uid UID,
 	latency int32,
 ) *UpdateLatencyEvent {
 	return &UpdateLatencyEvent{
@@ -109,7 +108,7 @@ func NewUpdateLatencyEvent(
 	}
 }
 
-func (e *UpdateLatencyEvent) GetUUID() uuid.UUID {
+func (e *UpdateLatencyEvent) GetUUID() UID {
 	return e.uid
 }
 
@@ -125,18 +124,18 @@ func (e *UpdateLatencyEvent) String() string {
 }
 
 type DespawnEntityEvent struct {
-	eid int32
+	eid EID
 }
 
 func NewDespawnEntityEvent(
-	eid int32,
+	eid EID,
 ) *DespawnEntityEvent {
 	return &DespawnEntityEvent{
 		eid: eid,
 	}
 }
 
-func (e *DespawnEntityEvent) GetEID() int32 {
+func (e *DespawnEntityEvent) GetEID() EID {
 	return e.eid
 }
 
@@ -148,8 +147,8 @@ func (e *DespawnEntityEvent) String() string {
 }
 
 type SpawnPlayerEvent struct {
-	eid   int32
-	uid   uuid.UUID
+	eid   EID
+	uid   UID
 	x     float64
 	y     float64
 	z     float64
@@ -158,8 +157,8 @@ type SpawnPlayerEvent struct {
 }
 
 func NewSpawnPlayerEvent(
-	eid int32,
-	uid uuid.UUID,
+	eid EID,
+	uid UID,
 	x, y, z float64,
 	yaw, pitch float32,
 ) *SpawnPlayerEvent {
@@ -174,11 +173,11 @@ func NewSpawnPlayerEvent(
 	}
 }
 
-func (p *SpawnPlayerEvent) GetEID() int32 {
+func (p *SpawnPlayerEvent) GetEID() EID {
 	return p.eid
 }
 
-func (p *SpawnPlayerEvent) GetUUID() uuid.UUID {
+func (p *SpawnPlayerEvent) GetUUID() UID {
 	return p.uid
 }
 
@@ -224,15 +223,15 @@ func (p *SpawnPlayerEvent) String() string {
 }
 
 type UpdateChunkPosEvent struct {
-	currCx int
-	currCz int
-	prevCx int
-	prevCz int
+	currCx int32
+	currCz int32
+	prevCx int32
+	prevCz int32
 }
 
 func NewUpdateChunkPosEvent(
-	currCx, currCz int,
-	prevCx, prevCz int,
+	currCx, currCz int32,
+	prevCx, prevCz int32,
 ) *UpdateChunkPosEvent {
 	return &UpdateChunkPosEvent{
 		currCx: currCx,
@@ -242,19 +241,19 @@ func NewUpdateChunkPosEvent(
 	}
 }
 
-func (e *UpdateChunkPosEvent) GetCurrCx() int {
+func (e *UpdateChunkPosEvent) GetCurrCx() int32 {
 	return e.currCx
 }
 
-func (e *UpdateChunkPosEvent) GetCurrCz() int {
+func (e *UpdateChunkPosEvent) GetCurrCz() int32 {
 	return e.currCz
 }
 
-func (e *UpdateChunkPosEvent) GetPrevCx() int {
+func (e *UpdateChunkPosEvent) GetPrevCx() int32 {
 	return e.prevCx
 }
 
-func (e *UpdateChunkPosEvent) GetPrevCz() int {
+func (e *UpdateChunkPosEvent) GetPrevCz() int32 {
 	return e.prevCz
 }
 

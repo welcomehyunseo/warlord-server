@@ -5,49 +5,40 @@ import (
 	"github.com/google/uuid"
 )
 
+type EID int32
+type UID uuid.UUID
+
+var NilUID = UID(uuid.Nil)
+
 type entity struct {
-	eid       int32
-	uid       uuid.UUID
-	x         float64
-	y         float64
-	z         float64
-	yaw       float32
-	pitch     float32
-	prevX     float64
-	prevY     float64
-	prevZ     float64
-	sneaking  bool
-	sprinting bool
+	eid                 EID
+	uid                 UID
+	x, y, z             float64
+	yaw, pitch          float32
+	prevX, prevY, prevZ float64
+	sneaking, sprinting bool
 }
 
 func newEntity(
-	eid int32,
-	uid uuid.UUID,
-	x float64,
-	y float64,
-	z float64,
-	yaw float32,
-	pitch float32,
+	eid EID,
+	uid UID,
+	x, y, z float64,
+	yaw, pitch float32,
 ) *entity {
 	return &entity{
-		eid:   eid,
-		uid:   uid,
-		x:     x,
-		y:     y,
-		z:     z,
-		yaw:   yaw,
-		pitch: pitch,
-		prevX: x,
-		prevY: y,
-		prevZ: z,
+		eid: eid,
+		uid: uid,
+		x:   x, y: y, z: z,
+		yaw: yaw, pitch: pitch,
+		prevX: x, prevY: y, prevZ: z,
 	}
 }
 
-func (e *entity) GetEid() int32 {
+func (e *entity) GetEid() EID {
 	return e.eid
 }
 
-func (e *entity) GetUid() uuid.UUID {
+func (e *entity) GetUid() UID {
 	return e.uid
 }
 
@@ -130,13 +121,17 @@ func (e *entity) String() string {
 		"{ "+
 			"eid: %d, "+
 			"uid: %+v, "+
-			"x: %f, "+
-			"y: %f, "+
-			"z: %f, "+
-			"yaw: %f, "+
-			"pitch: %f "+
+			"x: %f, y: %f, z: %f, "+
+			"yaw: %f, pitch: %f, "+
+			"prevX: %f, prevY: %f, prevZ: %f, "+
+			"sneaking: %v, sprinting: %v "+
 			"}",
-		e.eid, e.uid, e.x, e.y, e.z, e.yaw, e.pitch,
+		e.eid,
+		e.uid,
+		e.x, e.y, e.z,
+		e.yaw, e.pitch,
+		e.prevX, e.prevY, e.prevZ,
+		e.sneaking, e.sprinting,
 	)
 }
 
@@ -145,23 +140,17 @@ type living struct {
 }
 
 func newLiving(
-	eid int32,
-	uid uuid.UUID,
-	x float64,
-	y float64,
-	z float64,
-	yaw float32,
-	pitch float32,
+	eid EID,
+	uid UID,
+	x, y, z float64,
+	yaw, pitch float32,
 ) *living {
 	return &living{
 		entity: newEntity(
 			eid,
 			uid,
-			x,
-			y,
-			z,
-			yaw,
-			pitch,
+			x, y, z,
+			yaw, pitch,
 		),
 	}
 }
@@ -180,25 +169,19 @@ type Player struct {
 }
 
 func NewPlayer(
-	eid int32,
-	uid uuid.UUID,
+	eid EID,
+	uid UID,
 	username string,
-	x float64,
-	y float64,
-	z float64,
-	yaw float32,
-	pitch float32,
+	x, y, z float64,
+	yaw, pitch float32,
 
 ) *Player {
 	return &Player{
 		living: newLiving(
 			eid,
 			uid,
-			x,
-			y,
-			z,
-			yaw,
-			pitch,
+			x, y, z,
+			yaw, pitch,
 		),
 		username: username,
 	}
