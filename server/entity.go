@@ -120,14 +120,14 @@ func (e *entity) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"eid: %d, "+
-			"uid: %+v, "+
+			"uid: %s, "+
 			"x: %f, y: %f, z: %f, "+
 			"yaw: %f, pitch: %f, "+
 			"prevX: %f, prevY: %f, prevZ: %f, "+
 			"sneaking: %v, sprinting: %v "+
 			"}",
 		e.eid,
-		e.uid,
+		uuid.UUID(e.uid).String(),
 		e.x, e.y, e.z,
 		e.yaw, e.pitch,
 		e.prevX, e.prevY, e.prevZ,

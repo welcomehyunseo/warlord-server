@@ -18,8 +18,8 @@ const CompThold = 16 // threshold for compression
 const MinRndDist = 2  // minimum render distance
 const MaxRndDist = 32 // maximum render distance
 
-const CheckKeepAliveTime = time.Millisecond * 1000
-const Loop3Time = time.Millisecond * 1
+const DelayForCheckKeepAlive = time.Millisecond * 1000
+const LoopDelayForPlayState = time.Millisecond * 1
 
 type ChanForError chan any
 
@@ -81,7 +81,13 @@ func (s *Server) handleAddPlayerEvent(
 	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
+	wg *sync.WaitGroup,
 ) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
 	lg := NewLogger(
 		"add-player-event-handler",
 		NewLgElement("player", player),
@@ -109,20 +115,27 @@ func (s *Server) handleAddPlayerEvent(
 				stop = true
 				break
 			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
 
-			uid, username := event.GetUUID(), event.GetUsername()
-			if err := cnt.AddPlayer(lg, uid, username); err != nil {
+				uid, username := event.GetUUID(), event.GetUsername()
+				if err := cnt.AddPlayer(lg, uid, username); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
 				event.Fail()
 				panic(err)
 			}
 
 			event.Done()
-
-			lg.Debug("it is finished to process event")
 		}
 
 		if stop == true {
@@ -135,7 +148,13 @@ func (s *Server) handleUpdateLatencyEvent(
 	chanForEvent ChanForUpdateLatencyEvent,
 	cnt *Client,
 	chanForError ChanForError,
+	wg *sync.WaitGroup,
 ) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
 	lg := NewLogger(
 		"update-latency-event-handler",
 		NewLgElement("client", cnt),
@@ -162,16 +181,25 @@ func (s *Server) handleUpdateLatencyEvent(
 				stop = true
 				break
 			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
-			uid, latency := event.GetUUID(), event.GetLatency()
-			if err := cnt.UpdateLatency(lg, uid, latency); err != nil {
+
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				uid, latency := event.GetUUID(), event.GetLatency()
+				if err := cnt.UpdateLatency(lg, uid, latency); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
 				panic(err)
 			}
-
-			lg.Debug("it is finished to process event.")
 		}
 
 		if stop == true {
@@ -186,7 +214,13 @@ func (s *Server) handleRemovePlayerEvent(
 	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
+	wg *sync.WaitGroup,
 ) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
 	lg := NewLogger(
 		"remove-player-event-handler",
 		NewLgElement("player", player),
@@ -215,17 +249,24 @@ func (s *Server) handleRemovePlayerEvent(
 				stop = true
 				break
 			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
 
-			uid := event.GetUUID()
-			if err := cnt.RemovePlayer(lg, uid); err != nil {
+				uid := event.GetUUID()
+				if err := cnt.RemovePlayer(lg, uid); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
 				panic(err)
 			}
-
-			lg.Debug("it is finished to process event")
 		}
 
 		if stop == true {
@@ -240,7 +281,13 @@ func (s *Server) handleConfirmKeepAliveEvent(
 	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
+	wg *sync.WaitGroup,
 ) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
 	lg := NewLogger(
 		"confirm-keep-alive-event-handler",
 		NewLgElement("player", player),
@@ -266,7 +313,7 @@ func (s *Server) handleConfirmKeepAliveEvent(
 	stop := false
 	for {
 		select {
-		case <-time.After(CheckKeepAliveTime):
+		case <-time.After(DelayForCheckKeepAlive):
 			if start.IsZero() == false {
 				break
 			}
@@ -275,6 +322,7 @@ func (s *Server) handleConfirmKeepAliveEvent(
 				panic(err)
 			}
 			start = time.Now()
+
 		case event, ok := <-chanForEvent:
 			if ok == false {
 				stop = true
@@ -332,6 +380,7 @@ func (s *Server) initClient(
 	playerList *PlayerList,
 	uid UID, username string,
 	cnt *Client,
+	wg *sync.WaitGroup,
 ) (
 	*Player,
 	ChanForConfirmKeepAliveEvent,
@@ -377,6 +426,7 @@ func (s *Server) initClient(
 		player,
 		cnt,
 		chanForError,
+		wg,
 	)
 
 	chanForUpdateLatencyEvent := make(ChanForUpdateLatencyEvent, 1)
@@ -384,6 +434,7 @@ func (s *Server) initClient(
 		chanForUpdateLatencyEvent,
 		cnt,
 		chanForError,
+		wg,
 	)
 
 	chanForRemovePlayerEvent := make(ChanForRemovePlayerEvent, 1)
@@ -392,6 +443,7 @@ func (s *Server) initClient(
 		player,
 		cnt,
 		chanForError,
+		wg,
 	)
 
 	if err := playerList.InitPlayer(
@@ -412,6 +464,7 @@ func (s *Server) initClient(
 		player,
 		cnt,
 		chanForError,
+		wg,
 	)
 
 	return player,
@@ -426,6 +479,7 @@ func (s *Server) closeClient(
 	player *Player,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 	chanForError ChanForError,
+	wg *sync.WaitGroup,
 ) {
 	s.Lock()
 	defer s.Unlock()
@@ -448,6 +502,7 @@ func (s *Server) closeClient(
 
 	close(chanForConfirmKeepAliveEvent)
 
+	wg.Wait()
 	close(chanForError)
 }
 
@@ -455,8 +510,6 @@ func (s *Server) handleClient(
 	playerList *PlayerList,
 	cnt *Client,
 ) {
-	cnt.Init()
-	defer cnt.Close()
 
 	addr := cnt.GetAddr()
 	lg := NewLogger(
@@ -464,6 +517,7 @@ func (s *Server) handleClient(
 		NewLgElement("addr", addr),
 	)
 	lg.Debug("it is started to handle Client")
+
 	defer func() {
 
 		if err := recover(); err != nil {
@@ -473,6 +527,9 @@ func (s *Server) handleClient(
 		lg.Debug("it is finished to handle Client")
 		lg.Close()
 	}()
+
+	cnt.Init(lg)
+	defer cnt.Close(lg)
 
 	max, online :=
 		s.max, s.online
@@ -509,6 +566,8 @@ func (s *Server) handleClient(
 	//	cancel()
 	//}()
 
+	wg := new(sync.WaitGroup)
+
 	player,
 		chanForConfirmKeepAliveEvent,
 		chanForError,
@@ -517,6 +576,7 @@ func (s *Server) handleClient(
 		playerList,
 		uid, username,
 		cnt,
+		wg,
 	)
 	if err != nil {
 		panic(err)
@@ -527,26 +587,24 @@ func (s *Server) handleClient(
 		player,
 		chanForConfirmKeepAliveEvent,
 		chanForError,
-	)
-
-	go cnt.HandlePlayState(
-		player,
-		chanForConfirmKeepAliveEvent,
-		chanForError,
+		wg,
 	)
 
 	for {
-		var stop bool
-
 		select {
-		case <-chanForError:
-			stop = true
+		case <-time.After(LoopDelayForPlayState):
+			if err := cnt.LoopForPlayState(
+				lg,
+				player,
+				chanForConfirmKeepAliveEvent,
+			); err != nil {
+				panic(err)
+			}
 			break
+		case err := <-chanForError:
+			panic(err)
 		}
 
-		if stop == true {
-			break
-		}
 	}
 }
 

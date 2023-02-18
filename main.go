@@ -9,13 +9,15 @@ func main() {
 	lc.SetLogLevel(server.DebugLevel)
 	//lc.EnableReport()
 	//lc.SetFilter("server-renderer")
+	//lc.SetFilter("client-handler")
+	lc.SetFilter("confirm-keep-alive-event-handler")
 
 	addr := ":9999"
 	max := 20
 	favicon, desc := "", "Warlord Server for Dev"
 	rndDist := int32(4)
 	spawnX, spawnY, spawnZ :=
-		float64(0), float64(70), float64(0)
+		float64(8), float64(70), float64(8)
 	spawnYaw, spawnPitch :=
 		float32(0), float32(0)
 

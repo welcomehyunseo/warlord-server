@@ -9,7 +9,6 @@ import (
 	"math/rand"
 	"net"
 	"sync"
-	"time"
 )
 
 type CID = uuid.UUID
@@ -415,9 +414,9 @@ func (cnt *Client) HandleNonLoginState(
 	bool, // stop
 	error,
 ) {
-	lg.Debug("it is started to handle non login state")
+	lg.Debug("it is started to handle non login state in client")
 	defer func() {
-		lg.Debug("it is finished to handle non login state")
+		lg.Debug("it is finished to handle non login state in client")
 	}()
 
 	state := HandshakingState
@@ -483,9 +482,9 @@ func (cnt *Client) HandleLoginState(
 	string, // username
 	error,
 ) {
-	lg.Debug("it is started to handle login state")
+	lg.Debug("it is started to handle login state in client")
 	defer func() {
-		lg.Debug("it is finished to handle login state")
+		lg.Debug("it is finished to handle login state in client")
 	}()
 
 	state := LoginState
@@ -526,9 +525,9 @@ func (cnt *Client) JoinGame(
 	spawnX, spawnY, spawnZ float64,
 	spawnYaw, spawnPitch float32,
 ) error {
-	lg.Debug("it is started to join game")
+	lg.Debug("it is started to join game in client")
 	defer func() {
-		lg.Debug("it is finished to join game")
+		lg.Debug("it is finished to join game in client")
 	}()
 
 	state := PlayState
@@ -589,106 +588,109 @@ func (cnt *Client) JoinGame(
 		return errors.New("it is invalid payload of FinishTeleportPacket to init play state")
 	}
 
-	return nil
-}
-
-func (cnt *Client) HandlePlayState(
-	player *Player,
-	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
-	chanForError ChanForError,
-) {
-	lg := NewLogger(
-		"play-state-handler",
-	)
-	lg.Debug("it is started to handle play state")
-	defer func() {
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
+	chunk := NewChunk(0, 0)
+	part := NewChunkPart()
+	for z := 0; z < ChunkPartWidth; z++ {
+		for x := 0; x < ChunkPartWidth; x++ {
+			part.SetBlock(uint8(x), 0, uint8(z), StoneBlock)
 		}
-
-		lg.Debug("it is finished to handle play state")
-		lg.Close()
-	}()
-
-	state := PlayState
-	for {
-		inPacket, err := cnt.ReadWithComp(state)
-		if err != nil {
-			panic(err)
-		}
-
-		lg.Debug(
-			"client read packet",
-			NewLgElement("InPacket", inPacket),
-		)
-
-		var outPackets []OutPacket
-
-		switch inPacket.(type) {
-		case *ConfirmKeepAlivePacket: // 0x0B
-			confirmKeepAlivePacket := inPacket.(*ConfirmKeepAlivePacket)
-			payload := confirmKeepAlivePacket.GetPayload()
-			confirmKeepAliveEvent :=
-				NewConfirmKeepAliveEvent(
-					payload,
-				)
-			chanForConfirmKeepAliveEvent <- confirmKeepAliveEvent
-			break
-		}
-
-		for _, outPacket := range outPackets {
-			if err := cnt.WriteWithComp(outPacket); err != nil {
-				panic(err)
-			}
-			lg.Debug(
-				"client sent packet",
-				NewLgElement("OutPacket", outPacket),
-			)
-		}
-
-		time.Sleep(time.Millisecond * 1)
 	}
-}
-
-func (cnt *Client) Init() {
-
-}
-
-func (cnt *Client) Close() {
-	_ = cnt.conn.Close()
-}
-
-func (cnt *Client) CheckKeepAlive(
-	lg *Logger,
-	payload int64,
-) error {
-	lg.Debug(
-		"It is started to check keep-alive of player.",
-		NewLgElement("payload", payload),
+	chunk.SetChunkPart(4, part)
+	bitmask, data := chunk.GenerateData(true, true)
+	sendChunkDataPacket := NewSendChunkDataPacket(
+		0, 0,
+		true,
+		bitmask, data,
 	)
-
-	packet := NewCheckKeepAlivePacket(payload)
-	if err := cnt.WriteWithComp(packet); err != nil {
+	if err := cnt.WriteWithComp(sendChunkDataPacket); err != nil {
 		return err
 	}
 
-	lg.Debug("It is finished to check keep-alive of player.")
 	return nil
+}
+
+func (cnt *Client) LoopForPlayState(
+	lg *Logger,
+	player *Player,
+	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
+) error {
+	lg.Debug("it is started to loop for play state in client")
+	defer func() {
+		lg.Debug("it is finished to loop for play state in client")
+	}()
+
+	state := PlayState
+	inPacket, err := cnt.ReadWithComp(state)
+	if err != nil {
+		return err
+	}
+
+	lg.Debug(
+		"client read packet to loop for play state in client",
+		NewLgElement("InPacket", inPacket),
+	)
+
+	var outPackets []OutPacket
+
+	switch inPacket.(type) {
+	case *ConfirmKeepAlivePacket: // 0x0B
+		confirmKeepAlivePacket := inPacket.(*ConfirmKeepAlivePacket)
+		payload := confirmKeepAlivePacket.GetPayload()
+		confirmKeepAliveEvent :=
+			NewConfirmKeepAliveEvent(
+				payload,
+			)
+		chanForConfirmKeepAliveEvent <- confirmKeepAliveEvent
+		break
+	}
+
+	for _, outPacket := range outPackets {
+		if err := cnt.WriteWithComp(outPacket); err != nil {
+			return err
+		}
+		lg.Debug(
+			"client sent packet to loop for play state in client",
+			NewLgElement("OutPacket", outPacket),
+		)
+	}
+
+	return nil
+}
+
+func (cnt *Client) Init(
+	lg *Logger,
+) {
+	lg.Debug("it is started to init client")
+	defer func() {
+		lg.Debug("it is finished to init client")
+	}()
+}
+
+func (cnt *Client) Close(
+	lg *Logger,
+) {
+	lg.Debug("it is started to close client")
+	defer func() {
+		lg.Debug("it is finished to close client")
+	}()
+	_ = cnt.conn.Close()
 }
 
 func (cnt *Client) AddPlayer(
 	lg *Logger,
-	uid UID,
-	username string,
+	uid UID, username string,
 ) error {
 	lg.Debug(
-		"It is started to add player.",
+		"it is started to add player in client",
 		NewLgElement("uid", uid),
 		NewLgElement("username", username),
 	)
+	defer func() {
+		lg.Debug("it is finished to add player in client")
+	}()
 
-	textureString, signature, err := UUIDToTextureString(uid)
+	textureString, signature, err :=
+		UUIDToTextureString(uid)
 	if err != nil {
 		return err
 	}
@@ -711,10 +713,6 @@ func (cnt *Client) AddPlayer(
 		return err
 	}
 
-	lg.Debug(
-		"It is finished to add player.",
-	)
-
 	return nil
 }
 
@@ -722,9 +720,10 @@ func (cnt *Client) RemovePlayer(
 	lg *Logger,
 	uid UID,
 ) error {
-	lg.Debug(
-		"It is started to remove player",
-	)
+	lg.Debug("it is started to remove player in client")
+	defer func() {
+		lg.Debug("it is finished to remove player in client")
+	}()
 
 	packet := NewRemovePlayerPacket(
 		uid,
@@ -732,10 +731,6 @@ func (cnt *Client) RemovePlayer(
 	if err := cnt.WriteWithComp(packet); err != nil {
 		return err
 	}
-
-	lg.Debug(
-		"It is finished to remove player",
-	)
 
 	return nil
 }
@@ -745,9 +740,10 @@ func (cnt *Client) UpdateLatency(
 	uid UID,
 	latency int32,
 ) error {
-	lg.Debug(
-		"It is started to update latency",
-	)
+	lg.Debug("it is started to update latency in client")
+	defer func() {
+		lg.Debug("it is finished to update latency in client")
+	}()
 
 	packet := NewUpdateLatencyPacket(
 		uid,
@@ -757,9 +753,25 @@ func (cnt *Client) UpdateLatency(
 		return err
 	}
 
+	return nil
+}
+
+func (cnt *Client) CheckKeepAlive(
+	lg *Logger,
+	payload int64,
+) error {
 	lg.Debug(
-		"It is finished to update latency",
+		"it is started to check keep-alive in client",
+		NewLgElement("payload", payload),
 	)
+	defer func() {
+		lg.Debug("it is finished to check keep-alive in client")
+	}()
+
+	packet := NewCheckKeepAlivePacket(payload)
+	if err := cnt.WriteWithComp(packet); err != nil {
+		return err
+	}
 
 	return nil
 }
