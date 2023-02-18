@@ -94,7 +94,7 @@ func (e *entity) GetDeltaY() int16 {
 }
 
 func (e *entity) GetDeltaZ() int16 {
-	return int16(((e.y * 32) - (e.prevY * 32)) * 128)
+	return int16(((e.z * 32) - (e.prevZ * 32)) * 128)
 }
 
 func (e *entity) GetCx() int32 {

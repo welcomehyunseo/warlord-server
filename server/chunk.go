@@ -13,14 +13,6 @@ const (
 	LongSize         = 64
 )
 
-type ChunkPosStr = string
-
-func toChunkPosStr(
-	cx, cz int,
-) string {
-	return fmt.Sprintf("(%d,%d)", cx, cz)
-}
-
 type BiomeID = uint8
 
 const (

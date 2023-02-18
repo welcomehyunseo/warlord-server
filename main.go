@@ -12,6 +12,8 @@ func main() {
 	//lc.SetFilter("client-handler")
 	//lc.SetFilter("load-chunk-event-handler")
 	//lc.SetFilter("play-state-handler")
+	//lc.SetFilter("add-player-event-handler")
+	//lc.SetFilter("spawn-player-event-handler")
 
 	rndDist := 4
 	spawnX, spawnY, spawnZ :=

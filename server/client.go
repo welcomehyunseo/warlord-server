@@ -591,9 +591,16 @@ func (cnt *Client) JoinGame(
 
 func (cnt *Client) HandlePlayState(
 	eid EID,
+	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 	world *Overworld,
 	chanForError ChanForError,
+	wg *sync.WaitGroup,
 ) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
 	lg := NewLogger(
 		"play-state-handler",
 		NewLgElement("eid", eid),
@@ -606,6 +613,7 @@ func (cnt *Client) HandlePlayState(
 		}
 
 		lg.Debug("it is finished to handle play state")
+		lg.Close()
 	}()
 
 	state := PlayState
@@ -623,7 +631,16 @@ func (cnt *Client) HandlePlayState(
 		var outPackets []OutPacket
 
 		switch inPacket.(type) {
-		case *ChangePosPacket:
+		case *ConfirmKeepAlivePacket: // 0x0B
+			confirmKeepAlivePacket := inPacket.(*ConfirmKeepAlivePacket)
+			payload := confirmKeepAlivePacket.GetPayload()
+			confirmKeepAliveEvent :=
+				NewConfirmKeepAliveEvent(
+					payload,
+				)
+			chanForConfirmKeepAliveEvent <- confirmKeepAliveEvent
+			break
+		case *ChangePosPacket: // 0x0D
 			changePosPacket := inPacket.(*ChangePosPacket)
 			x, y, z :=
 				changePosPacket.GetX(),
@@ -634,37 +651,37 @@ func (cnt *Client) HandlePlayState(
 				eid,
 				x, y, z,
 			)
-			world.UpdatePlayerChunk(eid)
+			//world.UpdatePlayerChunk(eid)
 			break
-		case *ChangeLookPacket:
-			changeLookPacket := inPacket.(*ChangeLookPacket)
-			yaw, pitch :=
-				changeLookPacket.GetYaw(), changeLookPacket.GetPitch()
+		case *ChangeLookPacket: // 0x0E
+			//changeLookPacket := inPacket.(*ChangeLookPacket)
+			//yaw, pitch :=
+			//	changeLookPacket.GetYaw(), changeLookPacket.GetPitch()
 			//ground := changeLookPacket.GetGround()  // TODO
-			world.UpdatePlayerLook(
-				eid,
-				yaw, pitch,
-			)
+			//world.UpdatePlayerLook(
+			//	eid,
+			//	yaw, pitch,
+			//)
 			break
-		case *ChangePosAndLookPacket:
-			changePosAndLookPacket := inPacket.(*ChangePosAndLookPacket)
-			yaw, pitch :=
-				changePosAndLookPacket.GetYaw(),
-				changePosAndLookPacket.GetPitch()
-			x, y, z :=
-				changePosAndLookPacket.GetX(),
-				changePosAndLookPacket.GetY(),
-				changePosAndLookPacket.GetZ()
+		case *ChangePosAndLookPacket: // 0x0F
+			//changePosAndLookPacket := inPacket.(*ChangePosAndLookPacket)
+			//yaw, pitch :=
+			//	changePosAndLookPacket.GetYaw(),
+			//	changePosAndLookPacket.GetPitch()
+			//x, y, z :=
+			//	changePosAndLookPacket.GetX(),
+			//	changePosAndLookPacket.GetY(),
+			//	changePosAndLookPacket.GetZ()
 			//ground := changePosAndLookPacket.GetGround()  // TODO
-			world.UpdatePlayerLook(
-				eid,
-				yaw, pitch,
-			)
-			world.UpdatePlayerPos(
-				eid,
-				x, y, z,
-			)
-			world.UpdatePlayerChunk(eid)
+			//world.UpdatePlayerLook(
+			//	eid,
+			//	yaw, pitch,
+			//)
+			//world.UpdatePlayerPos(
+			//	eid,
+			//	x, y, z,
+			//)
+			//world.UpdatePlayerChunk(eid)
 			break
 		}
 
