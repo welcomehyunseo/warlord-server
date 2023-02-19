@@ -637,7 +637,7 @@ func (p *JoinGamePacket) String() string {
 
 type SetEntityRelativePosPacket struct {
 	*packet
-	eid    int32
+	eid    EID
 	deltaX int16
 	deltaY int16
 	deltaZ int16
@@ -645,7 +645,7 @@ type SetEntityRelativePosPacket struct {
 }
 
 func NewSetEntityRelativePosPacket(
-	eid int32,
+	eid EID,
 	deltaX, deltaY, deltaZ int16,
 	ground bool,
 ) *SetEntityRelativePosPacket {
@@ -668,7 +668,7 @@ func (p *SetEntityRelativePosPacket) Pack() (
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(p.eid); err != nil {
+	if err := data.WriteVarInt(int32(p.eid)); err != nil {
 		return nil, err
 	}
 	if err := data.WriteInt16(p.deltaX); err != nil {
@@ -687,7 +687,7 @@ func (p *SetEntityRelativePosPacket) Pack() (
 	return data, nil
 }
 
-func (p *SetEntityRelativePosPacket) GetEID() int32 {
+func (p *SetEntityRelativePosPacket) GetEID() EID {
 	return p.eid
 }
 
@@ -728,14 +728,14 @@ func (p *SetEntityRelativePosPacket) String() string {
 
 type SetEntityLookPacket struct {
 	*packet
-	eid    int32
+	eid    EID
 	yaw    float32
 	pitch  float32
 	ground bool
 }
 
 func NewSetEntityLookPacket(
-	eid int32,
+	eid EID,
 	yaw, pitch float32,
 	ground bool,
 ) *SetEntityLookPacket {
@@ -757,7 +757,7 @@ func (p *SetEntityLookPacket) Pack() (
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(p.eid); err != nil {
+	if err := data.WriteVarInt(int32(p.eid)); err != nil {
 		return nil, err
 	}
 	if err := data.WriteAngle(p.yaw); err != nil {
@@ -773,7 +773,7 @@ func (p *SetEntityLookPacket) Pack() (
 	return data, nil
 }
 
-func (p *SetEntityLookPacket) GetEID() int32 {
+func (p *SetEntityLookPacket) GetEID() EID {
 	return p.eid
 }
 
@@ -1295,12 +1295,12 @@ func (p *DespawnEntityPacket) String() string {
 
 type SetEntityHeadLookPacket struct {
 	*packet
-	eid int32
+	eid EID
 	yaw float32
 }
 
 func NewSetEntityHeadLookPacket(
-	eid int32,
+	eid EID,
 	yaw float32,
 ) *SetEntityHeadLookPacket {
 	return &SetEntityHeadLookPacket{
@@ -1319,7 +1319,7 @@ func (p *SetEntityHeadLookPacket) Pack() (
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(p.eid); err != nil {
+	if err := data.WriteVarInt(int32(p.eid)); err != nil {
 		return nil, err
 	}
 	if err := data.WriteAngle(p.yaw); err != nil {
@@ -1329,7 +1329,7 @@ func (p *SetEntityHeadLookPacket) Pack() (
 	return data, nil
 }
 
-func (p *SetEntityHeadLookPacket) GetEID() int32 {
+func (p *SetEntityHeadLookPacket) GetEID() EID {
 	return p.eid
 }
 

@@ -7,10 +7,12 @@ import (
 func main() {
 	lc := server.NewLoggerConfigurator()
 	lc.SetLogLevel(server.DebugLevel)
-	//lc.EnableReport()
-	//lc.SetFilter("server-renderer")
+	lc.EnableReport()
+	lc.SetFilter("server-renderer")
 	//lc.SetFilter("client-handler")
 	//lc.SetFilter("confirm-keep-alive-event-handler")
+	//lc.SetFilter("set-entity-relative-pos-event-handler")
+	//lc.SetFilter("update-look-event-handler")
 
 	addr := ":9999"
 	max := 20

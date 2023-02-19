@@ -218,6 +218,154 @@ func (s *Server) handleDespawnEntityEvent(
 	}
 }
 
+func (s *Server) handleSetEntityRelativePosEvent(
+	chanForEvent ChanForSetEntityRelativePosEvent,
+	player *Player,
+	cnt *Client,
+	chanForError ChanForError,
+	wg *sync.WaitGroup,
+) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
+	lg := NewLogger(
+		"set-entity-relative-pos-event-handler",
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
+	)
+	defer lg.Close()
+
+	lg.Debug("it is started to handle SetEntityRelativePosEvent")
+	defer func() {
+		lg.Debug("it is finished to handle SetEntityRelativePosEvent")
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				eid := event.GetEID()
+				deltaX, deltaY, deltaZ :=
+					event.GetDeltaX(),
+					event.GetDeltaY(),
+					event.GetDeltaZ()
+				ground := event.GetGround()
+				if err := cnt.SetEntityRelativePos(
+					lg,
+					eid,
+					deltaX, deltaY, deltaZ,
+					ground,
+				); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
+				panic(err)
+			}
+		}
+
+		if stop == true {
+			break
+		}
+	}
+}
+
+func (s *Server) handleSetEntityLookEvent(
+	chanForEvent ChanForSetEntityLookEvent,
+	player *Player,
+	cnt *Client,
+	chanForError ChanForError,
+	wg *sync.WaitGroup,
+) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
+	lg := NewLogger(
+		"set-entity-look-event-handler",
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
+	)
+	defer lg.Close()
+
+	lg.Debug("it is started to handle SetEntityLookEvent")
+	defer func() {
+		lg.Debug("it is finished to handle SetEntityLookEvent")
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				eid := event.GetEID()
+				yaw, pitch :=
+					event.GetYaw(), event.GetPitch()
+				ground := event.GetGround()
+				if err := cnt.SetEntityLook(
+					lg,
+					eid,
+					yaw, pitch,
+					ground,
+				); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
+				panic(err)
+			}
+		}
+
+		if stop == true {
+			break
+		}
+	}
+}
+
 func (s *Server) handleAddPlayerEvent(
 	chanForEvent ChanForAddPlayerEvent,
 	player *Player,
@@ -653,13 +801,25 @@ func (s *Server) initClient(
 		ChanForSetEntityLookEvent,
 		MaxNumForChannel,
 	)
-	// TODO
+	go s.handleSetEntityLookEvent(
+		chanForSetEntityLookEvent,
+		player,
+		cnt,
+		chanForError,
+		wg,
+	)
 
 	chanForSetEntityRelativePosEvent := make(
 		ChanForSetEntityRelativePosEvent,
 		MaxNumForChannel,
 	)
-	// TODO
+	go s.handleSetEntityRelativePosEvent(
+		chanForSetEntityRelativePosEvent,
+		player,
+		cnt,
+		chanForError,
+		wg,
+	)
 
 	if err := world.InitPlayer(
 		lg,
@@ -737,16 +897,17 @@ func (s *Server) handleClient(
 		"client-handler",
 		NewLgElement("addr", addr),
 	)
+	defer lg.Close()
+
 	lg.Debug("it is started to handle Client")
+	defer func() {
+		lg.Debug("it is finished to handle Client")
+	}()
 
 	defer func() {
-
 		if err := recover(); err != nil {
 			lg.Error(err)
 		}
-
-		lg.Debug("it is finished to handle Client")
-		lg.Close()
 	}()
 
 	cnt.Init(lg)
@@ -818,6 +979,7 @@ func (s *Server) handleClient(
 		case <-time.After(LoopDelayForPlayState):
 			if err := cnt.LoopForPlayState(
 				lg,
+				world,
 				player,
 				chanForConfirmKeepAliveEvent,
 			); err != nil {

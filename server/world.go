@@ -182,6 +182,99 @@ func (w *Overworld) InitPlayer(
 	return nil
 }
 
+func (w *Overworld) UpdatePlayerPos(
+	lg *Logger,
+	player *Player,
+	x, y, z float64,
+	ground bool,
+) error {
+	w.RLock()
+	defer w.RUnlock()
+
+	lg.Debug(
+		"it is started to update player pos in Overworld",
+		NewLgElement("player", player),
+		NewLgElement("x", x),
+		NewLgElement("y", y),
+		NewLgElement("z", z),
+		NewLgElement("ground", ground),
+	)
+	defer func() {
+		lg.Debug("it is finished to update player pos in Overworld")
+	}()
+
+	// TODO: ground
+	eid := player.GetEid()
+	player.UpdatePos(
+		x, y, z,
+	)
+	deltaX, deltaY, deltaZ :=
+		player.GetDeltaX(),
+		player.GetDeltaY(),
+		player.GetDeltaZ()
+
+	setEntityRelativePosEvent :=
+		NewSetEntityRelativePosEvent(
+			eid,
+			deltaX, deltaY, deltaZ,
+			ground,
+		)
+	if deltaX == 0 && deltaY == 0 && deltaZ == 0 {
+		return nil
+	}
+	a := w.connsBetweenPlayers[eid]
+	for eid1, _ := range a {
+		chanForSetEntityRelativePosEvent1 :=
+			w.chansForSetEntityRelativePosEvent[eid1]
+		chanForSetEntityRelativePosEvent1 <- setEntityRelativePosEvent
+	}
+
+	return nil
+}
+
+func (w *Overworld) UpdatePlayerLook(
+	lg *Logger,
+	player *Player,
+	yaw, pitch float32,
+	ground bool,
+) error {
+	w.RLock()
+	defer w.RUnlock()
+
+	lg.Debug(
+		"it is started to update player look in Overworld",
+		NewLgElement("player", player),
+		NewLgElement("yaw", yaw),
+		NewLgElement("pitch", pitch),
+		NewLgElement("ground", ground),
+	)
+	defer func() {
+		lg.Debug("it is finished to update player look in Overworld")
+	}()
+
+	// TODO: ground
+	eid := player.GetEid()
+	player.UpdateLook(
+		yaw, pitch,
+	)
+
+	setEntityLookEvent :=
+		NewSetEntityLookEvent(
+			eid,
+			yaw, pitch,
+			ground,
+		)
+	a := w.connsBetweenPlayers[eid]
+	for eid1, _ := range a {
+		chanForSetEntityLookEvent1 :=
+			w.chansForSetEntityLookEvent[eid1]
+		chanForSetEntityLookEvent1 <- setEntityLookEvent
+
+	}
+
+	return nil
+}
+
 func (w *Overworld) ClosePlayer(
 	lg *Logger,
 	player *Player,

@@ -81,6 +81,18 @@ func (e *entity) GetPrevZ() float64 {
 	return e.prevZ
 }
 
+func (e *entity) GetDeltaX() int16 {
+	return int16(((e.x * 32) - (e.prevX * 32)) * 128)
+}
+
+func (e *entity) GetDeltaY() int16 {
+	return int16(((e.y * 32) - (e.prevY * 32)) * 128)
+}
+
+func (e *entity) GetDeltaZ() int16 {
+	return int16(((e.z * 32) - (e.prevZ * 32)) * 128)
+}
+
 func (e *entity) UpdatePos(
 	x, y, z float64,
 ) {
