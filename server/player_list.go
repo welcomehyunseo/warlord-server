@@ -1,17 +1,8 @@
 package server
 
 import (
-	"fmt"
 	"sync"
 )
-
-type ChunkPosStr = string
-
-func toChunkPosStr(
-	cx, cz int32,
-) string {
-	return fmt.Sprintf("%d/%d", cx, cz)
-}
 
 type PlayerList struct {
 	sync.RWMutex

@@ -15,7 +15,6 @@ func main() {
 	addr := ":9999"
 	max := 20
 	favicon, desc := "", "Warlord Server for Dev"
-	rndDist := int32(4)
 	spawnX, spawnY, spawnZ :=
 		float64(8), float64(70), float64(8)
 	spawnYaw, spawnPitch :=
@@ -26,7 +25,6 @@ func main() {
 		max,
 		favicon,
 		desc,
-		rndDist,
 		spawnX, spawnY, spawnZ,
 		spawnYaw, spawnPitch,
 	)
@@ -46,9 +44,12 @@ func main() {
 	//	}
 	//}
 
+	rndDist := int32(4)
 	playerList := server.NewPlayerList()
+	world := server.NewOverworld(rndDist)
 	s.Render(
 		playerList,
+		world,
 	)
 
 }

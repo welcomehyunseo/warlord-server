@@ -37,7 +37,6 @@ type Server struct {
 	favicon string // base64 png image string
 	text    string // description of server
 
-	rndDist    int32 // render distance
 	spawnX     float64
 	spawnY     float64
 	spawnZ     float64
@@ -49,7 +48,6 @@ func NewServer(
 	addr string,
 	max int,
 	favicon, text string,
-	rndDist int32,
 	spawnX, spawnY, spawnZ float64,
 	spawnYaw, spawnPitch float32,
 ) *Server {
@@ -63,7 +61,6 @@ func NewServer(
 		favicon: favicon,
 		text:    text,
 
-		rndDist:    rndDist,
 		spawnX:     spawnX,
 		spawnY:     spawnY,
 		spawnZ:     spawnZ,
@@ -76,6 +73,149 @@ func (s *Server) countEID() EID {
 	a := s.last
 	s.last++
 	return a
+}
+
+func (s *Server) handleSpawnPlayerEvent(
+	chanForEvent ChanForSpawnPlayerEvent,
+	player *Player,
+	cnt *Client,
+	chanForError ChanForError,
+	wg *sync.WaitGroup,
+) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
+	lg := NewLogger(
+		"spawn-player-event-handler",
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
+	)
+	defer lg.Close()
+
+	lg.Debug("it is started to handle SpawnPlayerEvent")
+	defer func() {
+		lg.Debug("it is finished to handle SpawnPlayerEvent")
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				eid, uid :=
+					event.GetEID(), event.GetUUID()
+				x, y, z :=
+					event.GetX(), event.GetY(), event.GetZ()
+				yaw, pitch :=
+					event.GetYaw(), event.GetPitch()
+				if err := cnt.SpawnPlayer(
+					lg,
+					eid, uid,
+					x, y, z,
+					yaw, pitch,
+				); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
+				panic(err)
+			}
+		}
+
+		if stop == true {
+			break
+		}
+	}
+}
+
+func (s *Server) handleDespawnEntityEvent(
+	chanForEvent ChanForDespawnEntityEvent,
+	player *Player,
+	cnt *Client,
+	chanForError ChanForError,
+	wg *sync.WaitGroup,
+) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
+	lg := NewLogger(
+		"despawn-entity-event-handler",
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
+	)
+	defer lg.Close()
+
+	lg.Debug("it is started to handle DespawnEntityEvent")
+	defer func() {
+		lg.Debug("it is finished to handle DespawnEntityEvent")
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				eid := event.GetEID()
+				if err := cnt.DespawnEntity(
+					lg,
+					eid,
+				); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
+				panic(err)
+			}
+		}
+
+		if stop == true {
+			break
+		}
+	}
 }
 
 func (s *Server) handleAddPlayerEvent(
@@ -380,6 +520,7 @@ func (s *Server) handleConfirmKeepAliveEvent(
 func (s *Server) initClient(
 	lg *Logger,
 	playerList *PlayerList,
+	world *Overworld,
 	cnt *Client,
 	uid UID, username string,
 	wg *sync.WaitGroup,
@@ -484,6 +625,54 @@ func (s *Server) initClient(
 		wg,
 	)
 
+	chanForSpawnPlayerEvent := make(
+		ChanForSpawnPlayerEvent,
+		MaxNumForChannel,
+	)
+	go s.handleSpawnPlayerEvent(
+		chanForSpawnPlayerEvent,
+		player,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	chanForDespawnEntityEvent := make(
+		ChanForDespawnEntityEvent,
+		MaxNumForChannel,
+	)
+	go s.handleDespawnEntityEvent(
+		chanForDespawnEntityEvent,
+		player,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	chanForSetEntityLookEvent := make(
+		ChanForSetEntityLookEvent,
+		MaxNumForChannel,
+	)
+	// TODO
+
+	chanForSetEntityRelativePosEvent := make(
+		ChanForSetEntityRelativePosEvent,
+		MaxNumForChannel,
+	)
+	// TODO
+
+	if err := world.InitPlayer(
+		lg,
+		player,
+		cnt,
+		chanForSpawnPlayerEvent,
+		chanForDespawnEntityEvent,
+		chanForSetEntityLookEvent,
+		chanForSetEntityRelativePosEvent,
+	); err != nil {
+		return nil, nil, nil, err
+	}
+
 	return player,
 		chanForConfirmKeepAliveEvent,
 		chanForError,
@@ -493,6 +682,7 @@ func (s *Server) initClient(
 func (s *Server) closeClient(
 	lg *Logger,
 	playerList *PlayerList,
+	world *Overworld,
 	player *Player,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 	chanForError ChanForError,
@@ -506,6 +696,21 @@ func (s *Server) closeClient(
 		lg.Debug("it is finished to close Connection")
 	}()
 
+	chanForSpawnPlayerEvent,
+		chanForDespawnEntityEvent,
+		chanForSetEntityLookEvent,
+		chanForSetEntityRelativePosEvent :=
+		world.ClosePlayer(
+			lg,
+			player,
+		)
+	close(chanForSpawnPlayerEvent)
+	close(chanForDespawnEntityEvent)
+	close(chanForSetEntityLookEvent)
+	close(chanForSetEntityRelativePosEvent)
+
+	close(chanForConfirmKeepAliveEvent)
+
 	chanForAddPlayerEvent,
 		chanForUpdateLatencyEvent,
 		chanForRemovePlayerEvent :=
@@ -517,14 +722,13 @@ func (s *Server) closeClient(
 	close(chanForUpdateLatencyEvent)
 	close(chanForRemovePlayerEvent)
 
-	close(chanForConfirmKeepAliveEvent)
-
 	wg.Wait()
 	close(chanForError)
 }
 
 func (s *Server) handleClient(
 	playerList *PlayerList,
+	world *Overworld,
 	cnt *Client,
 ) {
 
@@ -591,6 +795,7 @@ func (s *Server) handleClient(
 		err := s.initClient(
 		lg,
 		playerList,
+		world,
 		cnt,
 		uid, username,
 		wg,
@@ -601,6 +806,7 @@ func (s *Server) handleClient(
 	defer s.closeClient(
 		lg,
 		playerList,
+		world,
 		player,
 		chanForConfirmKeepAliveEvent,
 		chanForError,
@@ -627,6 +833,7 @@ func (s *Server) handleClient(
 
 func (s *Server) Render(
 	playerList *PlayerList,
+	world *Overworld,
 ) {
 	addr := s.addr
 	network := Network
@@ -671,6 +878,7 @@ func (s *Server) Render(
 		)
 		go s.handleClient(
 			playerList,
+			world,
 			cnt,
 		)
 	}

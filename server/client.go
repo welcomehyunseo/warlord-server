@@ -676,6 +676,60 @@ func (cnt *Client) Close(
 	_ = cnt.conn.Close()
 }
 
+func (cnt *Client) SpawnPlayer(
+	lg *Logger,
+	eid EID, uid UID,
+	x, y, z float64,
+	yaw, pitch float32,
+) error {
+	lg.Debug(
+		"it is started to spawn player in client",
+		NewLgElement("eid", eid),
+		NewLgElement("uid", uid),
+		NewLgElement("x", x),
+		NewLgElement("y", y),
+		NewLgElement("z", z),
+		NewLgElement("yaw", yaw),
+		NewLgElement("pitch", pitch),
+	)
+	defer func() {
+		lg.Debug("it is finished to spawn player in client")
+	}()
+
+	packet := NewSpawnPlayerPacket(
+		eid, uid,
+		x, y, z,
+		yaw, pitch,
+	)
+	if err := cnt.WriteWithComp(packet); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cnt *Client) DespawnEntity(
+	lg *Logger,
+	eid EID,
+) error {
+	lg.Debug(
+		"it is started to despawn entity in client",
+		NewLgElement("eid", eid),
+	)
+	defer func() {
+		lg.Debug("it is finished to despawn entity in client")
+	}()
+
+	packet := NewDespawnEntityPacket(
+		eid,
+	)
+	if err := cnt.WriteWithComp(packet); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (cnt *Client) AddPlayer(
 	lg *Logger,
 	uid UID, username string,

@@ -1,4 +1,239 @@
 package server
 
-type playersByChunkPos struct {
+import (
+	"fmt"
+	"go/types"
+	"sort"
+	"sync"
+)
+
+type ChunkPosStr = string
+
+func toChunkPosStr(
+	cx, cz int32,
+) ChunkPosStr {
+	return fmt.Sprintf("%d/%d", cx, cz)
+}
+
+func findRect(
+	cx, cz int32,
+	d int32,
+) (
+	maxCx int32, maxCz int32,
+	minCx int32, minCz int32,
+) {
+	maxCx, maxCz, minCx, minCz =
+		cx+d, cz+d, cx-d, cz-d
+	return
+}
+
+func subRects(
+	maxCx0, maxCz0, minCx0, minCz0 int32,
+	maxCx1, maxCz1, minCx1, minCz1 int32,
+) (
+	maxSubCx int32, maxSubCz int32,
+	minSubCx int32, minSubCz int32,
+) {
+	l0 := []int{int(maxCx0), int(minCx0), int(maxCx1), int(minCx1)}
+	l1 := []int{int(maxCz0), int(minCz0), int(maxCz1), int(minCz1)}
+	sort.Ints(l0)
+	sort.Ints(l1)
+	maxSubCx, maxSubCz, minSubCx, minSubCz =
+		int32(l0[2]), int32(l1[2]), int32(l0[1]), int32(l1[1])
+	return
+}
+
+func toChunkPos(
+	x, z float64,
+) (
+	cx int32, cz int32,
+) {
+	if x < 0 {
+		x = x - 16
+	}
+	if z < 0 {
+		z = z - 16
+	}
+
+	cx, cz = int32(x)/16, int32(z)/16
+	return
+}
+
+type Overworld struct {
+	sync.RWMutex
+
+	rndDist int32
+
+	players                           map[EID]*Player
+	chansForSpawnPlayerEvent          map[EID]ChanForSpawnPlayerEvent
+	chansForDespawnEntityEvent        map[EID]ChanForDespawnEntityEvent
+	chansForSetEntityLookEvent        map[EID]ChanForSetEntityLookEvent
+	chansForSetEntityRelativePosEvent map[EID]ChanForSetEntityRelativePosEvent
+
+	connsBetweenPlayers map[EID]map[EID]types.Nil
+	playersByChunkPos   map[ChunkPosStr]map[EID]types.Nil
+}
+
+func NewOverworld(
+	rndDist int32,
+) *Overworld {
+	return &Overworld{
+		rndDist: rndDist,
+
+		players:                           make(map[EID]*Player),
+		chansForSpawnPlayerEvent:          make(map[EID]ChanForSpawnPlayerEvent),
+		chansForDespawnEntityEvent:        make(map[EID]ChanForDespawnEntityEvent),
+		chansForSetEntityLookEvent:        make(map[EID]ChanForSetEntityLookEvent),
+		chansForSetEntityRelativePosEvent: make(map[EID]ChanForSetEntityRelativePosEvent),
+
+		connsBetweenPlayers: make(map[EID]map[EID]types.Nil),
+		playersByChunkPos:   make(map[ChunkPosStr]map[EID]types.Nil),
+	}
+}
+
+func (w *Overworld) InitPlayer(
+	lg *Logger,
+	player *Player,
+	cnt *Client,
+	chanForSpawnPlayerEvent ChanForSpawnPlayerEvent,
+	chanForDespawnEntityEvent ChanForDespawnEntityEvent,
+	chanForSetEntityLookEvent ChanForSetEntityLookEvent,
+	chanForSetEntityRelativePosEvent ChanForSetEntityRelativePosEvent,
+) error {
+	w.Lock()
+	defer w.Unlock()
+
+	lg.Debug(
+		"it is started to init player in Overworld",
+		NewLgElement("player", player),
+		NewLgElement("cnt", cnt),
+	)
+	defer func() {
+		lg.Debug("it is finished to init player in Overworld")
+	}()
+
+	eid := player.GetEid()
+	w.players[eid] = player
+	w.chansForSpawnPlayerEvent[eid] = chanForSpawnPlayerEvent
+	w.chansForDespawnEntityEvent[eid] = chanForDespawnEntityEvent
+	w.chansForSetEntityLookEvent[eid] = chanForSetEntityLookEvent
+	w.chansForSetEntityRelativePosEvent[eid] = chanForSetEntityRelativePosEvent
+
+	uid := player.GetUid()
+	x, y, z :=
+		player.GetX(), player.GetY(), player.GetZ()
+	yaw, pitch :=
+		player.GetYaw(), player.GetPitch()
+	spawnPlayerEvent := NewSpawnPlayerEvent(
+		eid, uid,
+		x, y, z,
+		yaw, pitch,
+	)
+
+	w.connsBetweenPlayers[eid] = make(map[EID]types.Nil)
+
+	dist := w.rndDist
+	cx, cz := toChunkPos(x, z)
+	maxCx, maxCz, minCx, minCz := findRect(
+		cx, cz, dist,
+	)
+	//overworld, init := true, true
+	for cz := maxCz; cz >= minCz; cz-- {
+		for cx := maxCx; cx >= minCx; cx-- {
+			chunkPosStr := toChunkPosStr(cx, cz)
+
+			a, has := w.playersByChunkPos[chunkPosStr]
+			if has == false {
+				continue
+			}
+			for eid1, _ := range a {
+				player1 := w.players[eid1]
+				eid1, uid1 :=
+					player1.GetEid(), player1.GetUid()
+				x1, y1, z1 :=
+					player1.GetX(), player1.GetY(), player1.GetZ()
+				yaw1, pitch1 :=
+					player1.GetYaw(), player1.GetPitch()
+				spawnPlayerEvent1 := NewSpawnPlayerEvent(
+					eid1, uid1,
+					x1, y1, z1,
+					yaw1, pitch1,
+				)
+				chanForSpawnPlayerEvent <- spawnPlayerEvent1
+
+				chanForSpawnPlayerEvent1 := w.chansForSpawnPlayerEvent[eid1]
+				chanForSpawnPlayerEvent1 <- spawnPlayerEvent
+
+				w.connsBetweenPlayers[eid][eid1] = types.Nil{}
+				w.connsBetweenPlayers[eid1][eid] = types.Nil{}
+			}
+		}
+	}
+
+	chunkPosStr := toChunkPosStr(cx, cz)
+	a, has := w.playersByChunkPos[chunkPosStr]
+	if has == false {
+		b := make(map[EID]types.Nil)
+		w.playersByChunkPos[chunkPosStr] = b
+		a = b
+	}
+	a[eid] = types.Nil{}
+
+	return nil
+}
+
+func (w *Overworld) ClosePlayer(
+	lg *Logger,
+	player *Player,
+) (
+	ChanForSpawnPlayerEvent,
+	ChanForDespawnEntityEvent,
+	ChanForSetEntityLookEvent,
+	ChanForSetEntityRelativePosEvent,
+) {
+	w.Lock()
+	defer w.Unlock()
+
+	lg.Debug(
+		"it is started to close player in Overworld",
+		NewLgElement("player", player),
+	)
+	defer func() {
+		lg.Debug("it is finished to close player in Overworld")
+	}()
+
+	eid := player.GetEid()
+
+	x, z := player.GetX(), player.GetZ()
+	cx, cz := toChunkPos(x, z)
+	chunkPosStr := toChunkPosStr(cx, cz)
+	delete(w.playersByChunkPos[chunkPosStr], eid)
+
+	despawnEntityEvent := NewDespawnEntityEvent(
+		eid,
+	)
+	a := w.connsBetweenPlayers[eid]
+	for eid1, _ := range a {
+		chanForDespawnEntityEvent1 :=
+			w.chansForDespawnEntityEvent[eid1]
+		chanForDespawnEntityEvent1 <- despawnEntityEvent
+
+		delete(w.connsBetweenPlayers[eid1], eid)
+	}
+	delete(w.connsBetweenPlayers, eid)
+
+	chanForSpawnPlayerEvent := w.chansForSpawnPlayerEvent[eid]
+	chanForDespawnEntityEvent := w.chansForDespawnEntityEvent[eid]
+	chanForSetEntityLookEvent := w.chansForSetEntityLookEvent[eid]
+	chanForSetEntityRelativePosEvent := w.chansForSetEntityRelativePosEvent[eid]
+	delete(w.chansForSpawnPlayerEvent, eid)
+	delete(w.chansForDespawnEntityEvent, eid)
+	delete(w.chansForSetEntityLookEvent, eid)
+	delete(w.chansForSetEntityRelativePosEvent, eid)
+	delete(w.players, eid)
+
+	return chanForSpawnPlayerEvent,
+		chanForDespawnEntityEvent,
+		chanForSetEntityLookEvent,
+		chanForSetEntityRelativePosEvent
 }
