@@ -21,6 +21,8 @@ const MaxRndDist = 32 // maximum render distance
 const DelayForCheckKeepAlive = time.Millisecond * 1000
 const LoopDelayForPlayState = time.Millisecond * 1
 
+const MaxNumForChannel = 16
+
 type ChanForError chan any
 
 type Server struct {
@@ -378,8 +380,8 @@ func (s *Server) handleConfirmKeepAliveEvent(
 func (s *Server) initClient(
 	lg *Logger,
 	playerList *PlayerList,
-	uid UID, username string,
 	cnt *Client,
+	uid UID, username string,
 	wg *sync.WaitGroup,
 ) (
 	*Player,
@@ -418,9 +420,15 @@ func (s *Server) initClient(
 		return nil, nil, nil, err
 	}
 
-	chanForError := make(ChanForError, 1)
+	chanForError := make(
+		ChanForError,
+		MaxNumForChannel,
+	)
 
-	chanForAddPlayerEvent := make(ChanForAddPlayerEvent, 1)
+	chanForAddPlayerEvent := make(
+		ChanForAddPlayerEvent,
+		MaxNumForChannel,
+	)
 	go s.handleAddPlayerEvent(
 		chanForAddPlayerEvent,
 		player,
@@ -429,7 +437,10 @@ func (s *Server) initClient(
 		wg,
 	)
 
-	chanForUpdateLatencyEvent := make(ChanForUpdateLatencyEvent, 1)
+	chanForUpdateLatencyEvent := make(
+		ChanForUpdateLatencyEvent,
+		MaxNumForChannel,
+	)
 	go s.handleUpdateLatencyEvent(
 		chanForUpdateLatencyEvent,
 		cnt,
@@ -437,7 +448,10 @@ func (s *Server) initClient(
 		wg,
 	)
 
-	chanForRemovePlayerEvent := make(ChanForRemovePlayerEvent, 1)
+	chanForRemovePlayerEvent := make(
+		ChanForRemovePlayerEvent,
+		MaxNumForChannel,
+	)
 	go s.handleRemovePlayerEvent(
 		chanForRemovePlayerEvent,
 		player,
@@ -457,7 +471,10 @@ func (s *Server) initClient(
 		return nil, nil, nil, err
 	}
 
-	chanForConfirmKeepAliveEvent := make(ChanForConfirmKeepAliveEvent, 1)
+	chanForConfirmKeepAliveEvent := make(
+		ChanForConfirmKeepAliveEvent,
+		MaxNumForChannel,
+	)
 	go s.handleConfirmKeepAliveEvent(
 		playerList,
 		chanForConfirmKeepAliveEvent,
@@ -574,8 +591,8 @@ func (s *Server) handleClient(
 		err := s.initClient(
 		lg,
 		playerList,
-		uid, username,
 		cnt,
+		uid, username,
 		wg,
 	)
 	if err != nil {

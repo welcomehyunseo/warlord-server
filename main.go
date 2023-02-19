@@ -10,7 +10,7 @@ func main() {
 	//lc.EnableReport()
 	//lc.SetFilter("server-renderer")
 	//lc.SetFilter("client-handler")
-	lc.SetFilter("confirm-keep-alive-event-handler")
+	//lc.SetFilter("confirm-keep-alive-event-handler")
 
 	addr := ":9999"
 	max := 20
