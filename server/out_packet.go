@@ -21,8 +21,8 @@ const SetEntityRelativePosPacketID = 0x26
 const SetEntityLookPacketID = 0x28
 const SetAbilitiesPacketID = 0x2C
 const AddPlayerPacketID = 0x2E
-const RemovePlayerPacketID = 0x2E
 const UpdateLatencyPacketID = 0x2E
+const RemovePlayerPacketID = 0x2E
 const TeleportPacketID = 0x2F
 const DespawnEntityPacketID = 0x32
 const SetEntityHeadLookPacketID = 0x36
@@ -253,7 +253,7 @@ type SpawnPlayerPacket struct {
 	uid        UID
 	x, y, z    float64
 	yaw, pitch float32
-	//metadata
+	metadata   Metadata
 }
 
 func NewSpawnPlayerPacket(
@@ -261,6 +261,7 @@ func NewSpawnPlayerPacket(
 	uid UID,
 	x, y, z float64,
 	yaw, pitch float32,
+	metadata Metadata,
 ) *SpawnPlayerPacket {
 	return &SpawnPlayerPacket{
 		packet: newPacket(
@@ -268,13 +269,11 @@ func NewSpawnPlayerPacket(
 			PlayState,
 			SpawnPlayerPacketID,
 		),
-		eid:   eid,
-		uid:   uid,
-		x:     x,
-		y:     y,
-		z:     z,
-		yaw:   yaw,
-		pitch: pitch,
+		eid: eid,
+		uid: uid,
+		x:   x, y: y, z: z,
+		yaw: yaw, pitch: pitch,
+		metadata: metadata,
 	}
 }
 
@@ -298,13 +297,13 @@ func (p *SpawnPlayerPacket) Pack() (
 	if err := data.WriteFloat64(p.z); err != nil {
 		return nil, err
 	}
-	if err := data.WriteFloat32(p.yaw); err != nil {
+	if err := data.WriteAngle(p.yaw); err != nil {
 		return nil, err
 	}
-	if err := data.WriteFloat32(p.pitch); err != nil {
+	if err := data.WriteAngle(p.pitch); err != nil {
 		return nil, err
 	}
-	if err := data.WriteUint8(0xff); err != nil {
+	if err := data.WriteMetadata(p.metadata); err != nil {
 		return nil, err
 	}
 
@@ -1046,53 +1045,6 @@ func (p *AddPlayerPacket) String() string {
 	)
 }
 
-type RemovePlayerPacket struct {
-	*packet
-	uid UID
-}
-
-func NewRemovePlayerPacket(
-	uid UID,
-) *RemovePlayerPacket {
-	return &RemovePlayerPacket{
-		packet: newPacket(
-			Outbound,
-			PlayState,
-			RemovePlayerPacketID,
-		),
-		uid: uid,
-	}
-}
-
-func (p *RemovePlayerPacket) Pack() (
-	*Data,
-	error,
-) {
-	data := NewData()
-	if err := data.WriteVarInt(4); err != nil {
-		return nil, err
-	}
-	if err := data.WriteVarInt(1); err != nil {
-		return nil, err
-	}
-	if err := data.WriteUUID(uuid.UUID(p.uid)); err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
-func (p *RemovePlayerPacket) GetUUID() UID {
-	return p.uid
-}
-
-func (p *RemovePlayerPacket) String() string {
-	return fmt.Sprintf(
-		"{ packet: %+v, uid: %s }",
-		p.packet, p.uid,
-	)
-}
-
 type UpdateLatencyPacket struct {
 	*packet
 	uid     UID
@@ -1150,14 +1102,58 @@ func (p *UpdateLatencyPacket) String() string {
 	)
 }
 
+type RemovePlayerPacket struct {
+	*packet
+	uid UID
+}
+
+func NewRemovePlayerPacket(
+	uid UID,
+) *RemovePlayerPacket {
+	return &RemovePlayerPacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			RemovePlayerPacketID,
+		),
+		uid: uid,
+	}
+}
+
+func (p *RemovePlayerPacket) Pack() (
+	*Data,
+	error,
+) {
+	data := NewData()
+	if err := data.WriteVarInt(4); err != nil {
+		return nil, err
+	}
+	if err := data.WriteVarInt(1); err != nil {
+		return nil, err
+	}
+	if err := data.WriteUUID(uuid.UUID(p.uid)); err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func (p *RemovePlayerPacket) GetUUID() UID {
+	return p.uid
+}
+
+func (p *RemovePlayerPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, uid: %s }",
+		p.packet, p.uid,
+	)
+}
+
 type TeleportPacket struct {
 	*packet
-	x       float64
-	y       float64
-	z       float64
-	yaw     float32
-	pitch   float32
-	payload int32
+	x, y, z    float64
+	yaw, pitch float32
+	payload    int32
 }
 
 func NewTeleportPacket(
@@ -1171,12 +1167,9 @@ func NewTeleportPacket(
 			PlayState,
 			TeleportPacketID,
 		),
-		x:       x,
-		y:       y,
-		z:       z,
-		yaw:     yaw,
-		pitch:   pitch,
-		payload: payload,
+		x, y, z,
+		yaw, pitch,
+		payload,
 	}
 }
 
@@ -1346,12 +1339,12 @@ func (p *SetEntityHeadLookPacket) String() string {
 
 type SetEntityMetadataPacket struct {
 	*packet
-	eid      int32
+	eid      EID
 	metadata *EntityMetadata
 }
 
 func NewSetEntityMetadataPacket(
-	eid int32,
+	eid EID,
 	metadata *EntityMetadata,
 ) *SetEntityMetadataPacket {
 	return &SetEntityMetadataPacket{
@@ -1370,7 +1363,7 @@ func (p *SetEntityMetadataPacket) Pack() (
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(p.eid); err != nil {
+	if err := data.WriteVarInt(int32(p.eid)); err != nil {
 		return nil, err
 	}
 	if err := data.WriteMetadata(p.metadata); err != nil {
@@ -1380,7 +1373,7 @@ func (p *SetEntityMetadataPacket) Pack() (
 	return data, nil
 }
 
-func (p *SetEntityMetadataPacket) GetEID() int32 {
+func (p *SetEntityMetadataPacket) GetEID() EID {
 	return p.eid
 }
 

@@ -129,11 +129,14 @@ func (s *Server) handleSpawnPlayerEvent(
 					event.GetX(), event.GetY(), event.GetZ()
 				yaw, pitch :=
 					event.GetYaw(), event.GetPitch()
+				sneaking, sprinting :=
+					event.IsSneaking(), event.IsSprinting()
 				if err := cnt.SpawnPlayer(
 					lg,
 					eid, uid,
 					x, y, z,
 					yaw, pitch,
+					sneaking, sprinting,
 				); err != nil {
 					return err
 				}
@@ -350,6 +353,76 @@ func (s *Server) handleSetEntityLookEvent(
 					eid,
 					yaw, pitch,
 					ground,
+				); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
+				panic(err)
+			}
+		}
+
+		if stop == true {
+			break
+		}
+	}
+}
+
+func (s *Server) handleSetEntityMetadataEvent(
+	chanForEvent ChanForSetEntityMetadataEvent,
+	player *Player,
+	cnt *Client,
+	chanForError ChanForError,
+	wg *sync.WaitGroup,
+) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
+	lg := NewLogger(
+		"set-entity-look-event-handler",
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
+	)
+	defer lg.Close()
+
+	lg.Debug("it is started to handle SetEntityMetadataEvent")
+	defer func() {
+		lg.Debug("it is finished to handle SetEntityMetadataEvent")
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				eid := event.GetEID()
+				metadata := event.GetMetadata()
+				if err := cnt.SetEntityMetadata(
+					lg,
+					eid,
+					metadata,
 				); err != nil {
 					return err
 				}
@@ -797,18 +870,6 @@ func (s *Server) initClient(
 		wg,
 	)
 
-	chanForSetEntityLookEvent := make(
-		ChanForSetEntityLookEvent,
-		MaxNumForChannel,
-	)
-	go s.handleSetEntityLookEvent(
-		chanForSetEntityLookEvent,
-		player,
-		cnt,
-		chanForError,
-		wg,
-	)
-
 	chanForSetEntityRelativePosEvent := make(
 		ChanForSetEntityRelativePosEvent,
 		MaxNumForChannel,
@@ -821,14 +882,39 @@ func (s *Server) initClient(
 		wg,
 	)
 
+	chanForSetEntityLookEvent := make(
+		ChanForSetEntityLookEvent,
+		MaxNumForChannel,
+	)
+	go s.handleSetEntityLookEvent(
+		chanForSetEntityLookEvent,
+		player,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	chanForSetEntityMetadataEvent := make(
+		ChanForSetEntityMetadataEvent,
+		MaxNumForChannel,
+	)
+	go s.handleSetEntityMetadataEvent(
+		chanForSetEntityMetadataEvent,
+		player,
+		cnt,
+		chanForError,
+		wg,
+	)
+
 	if err := world.InitPlayer(
 		lg,
 		player,
 		cnt,
 		chanForSpawnPlayerEvent,
 		chanForDespawnEntityEvent,
-		chanForSetEntityLookEvent,
 		chanForSetEntityRelativePosEvent,
+		chanForSetEntityLookEvent,
+		chanForSetEntityMetadataEvent,
 	); err != nil {
 		return nil, nil, nil, err
 	}
@@ -859,15 +945,17 @@ func (s *Server) closeClient(
 	chanForSpawnPlayerEvent,
 		chanForDespawnEntityEvent,
 		chanForSetEntityLookEvent,
-		chanForSetEntityRelativePosEvent :=
+		chanForSetEntityRelativePosEvent,
+		chanForSetEntityMetadataEvent :=
 		world.ClosePlayer(
 			lg,
 			player,
 		)
 	close(chanForSpawnPlayerEvent)
 	close(chanForDespawnEntityEvent)
-	close(chanForSetEntityLookEvent)
 	close(chanForSetEntityRelativePosEvent)
+	close(chanForSetEntityLookEvent)
+	close(chanForSetEntityMetadataEvent)
 
 	close(chanForConfirmKeepAliveEvent)
 

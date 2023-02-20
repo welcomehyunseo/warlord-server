@@ -340,17 +340,12 @@ func (p *ChunkPart) String() string {
 type Chunk struct {
 	sync.RWMutex
 
-	cx, cz int32
-
 	chunkParts [MaxChunkPartsNum]*ChunkPart
 	biomes     [MaxBiomesNum]BiomeID
 }
 
-func NewChunk(
-	cx, cz int32,
-) *Chunk {
+func NewChunk() *Chunk {
 	return &Chunk{
-		cx: cx, cz: cz,
 		chunkParts: [MaxChunkPartsNum]*ChunkPart{},
 		biomes:     [MaxBiomesNum]BiomeID{},
 	}
@@ -430,14 +425,6 @@ func (c *Chunk) GenerateData(
 	}
 
 	return bitmask, data.GetBytes()
-}
-
-func (c *Chunk) GetCx() int32 {
-	return c.cx
-}
-
-func (c *Chunk) GetCz() int32 {
-	return c.cz
 }
 
 func (c *Chunk) String() string {

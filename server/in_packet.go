@@ -16,7 +16,7 @@ const ConfirmKeepAlivePacketID = 0x0B
 const ChangePosPacketID = 0x0D
 const ChangePosAndLookPacketID = 0x0E
 const ChangeLookPacketID = 0x0F
-const HaveActionPacketID = 0x15
+const TakeActionPacketID = 0x15
 
 type InPacket interface {
 	Packet
@@ -703,7 +703,7 @@ func (p *ChangeLookPacket) String() string {
 	)
 }
 
-type HaveActionPacket struct {
+type TakeActionPacket struct {
 	*packet
 	eid                int32
 	startSneaking      bool
@@ -718,17 +718,17 @@ type HaveActionPacket struct {
 	startElytraFlying  bool
 }
 
-func NewHaveActionPacket() *HaveActionPacket {
-	return &HaveActionPacket{
+func NewTakeActionPacket() *TakeActionPacket {
+	return &TakeActionPacket{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			HaveActionPacketID,
+			TakeActionPacketID,
 		),
 	}
 }
 
-func (p *HaveActionPacket) Unpack(
+func (p *TakeActionPacket) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -776,51 +776,51 @@ func (p *HaveActionPacket) Unpack(
 	return err
 }
 
-func (p *HaveActionPacket) GetEid() int32 {
+func (p *TakeActionPacket) GetEid() int32 {
 	return p.eid
 }
 
-func (p *HaveActionPacket) IsSneakingStarted() bool {
+func (p *TakeActionPacket) IsSneakingStarted() bool {
 	return p.startSneaking
 }
 
-func (p *HaveActionPacket) IsSneakingStopped() bool {
+func (p *TakeActionPacket) IsSneakingStopped() bool {
 	return p.stopSneaking
 }
 
-func (p *HaveActionPacket) IsLeavingBed() bool {
+func (p *TakeActionPacket) IsLeavingBed() bool {
 	return p.leaveBed
 }
 
-func (p *HaveActionPacket) IsSprintingStared() bool {
+func (p *TakeActionPacket) IsSprintingStared() bool {
 	return p.startSprinting
 }
 
-func (p *HaveActionPacket) IsSprintingStopped() bool {
+func (p *TakeActionPacket) IsSprintingStopped() bool {
 	return p.stopSprinting
 }
 
-func (p *HaveActionPacket) IsHorseJumpStarted() bool {
+func (p *TakeActionPacket) IsHorseJumpStarted() bool {
 	return p.startHorseJump
 }
 
-func (p *HaveActionPacket) IsHorseJumpStopped() bool {
+func (p *TakeActionPacket) IsHorseJumpStopped() bool {
 	return p.stopHorseJump
 }
 
-func (p *HaveActionPacket) GetHorseJumpBoost() int32 {
+func (p *TakeActionPacket) GetHorseJumpBoost() int32 {
 	return p.horseJumpBoost
 }
 
-func (p *HaveActionPacket) IsHorseInventoryOpened() bool {
+func (p *TakeActionPacket) IsHorseInventoryOpened() bool {
 	return p.openHorseInventory
 }
 
-func (p *HaveActionPacket) IsElytraFlyingStarted() bool {
+func (p *TakeActionPacket) IsElytraFlyingStarted() bool {
 	return p.startElytraFlying
 }
 
-func (p *HaveActionPacket) String() string {
+func (p *TakeActionPacket) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"packet: %+v, "+
