@@ -338,16 +338,14 @@ func (p *ChunkPart) String() string {
 }
 
 type Chunk struct {
-	*sync.RWMutex
+	sync.RWMutex
 
 	chunkParts [MaxChunkPartsNum]*ChunkPart
 	biomes     [MaxBiomesNum]BiomeID
 }
 
 func NewChunk() *Chunk {
-	var mutex sync.RWMutex
 	return &Chunk{
-		RWMutex:    &mutex,
 		chunkParts: [MaxChunkPartsNum]*ChunkPart{},
 		biomes:     [MaxBiomesNum]BiomeID{},
 	}

@@ -98,7 +98,9 @@ func read(
 		return 0, nil, err
 	}
 
-	data.WriteBytes(buf)
+	if err := data.WriteBytes(buf); err != nil {
+		return 0, nil, err
+	}
 
 	return pid, data, nil
 }
@@ -139,9 +141,6 @@ func distribute(
 		case FinishTeleportPacketID:
 			inPacket = NewFinishTeleportPacket()
 			break
-		case ClickButtonPacketID:
-			inPacket = NewClickButtonPacket()
-			break
 		case ChangeSettingsPacketID:
 			inPacket = NewChangeSettingsPacket()
 			break
@@ -151,11 +150,11 @@ func distribute(
 		case ChangePosPacketID:
 			inPacket = NewChangePosPacket()
 			break
-		case ChangePosAndLookPacketID:
-			inPacket = NewChangePosAndLookPacket()
-			break
 		case ChangeLookPacketID:
 			inPacket = NewChangeLookPacket()
+			break
+		case ChangePosAndLookPacketID:
+			inPacket = NewChangePosAndLookPacket()
 			break
 		case TakeActionPacketID:
 			inPacket = NewTakeActionPacket()
@@ -220,14 +219,12 @@ func NewClient(
 	}
 }
 
-func (cnt *Client) Read(
+func (cnt *Client) read(
 	state State,
 ) (
 	InPacket,
 	error,
 ) {
-	cnt.Lock()
-	defer cnt.Unlock()
 
 	conn := cnt.conn
 
@@ -248,15 +245,12 @@ func (cnt *Client) Read(
 	)
 }
 
-func (cnt *Client) ReadWithComp(
+func (cnt *Client) readWithComp(
 	state State,
 ) (
 	InPacket,
 	error,
 ) {
-	cnt.Lock()
-	defer cnt.Unlock()
-
 	conn := cnt.conn
 
 	l0, _, err := readVarInt(conn) // length of packet
@@ -309,7 +303,7 @@ func (cnt *Client) ReadWithComp(
 	)
 }
 
-func (cnt *Client) Write(
+func (cnt *Client) write(
 	packet OutPacket,
 ) error {
 	cnt.Lock()
@@ -338,7 +332,7 @@ func (cnt *Client) Write(
 	return nil
 }
 
-func (cnt *Client) WriteWithComp(
+func (cnt *Client) writeWithComp(
 	packet OutPacket,
 ) error {
 	cnt.Lock()
@@ -359,7 +353,7 @@ func (cnt *Client) WriteWithComp(
 	arr0 := buf0.Bytes()
 	l0 := len(arr0) // length of packet before compression
 
-	if l0 <= CompThold {
+	if l0 < CompThold {
 		buf1 := bytes.NewBuffer(nil)
 		l1, err := writeVarInt(int32(0), buf1)
 		if err != nil {
@@ -418,15 +412,15 @@ func (cnt *Client) HandleNonLoginState(
 	bool, // stop
 	error,
 ) {
-	lg.Debug("it is started to handle non login state")
+	lg.Debug("it is started to handle non login state in client")
 	defer func() {
-		lg.Debug("it is finished to handle non login state")
+		lg.Debug("it is finished to handle non login state in client")
 	}()
 
 	state := HandshakingState
 
 	for {
-		inPacket, err := cnt.Read(state)
+		inPacket, err := cnt.read(state)
 		if err != nil {
 			return false, err
 		}
@@ -465,7 +459,7 @@ func (cnt *Client) HandleNonLoginState(
 			continue
 		}
 
-		if err := cnt.Write(outPacket); err != nil {
+		if err := cnt.write(outPacket); err != nil {
 			return false, err
 		}
 		lg.Debug(
@@ -486,48 +480,54 @@ func (cnt *Client) HandleLoginState(
 	string, // username
 	error,
 ) {
-	lg.Debug("it is started to handle login state")
+	lg.Debug("it is started to handle login state in client")
 	defer func() {
-		lg.Debug("it is finished to handle login state")
+		lg.Debug("it is finished to handle login state in client")
 	}()
 
 	state := LoginState
-	inPacket, err := cnt.Read(state)
+	inPacket, err := cnt.read(state)
 	if err != nil {
-		return uuid.Nil, "", err
+		return NilUID, "", err
 	}
 
 	startLoginPacket, ok := inPacket.(*StartLoginPacket)
 	if ok == false {
-		return uuid.Nil, "", errors.New("it is invalid inbound packet to handle login state")
+		return NilUID, "", errors.New("it is invalid inbound packet to handle login state")
 	}
 	username := startLoginPacket.GetUsername()
 	uid, err := UsernameToUUID(username)
 	if err != nil {
-		return uuid.Nil, "", err
+		return NilUID, "", err
 	}
 
 	enableCompPacket := NewEnableCompPacket(CompThold)
-	if err := cnt.Write(enableCompPacket); err != nil {
-		return uuid.Nil, "", err
+	if err := cnt.write(enableCompPacket); err != nil {
+		return NilUID, "", err
 	}
 
 	completeLoginPacket := NewCompleteLoginPacket(
 		uid,
 		username,
 	)
-	if err := cnt.WriteWithComp(completeLoginPacket); err != nil {
-		return uuid.Nil, "", err
+	if err := cnt.writeWithComp(completeLoginPacket); err != nil {
+		return NilUID, "", err
 	}
 
 	return uid, username, nil
 }
 
 func (cnt *Client) JoinGame(
+	lg *Logger,
 	eid EID,
 	spawnX, spawnY, spawnZ float64,
 	spawnYaw, spawnPitch float32,
 ) error {
+	lg.Debug("it is started to join game in client")
+	defer func() {
+		lg.Debug("it is finished to join game in client")
+	}()
+
 	state := PlayState
 	joinGamePacket := NewJoinGamePacket(
 		eid,
@@ -537,17 +537,17 @@ func (cnt *Client) JoinGame(
 		"default",
 		false,
 	)
-	if err := cnt.WriteWithComp(joinGamePacket); err != nil {
+	if err := cnt.writeWithComp(joinGamePacket); err != nil {
 		return err
 	}
 
 	// ChangeSettingsPacket
-	if _, err := cnt.ReadWithComp(state); err != nil {
+	if _, err := cnt.readWithComp(state); err != nil {
 		return err
 	}
 
 	// Plugin message
-	if _, err := cnt.ReadWithComp(state); err != nil {
+	if _, err := cnt.readWithComp(state); err != nil {
 		return err
 	}
 
@@ -559,7 +559,7 @@ func (cnt *Client) JoinGame(
 		0,
 		0,
 	)
-	if err := cnt.WriteWithComp(setAbilitiesPacket); err != nil {
+	if err := cnt.writeWithComp(setAbilitiesPacket); err != nil {
 		return err
 	}
 
@@ -569,11 +569,11 @@ func (cnt *Client) JoinGame(
 		spawnYaw, spawnPitch,
 		payload,
 	)
-	if err := cnt.WriteWithComp(teleportPacket); err != nil {
+	if err := cnt.writeWithComp(teleportPacket); err != nil {
 		return err
 	}
 
-	inPacket2, err := cnt.ReadWithComp(state)
+	inPacket2, err := cnt.readWithComp(state)
 	if err != nil {
 		return err
 	}
@@ -589,120 +589,507 @@ func (cnt *Client) JoinGame(
 	return nil
 }
 
-func (cnt *Client) HandlePlayState(
-	eid EID,
-	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
+func (cnt *Client) LoopForPlayState(
+	lg *Logger,
 	world *Overworld,
-	chanForError ChanForError,
-	wg *sync.WaitGroup,
-) {
-	wg.Add(1)
+	player *Player,
+	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
+) error {
+	lg.Debug("it is started to loop for play state in client")
 	defer func() {
-		wg.Done()
-	}()
-
-	lg := NewLogger(
-		"play-state-handler",
-		NewLgElement("eid", eid),
-	)
-	lg.Debug("it is started to handle play state")
-	defer func() {
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
-		}
-
-		lg.Debug("it is finished to handle play state")
-		lg.Close()
+		lg.Debug("it is finished to loop for play state in client")
 	}()
 
 	state := PlayState
-	for {
-		inPacket, err := cnt.ReadWithComp(state)
-		if err != nil {
-			panic(err)
-		}
-
-		lg.Debug(
-			"client read packet",
-			NewLgElement("InPacket", inPacket),
-		)
-
-		var outPackets []OutPacket
-
-		switch inPacket.(type) {
-		case *ConfirmKeepAlivePacket: // 0x0B
-			confirmKeepAlivePacket := inPacket.(*ConfirmKeepAlivePacket)
-			payload := confirmKeepAlivePacket.GetPayload()
-			confirmKeepAliveEvent :=
-				NewConfirmKeepAliveEvent(
-					payload,
-				)
-			chanForConfirmKeepAliveEvent <- confirmKeepAliveEvent
-			break
-		case *ChangePosPacket: // 0x0D
-			changePosPacket := inPacket.(*ChangePosPacket)
-			x, y, z :=
-				changePosPacket.GetX(),
-				changePosPacket.GetY(),
-				changePosPacket.GetZ()
-			//ground := changePosPacket.GetGround()  // TODO
-			world.UpdatePlayerPos(
-				eid,
-				x, y, z,
-			)
-			//world.UpdatePlayerChunk(eid)
-			break
-		case *ChangeLookPacket: // 0x0E
-			//changeLookPacket := inPacket.(*ChangeLookPacket)
-			//yaw, pitch :=
-			//	changeLookPacket.GetYaw(), changeLookPacket.GetPitch()
-			//ground := changeLookPacket.GetGround()  // TODO
-			//world.UpdatePlayerLook(
-			//	eid,
-			//	yaw, pitch,
-			//)
-			break
-		case *ChangePosAndLookPacket: // 0x0F
-			//changePosAndLookPacket := inPacket.(*ChangePosAndLookPacket)
-			//yaw, pitch :=
-			//	changePosAndLookPacket.GetYaw(),
-			//	changePosAndLookPacket.GetPitch()
-			//x, y, z :=
-			//	changePosAndLookPacket.GetX(),
-			//	changePosAndLookPacket.GetY(),
-			//	changePosAndLookPacket.GetZ()
-			//ground := changePosAndLookPacket.GetGround()  // TODO
-			//world.UpdatePlayerLook(
-			//	eid,
-			//	yaw, pitch,
-			//)
-			//world.UpdatePlayerPos(
-			//	eid,
-			//	x, y, z,
-			//)
-			//world.UpdatePlayerChunk(eid)
-			break
-		}
-
-		for _, outPacket := range outPackets {
-			if err := cnt.WriteWithComp(outPacket); err != nil {
-				panic(err)
-			}
-			lg.Debug(
-				"client sent packet",
-				NewLgElement("OutPacket", outPacket),
-			)
-		}
+	inPacket, err := cnt.readWithComp(state)
+	if err != nil {
+		return err
 	}
+
+	//eid := player.GetEid()
+
+	lg.Debug(
+		"client read packet to loop for play state in client",
+		NewLgElement("InPacket", inPacket),
+	)
+
+	var outPackets []OutPacket
+
+	switch inPacket.(type) {
+	case *ConfirmKeepAlivePacket: // 0x0B
+		confirmKeepAlivePacket := inPacket.(*ConfirmKeepAlivePacket)
+		payload := confirmKeepAlivePacket.GetPayload()
+		confirmKeepAliveEvent :=
+			NewConfirmKeepAliveEvent(
+				payload,
+			)
+		chanForConfirmKeepAliveEvent <- confirmKeepAliveEvent
+		break
+	case *ChangePosPacket:
+		changePosPacket := inPacket.(*ChangePosPacket)
+		x, y, z :=
+			changePosPacket.GetX(),
+			changePosPacket.GetY(),
+			changePosPacket.GetZ()
+		ground := changePosPacket.GetGround()
+
+		if err := world.UpdatePlayerPos(
+			lg,
+			player,
+			x, y, z,
+			ground,
+		); err != nil {
+			return err
+		}
+
+		if err := world.UpdatePlayerChunk(
+			lg,
+			player,
+			cnt,
+		); err != nil {
+			return err
+		}
+		break
+	case *ChangeLookPacket:
+		changeLookPacket := inPacket.(*ChangeLookPacket)
+		yaw, pitch :=
+			changeLookPacket.GetYaw(),
+			changeLookPacket.GetPitch()
+		ground := changeLookPacket.GetGround()
+
+		if err := world.UpdatePlayerLook(
+			lg,
+			player,
+			yaw, pitch,
+			ground,
+		); err != nil {
+			return err
+		}
+
+		break
+	case *ChangePosAndLookPacket:
+		changePosAndLookPacket := inPacket.(*ChangePosAndLookPacket)
+		x, y, z :=
+			changePosAndLookPacket.GetX(),
+			changePosAndLookPacket.GetY(),
+			changePosAndLookPacket.GetZ()
+		ground := changePosAndLookPacket.GetGround()
+
+		if err := world.UpdatePlayerPos(
+			lg,
+			player,
+			x, y, z,
+			ground,
+		); err != nil {
+			return err
+		}
+
+		yaw, pitch :=
+			changePosAndLookPacket.GetYaw(),
+			changePosAndLookPacket.GetPitch()
+
+		if err := world.UpdatePlayerLook(
+			lg,
+			player,
+			yaw, pitch,
+			ground,
+		); err != nil {
+			return err
+		}
+
+		if err := world.UpdatePlayerChunk(
+			lg,
+			player,
+			cnt,
+		); err != nil {
+			return err
+		}
+
+		break
+	case *TakeActionPacket:
+		takeActionPacket := inPacket.(*TakeActionPacket)
+		startSneaking :=
+			takeActionPacket.IsSneakingStarted()
+		stopSneaking :=
+			takeActionPacket.IsSneakingStopped()
+		startSprinting :=
+			takeActionPacket.IsSprintingStared()
+		stopSprinting :=
+			takeActionPacket.IsSprintingStopped()
+		if startSneaking == true {
+			if err := world.UpdatePlayerSneaking(
+				lg,
+				player,
+				true,
+			); err != nil {
+				return err
+			}
+		} else if stopSneaking == true {
+			if err := world.UpdatePlayerSneaking(
+				lg,
+				player,
+				false,
+			); err != nil {
+				return err
+			}
+		} else if startSprinting == true {
+			if err := world.UpdatePlayerSprinting(
+				lg,
+				player,
+				true,
+			); err != nil {
+				return err
+			}
+		} else if stopSprinting == true {
+			if err := world.UpdatePlayerSprinting(
+				lg,
+				player,
+				false,
+			); err != nil {
+				return err
+			}
+		}
+
+	}
+
+	for _, outPacket := range outPackets {
+		if err := cnt.writeWithComp(outPacket); err != nil {
+			return err
+		}
+		lg.Debug(
+			"client sent packet to loop for play state in client",
+			NewLgElement("OutPacket", outPacket),
+		)
+	}
+
+	return nil
 }
 
-func (cnt *Client) Init() {
-
+func (cnt *Client) Init(
+	lg *Logger,
+) {
+	lg.Debug("it is started to init client")
+	defer func() {
+		lg.Debug("it is finished to init client")
+	}()
 }
 
-func (cnt *Client) Close() {
+func (cnt *Client) Close(
+	lg *Logger,
+) {
+	lg.Debug("it is started to close client")
+	defer func() {
+		lg.Debug("it is finished to close client")
+	}()
 	_ = cnt.conn.Close()
+}
+
+func (cnt *Client) SpawnPlayer(
+	lg *Logger,
+	eid EID, uid UID,
+	x, y, z float64,
+	yaw, pitch float32,
+	sneaking, sprinting bool,
+) error {
+	lg.Debug(
+		"it is started to spawn player in client",
+		NewLgElement("eid", eid),
+		NewLgElement("uid", uid),
+		NewLgElement("x", x),
+		NewLgElement("y", y),
+		NewLgElement("z", z),
+		NewLgElement("yaw", yaw),
+		NewLgElement("pitch", pitch),
+	)
+	defer func() {
+		lg.Debug("it is finished to spawn player in client")
+	}()
+
+	metadata := NewEntityMetadata()
+	if err := metadata.SetActions(
+		sneaking, sprinting,
+	); err != nil {
+		return err
+	}
+	packet := NewSpawnPlayerPacket(
+		eid, uid,
+		x, y, z,
+		yaw, pitch,
+		metadata,
+	)
+	if err := cnt.writeWithComp(packet); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cnt *Client) DespawnEntity(
+	lg *Logger,
+	eid EID,
+) error {
+	lg.Debug(
+		"it is started to despawn entity in client",
+		NewLgElement("eid", eid),
+	)
+	defer func() {
+		lg.Debug("it is finished to despawn entity in client")
+	}()
+
+	packet := NewDespawnEntityPacket(
+		eid,
+	)
+	if err := cnt.writeWithComp(packet); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cnt *Client) SetEntityLook(
+	lg *Logger,
+	eid EID,
+	yaw, pitch float32,
+	ground bool,
+) error {
+	lg.Debug(
+		"it is started to set entity look in client",
+		NewLgElement("eid", eid),
+		NewLgElement("yaw", yaw),
+		NewLgElement("pitch", pitch),
+		NewLgElement("ground", ground),
+	)
+	defer func() {
+		lg.Debug("it is finished to set entity look in client")
+	}()
+
+	packet0 := NewSetEntityLookPacket(
+		eid,
+		yaw, pitch,
+		ground,
+	)
+	if err := cnt.writeWithComp(packet0); err != nil {
+		return err
+	}
+
+	packet1 := NewSetEntityHeadLookPacket(
+		eid,
+		yaw,
+	)
+	if err := cnt.writeWithComp(packet1); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cnt *Client) SetEntityRelativePos(
+	lg *Logger,
+	eid EID,
+	deltaX, deltaY, deltaZ int16,
+	ground bool,
+) error {
+	lg.Debug(
+		"it is started to set entity relative pos in client",
+		NewLgElement("eid", eid),
+		NewLgElement("deltaX", deltaX),
+		NewLgElement("deltaY", deltaY),
+		NewLgElement("deltaZ", deltaZ),
+		NewLgElement("ground", ground),
+	)
+	defer func() {
+		lg.Debug("it is finished to set entity relative pos in client")
+	}()
+
+	packet1 := NewSetEntityRelativePosPacket(
+		eid,
+		deltaX, deltaY, deltaZ,
+		ground,
+	)
+	if err := cnt.writeWithComp(packet1); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cnt *Client) SetEntityMetadata(
+	lg *Logger,
+	eid EID,
+	metadata *EntityMetadata,
+) error {
+	lg.Debug(
+		"it is started to set entity metadata in client",
+		NewLgElement("eid", eid),
+		NewLgElement("metadata", metadata),
+	)
+	defer func() {
+		lg.Debug("it is finished to set entity metadata in client")
+	}()
+
+	packet1 := NewSetEntityMetadataPacket(
+		eid,
+		metadata,
+	)
+	if err := cnt.writeWithComp(packet1); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cnt *Client) LoadChunk(
+	lg *Logger,
+	overworld, init bool,
+	cx, cz int32,
+	chunk *Chunk,
+) error {
+	lg.Debug(
+		"it is started to load chunk in client",
+		NewLgElement("overworld", overworld),
+		NewLgElement("init", init),
+		NewLgElement("cx", cx),
+		NewLgElement("cz", cz),
+		NewLgElement("chunk", chunk),
+	)
+	defer func() {
+		lg.Debug("it is finished to load chunk in client")
+	}()
+
+	bitmask, data := chunk.GenerateData(init, overworld)
+	packet := NewSendChunkDataPacket(
+		cx, cz,
+		init,
+		bitmask, data,
+	)
+	if err := cnt.writeWithComp(packet); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cnt *Client) UnloadChunk(
+	lg *Logger,
+	cx, cz int32,
+) error {
+	lg.Debug(
+		"it is started to unload chunk in client",
+		NewLgElement("cx", cx),
+		NewLgElement("cz", cz),
+	)
+	defer func() {
+		lg.Debug("it is finished to unload chunk in client")
+	}()
+
+	packet := NewUnloadChunkPacket(
+		cx, cz,
+	)
+	if err := cnt.writeWithComp(packet); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cnt *Client) AddPlayer(
+	lg *Logger,
+	uid UID, username string,
+) error {
+	lg.Debug(
+		"it is started to add player in client",
+		NewLgElement("uid", uid),
+		NewLgElement("username", username),
+	)
+	defer func() {
+		lg.Debug("it is finished to add player in client")
+	}()
+
+	textureString, signature, err :=
+		UUIDToTextureString(uid)
+	if err != nil {
+		return err
+	}
+	gamemode := int32(0)
+	ping := int32(1000)
+	displayName := &Chat{
+		Text: username,
+		Bold: true,
+	}
+	packet := NewAddPlayerPacket(
+		uid,
+		username,
+		textureString,
+		signature,
+		gamemode,
+		ping,
+		displayName,
+	)
+	if err := cnt.writeWithComp(packet); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cnt *Client) RemovePlayer(
+	lg *Logger,
+	uid UID,
+) error {
+	lg.Debug("it is started to remove player in client")
+	defer func() {
+		lg.Debug("it is finished to remove player in client")
+	}()
+
+	packet := NewRemovePlayerPacket(
+		uid,
+	)
+	if err := cnt.writeWithComp(packet); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cnt *Client) UpdateLatency(
+	lg *Logger,
+	uid UID,
+	latency int32,
+) error {
+	lg.Debug("it is started to update latency in client")
+	defer func() {
+		lg.Debug("it is finished to update latency in client")
+	}()
+
+	packet := NewUpdateLatencyPacket(
+		uid,
+		latency,
+	)
+	if err := cnt.writeWithComp(packet); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cnt *Client) CheckKeepAlive(
+	lg *Logger,
+	payload int64,
+) error {
+	lg.Debug(
+		"it is started to check keep-alive in client",
+		NewLgElement("payload", payload),
+	)
+	defer func() {
+		lg.Debug("it is finished to check keep-alive in client")
+	}()
+
+	packet := NewCheckKeepAlivePacket(payload)
+	if err := cnt.writeWithComp(packet); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (cnt *Client) GetCID() CID {

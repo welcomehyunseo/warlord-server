@@ -21,8 +21,8 @@ const SetEntityRelativePosPacketID = 0x26
 const SetEntityLookPacketID = 0x28
 const SetAbilitiesPacketID = 0x2C
 const AddPlayerPacketID = 0x2E
-const RemovePlayerPacketID = 0x2E
 const UpdateLatencyPacketID = 0x2E
+const RemovePlayerPacketID = 0x2E
 const TeleportPacketID = 0x2F
 const DespawnEntityPacketID = 0x32
 const SetEntityHeadLookPacketID = 0x36
@@ -157,12 +157,12 @@ func (p *PongPacket) String() string {
 
 type CompleteLoginPacket struct {
 	*packet
-	uid      uuid.UUID
+	uid      UID
 	username string
 }
 
 func NewCompleteLoginPacket(
-	uid uuid.UUID,
+	uid UID,
 	username string,
 ) *CompleteLoginPacket {
 	return &CompleteLoginPacket{
@@ -181,7 +181,7 @@ func (p *CompleteLoginPacket) Pack() (
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteString(p.uid.String()); err != nil {
+	if err := data.WriteString(uuid.UUID(p.uid).String()); err != nil {
 		return nil, err
 	}
 	if err := data.WriteString(p.username); err != nil {
@@ -191,7 +191,7 @@ func (p *CompleteLoginPacket) Pack() (
 	return data, nil
 }
 
-func (p *CompleteLoginPacket) GetUUID() uuid.UUID {
+func (p *CompleteLoginPacket) GetUUID() UID {
 	return p.uid
 }
 
@@ -249,21 +249,19 @@ func (p *EnableCompPacket) String() string {
 
 type SpawnPlayerPacket struct {
 	*packet
-	eid   int32
-	uid   uuid.UUID
-	x     float64
-	y     float64
-	z     float64
-	yaw   float32
-	pitch float32
-	//metadata
+	eid        EID
+	uid        UID
+	x, y, z    float64
+	yaw, pitch float32
+	metadata   Metadata
 }
 
 func NewSpawnPlayerPacket(
-	eid int32,
-	uid uuid.UUID,
+	eid EID,
+	uid UID,
 	x, y, z float64,
 	yaw, pitch float32,
+	metadata Metadata,
 ) *SpawnPlayerPacket {
 	return &SpawnPlayerPacket{
 		packet: newPacket(
@@ -271,13 +269,11 @@ func NewSpawnPlayerPacket(
 			PlayState,
 			SpawnPlayerPacketID,
 		),
-		eid:   eid,
-		uid:   uid,
-		x:     x,
-		y:     y,
-		z:     z,
-		yaw:   yaw,
-		pitch: pitch,
+		eid: eid,
+		uid: uid,
+		x:   x, y: y, z: z,
+		yaw: yaw, pitch: pitch,
+		metadata: metadata,
 	}
 }
 
@@ -286,10 +282,10 @@ func (p *SpawnPlayerPacket) Pack() (
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(p.eid); err != nil {
+	if err := data.WriteVarInt(int32(p.eid)); err != nil {
 		return nil, err
 	}
-	if err := data.WriteUUID(p.uid); err != nil {
+	if err := data.WriteUUID(uuid.UUID(p.uid)); err != nil {
 		return nil, err
 	}
 	if err := data.WriteFloat64(p.x); err != nil {
@@ -301,24 +297,24 @@ func (p *SpawnPlayerPacket) Pack() (
 	if err := data.WriteFloat64(p.z); err != nil {
 		return nil, err
 	}
-	if err := data.WriteFloat32(p.yaw); err != nil {
+	if err := data.WriteAngle(p.yaw); err != nil {
 		return nil, err
 	}
-	if err := data.WriteFloat32(p.pitch); err != nil {
+	if err := data.WriteAngle(p.pitch); err != nil {
 		return nil, err
 	}
-	if err := data.WriteUint8(0xff); err != nil {
+	if err := data.WriteMetadata(p.metadata); err != nil {
 		return nil, err
 	}
 
 	return data, nil
 }
 
-func (p *SpawnPlayerPacket) GetEID() int32 {
+func (p *SpawnPlayerPacket) GetEID() EID {
 	return p.eid
 }
 
-func (p *SpawnPlayerPacket) GetUUID() uuid.UUID {
+func (p *SpawnPlayerPacket) GetUUID() UID {
 	return p.uid
 }
 
@@ -546,7 +542,7 @@ func (p *SendChunkDataPacket) String() string {
 
 type JoinGamePacket struct {
 	*packet
-	eid        int32
+	eid        EID
 	gamemode   uint8
 	dimension  int32
 	difficulty uint8
@@ -555,7 +551,7 @@ type JoinGamePacket struct {
 }
 
 func NewJoinGamePacket(
-	eid int32,
+	eid EID,
 	gamemode uint8,
 	dimension int32,
 	difficulty uint8,
@@ -582,7 +578,7 @@ func (p *JoinGamePacket) Pack() (
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteInt32(p.eid); err != nil {
+	if err := data.WriteInt32(int32(p.eid)); err != nil {
 		return nil, err
 	}
 	if err := data.WriteUint8(p.gamemode); err != nil {
@@ -607,7 +603,7 @@ func (p *JoinGamePacket) Pack() (
 	return data, nil
 }
 
-func (p *JoinGamePacket) GetEid() int32 {
+func (p *JoinGamePacket) GetEid() EID {
 	return p.eid
 }
 
@@ -640,7 +636,7 @@ func (p *JoinGamePacket) String() string {
 
 type SetEntityRelativePosPacket struct {
 	*packet
-	eid    int32
+	eid    EID
 	deltaX int16
 	deltaY int16
 	deltaZ int16
@@ -648,7 +644,7 @@ type SetEntityRelativePosPacket struct {
 }
 
 func NewSetEntityRelativePosPacket(
-	eid int32,
+	eid EID,
 	deltaX, deltaY, deltaZ int16,
 	ground bool,
 ) *SetEntityRelativePosPacket {
@@ -671,7 +667,7 @@ func (p *SetEntityRelativePosPacket) Pack() (
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(p.eid); err != nil {
+	if err := data.WriteVarInt(int32(p.eid)); err != nil {
 		return nil, err
 	}
 	if err := data.WriteInt16(p.deltaX); err != nil {
@@ -690,7 +686,7 @@ func (p *SetEntityRelativePosPacket) Pack() (
 	return data, nil
 }
 
-func (p *SetEntityRelativePosPacket) GetEID() int32 {
+func (p *SetEntityRelativePosPacket) GetEID() EID {
 	return p.eid
 }
 
@@ -731,14 +727,14 @@ func (p *SetEntityRelativePosPacket) String() string {
 
 type SetEntityLookPacket struct {
 	*packet
-	eid    int32
+	eid    EID
 	yaw    float32
 	pitch  float32
 	ground bool
 }
 
 func NewSetEntityLookPacket(
-	eid int32,
+	eid EID,
 	yaw, pitch float32,
 	ground bool,
 ) *SetEntityLookPacket {
@@ -760,7 +756,7 @@ func (p *SetEntityLookPacket) Pack() (
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(p.eid); err != nil {
+	if err := data.WriteVarInt(int32(p.eid)); err != nil {
 		return nil, err
 	}
 	if err := data.WriteAngle(p.yaw); err != nil {
@@ -776,7 +772,7 @@ func (p *SetEntityLookPacket) Pack() (
 	return data, nil
 }
 
-func (p *SetEntityLookPacket) GetEID() int32 {
+func (p *SetEntityLookPacket) GetEID() EID {
 	return p.eid
 }
 
@@ -917,20 +913,18 @@ func (p *SetAbilitiesPacket) String() string {
 
 type AddPlayerPacket struct {
 	*packet
-	uid         uuid.UUID
-	username    string
-	texture     string
-	signature   string
-	gamemode    int32
-	latency     int32
-	displayName *Chat
+	uid                UID
+	username           string
+	texture, signature string
+	gamemode           int32
+	latency            int32
+	displayName        *Chat
 }
 
 func NewAddPlayerPacket(
-	uid uuid.UUID,
+	uid UID,
 	username string,
-	texture string,
-	signature string,
+	texture, signature string,
 	gamemode int32,
 	latency int32,
 	displayName *Chat,
@@ -963,7 +957,7 @@ func (p *AddPlayerPacket) Pack() (
 		return nil, err
 	}
 
-	if err := data.WriteUUID(p.uid); err != nil {
+	if err := data.WriteUUID(uuid.UUID(p.uid)); err != nil {
 		return nil, err
 	}
 	if err := data.WriteString(p.username); err != nil {
@@ -1000,7 +994,7 @@ func (p *AddPlayerPacket) Pack() (
 	return data, nil
 }
 
-func (p *AddPlayerPacket) GetUid() uuid.UUID {
+func (p *AddPlayerPacket) GetUid() UID {
 	return p.uid
 }
 
@@ -1051,61 +1045,14 @@ func (p *AddPlayerPacket) String() string {
 	)
 }
 
-type RemovePlayerPacket struct {
-	*packet
-	uid uuid.UUID
-}
-
-func NewRemovePlayerPacket(
-	uid uuid.UUID,
-) *RemovePlayerPacket {
-	return &RemovePlayerPacket{
-		packet: newPacket(
-			Outbound,
-			PlayState,
-			RemovePlayerPacketID,
-		),
-		uid: uid,
-	}
-}
-
-func (p *RemovePlayerPacket) Pack() (
-	*Data,
-	error,
-) {
-	data := NewData()
-	if err := data.WriteVarInt(4); err != nil {
-		return nil, err
-	}
-	if err := data.WriteVarInt(1); err != nil {
-		return nil, err
-	}
-	if err := data.WriteUUID(p.uid); err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
-func (p *RemovePlayerPacket) GetUUID() uuid.UUID {
-	return p.uid
-}
-
-func (p *RemovePlayerPacket) String() string {
-	return fmt.Sprintf(
-		"{ packet: %+v, uid: %s }",
-		p.packet, p.uid,
-	)
-}
-
 type UpdateLatencyPacket struct {
 	*packet
-	uid     uuid.UUID
+	uid     UID
 	latency int32
 }
 
 func NewUpdateLatencyPacket(
-	uid uuid.UUID,
+	uid UID,
 	latency int32,
 ) *UpdateLatencyPacket {
 	return &UpdateLatencyPacket{
@@ -1130,7 +1077,7 @@ func (p *UpdateLatencyPacket) Pack() (
 	if err := data.WriteVarInt(1); err != nil {
 		return nil, err
 	}
-	if err := data.WriteUUID(p.uid); err != nil {
+	if err := data.WriteUUID(uuid.UUID(p.uid)); err != nil {
 		return nil, err
 	}
 	if err := data.WriteVarInt(p.latency); err != nil {
@@ -1140,7 +1087,7 @@ func (p *UpdateLatencyPacket) Pack() (
 	return data, nil
 }
 
-func (p *UpdateLatencyPacket) GetUUID() uuid.UUID {
+func (p *UpdateLatencyPacket) GetUUID() UID {
 	return p.uid
 }
 
@@ -1155,14 +1102,58 @@ func (p *UpdateLatencyPacket) String() string {
 	)
 }
 
+type RemovePlayerPacket struct {
+	*packet
+	uid UID
+}
+
+func NewRemovePlayerPacket(
+	uid UID,
+) *RemovePlayerPacket {
+	return &RemovePlayerPacket{
+		packet: newPacket(
+			Outbound,
+			PlayState,
+			RemovePlayerPacketID,
+		),
+		uid: uid,
+	}
+}
+
+func (p *RemovePlayerPacket) Pack() (
+	*Data,
+	error,
+) {
+	data := NewData()
+	if err := data.WriteVarInt(4); err != nil {
+		return nil, err
+	}
+	if err := data.WriteVarInt(1); err != nil {
+		return nil, err
+	}
+	if err := data.WriteUUID(uuid.UUID(p.uid)); err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func (p *RemovePlayerPacket) GetUUID() UID {
+	return p.uid
+}
+
+func (p *RemovePlayerPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, uid: %s }",
+		p.packet, p.uid,
+	)
+}
+
 type TeleportPacket struct {
 	*packet
-	x       float64
-	y       float64
-	z       float64
-	yaw     float32
-	pitch   float32
-	payload int32
+	x, y, z    float64
+	yaw, pitch float32
+	payload    int32
 }
 
 func NewTeleportPacket(
@@ -1171,17 +1162,14 @@ func NewTeleportPacket(
 	payload int32,
 ) *TeleportPacket {
 	return &TeleportPacket{
-		packet: newPacket(
+		newPacket(
 			Outbound,
 			PlayState,
 			TeleportPacketID,
 		),
-		x:       x,
-		y:       y,
-		z:       z,
-		yaw:     yaw,
-		pitch:   pitch,
-		payload: payload,
+		x, y, z,
+		yaw, pitch,
+		payload,
 	}
 }
 
@@ -1256,11 +1244,11 @@ func (p *TeleportPacket) String() string {
 
 type DespawnEntityPacket struct {
 	*packet
-	eid int32
+	eid EID
 }
 
 func NewDespawnEntityPacket(
-	eid int32,
+	eid EID,
 ) *DespawnEntityPacket {
 	return &DespawnEntityPacket{
 		packet: newPacket(
@@ -1280,14 +1268,14 @@ func (p *DespawnEntityPacket) Pack() (
 	if err := data.WriteVarInt(1); err != nil {
 		return nil, err
 	}
-	if err := data.WriteVarInt(p.eid); err != nil {
+	if err := data.WriteVarInt(int32(p.eid)); err != nil {
 		return nil, err
 	}
 
 	return data, nil
 }
 
-func (p *DespawnEntityPacket) GetEID() int32 {
+func (p *DespawnEntityPacket) GetEID() EID {
 	return p.eid
 }
 
@@ -1300,12 +1288,12 @@ func (p *DespawnEntityPacket) String() string {
 
 type SetEntityHeadLookPacket struct {
 	*packet
-	eid int32
+	eid EID
 	yaw float32
 }
 
 func NewSetEntityHeadLookPacket(
-	eid int32,
+	eid EID,
 	yaw float32,
 ) *SetEntityHeadLookPacket {
 	return &SetEntityHeadLookPacket{
@@ -1324,7 +1312,7 @@ func (p *SetEntityHeadLookPacket) Pack() (
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(p.eid); err != nil {
+	if err := data.WriteVarInt(int32(p.eid)); err != nil {
 		return nil, err
 	}
 	if err := data.WriteAngle(p.yaw); err != nil {
@@ -1334,7 +1322,7 @@ func (p *SetEntityHeadLookPacket) Pack() (
 	return data, nil
 }
 
-func (p *SetEntityHeadLookPacket) GetEID() int32 {
+func (p *SetEntityHeadLookPacket) GetEID() EID {
 	return p.eid
 }
 
@@ -1351,12 +1339,12 @@ func (p *SetEntityHeadLookPacket) String() string {
 
 type SetEntityMetadataPacket struct {
 	*packet
-	eid      int32
+	eid      EID
 	metadata *EntityMetadata
 }
 
 func NewSetEntityMetadataPacket(
-	eid int32,
+	eid EID,
 	metadata *EntityMetadata,
 ) *SetEntityMetadataPacket {
 	return &SetEntityMetadataPacket{
@@ -1375,7 +1363,7 @@ func (p *SetEntityMetadataPacket) Pack() (
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(p.eid); err != nil {
+	if err := data.WriteVarInt(int32(p.eid)); err != nil {
 		return nil, err
 	}
 	if err := data.WriteMetadata(p.metadata); err != nil {
@@ -1385,7 +1373,7 @@ func (p *SetEntityMetadataPacket) Pack() (
 	return data, nil
 }
 
-func (p *SetEntityMetadataPacket) GetEID() int32 {
+func (p *SetEntityMetadataPacket) GetEID() EID {
 	return p.eid
 }
 

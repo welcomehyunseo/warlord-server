@@ -18,11 +18,10 @@ const CompThold = 16 // threshold for compression
 const MinRndDist = 2  // minimum render distance
 const MaxRndDist = 32 // maximum render distance
 
-const CheckKeepAliveTime = time.Millisecond * 1000
-const Loop3Time = time.Millisecond * 1
+const DelayForCheckKeepAlive = time.Millisecond * 1000
+const LoopDelayForPlayState = time.Millisecond * 1
 
-var DifferentKeepAlivePayloadError = errors.New("the payload of keep-alive must be same as the given")
-var OutOfRndDistRangeError = errors.New("it is out of maximum and minimum value of render distance")
+const MaxNumForChannel = 16
 
 type ChanForError chan any
 
@@ -31,25 +30,30 @@ type Server struct {
 
 	addr string // address
 
-	max    int   // maximum number of players
-	online int   // number of online players
-	last   int32 // last entity ID
+	max    int // maximum number of players
+	online int // number of online players
+	last   EID // last entity ID
 
 	favicon string // base64 png image string
 	text    string // description of server
 
-	world *Overworld
+	spawnX     float64
+	spawnY     float64
+	spawnZ     float64
+	spawnYaw   float32
+	spawnPitch float32
 }
 
 func NewServer(
 	addr string,
 	max int,
 	favicon, text string,
-	world *Overworld,
+	spawnX, spawnY, spawnZ float64,
+	spawnYaw, spawnPitch float32,
 ) *Server {
-	return &Server{
-		addr: addr,
 
+	return &Server{
+		addr:   addr,
 		max:    max,
 		online: 0,
 		last:   0,
@@ -57,18 +61,387 @@ func NewServer(
 		favicon: favicon,
 		text:    text,
 
-		world: world,
+		spawnX:     spawnX,
+		spawnY:     spawnY,
+		spawnZ:     spawnZ,
+		spawnYaw:   spawnYaw,
+		spawnPitch: spawnPitch,
 	}
 }
 
-func (s *Server) countEID() int32 {
-	eid := s.last
+func (s *Server) countEID() EID {
+	a := s.last
 	s.last++
-	return eid
+	return a
+}
+
+func (s *Server) handleSpawnPlayerEvent(
+	chanForEvent ChanForSpawnPlayerEvent,
+	player *Player,
+	cnt *Client,
+	chanForError ChanForError,
+	wg *sync.WaitGroup,
+) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
+	lg := NewLogger(
+		"spawn-player-event-handler",
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
+	)
+	defer lg.Close()
+
+	lg.Debug("it is started to handle SpawnPlayerEvent")
+	defer func() {
+		lg.Debug("it is finished to handle SpawnPlayerEvent")
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				eid, uid :=
+					event.GetEID(), event.GetUUID()
+				x, y, z :=
+					event.GetX(), event.GetY(), event.GetZ()
+				yaw, pitch :=
+					event.GetYaw(), event.GetPitch()
+				sneaking, sprinting :=
+					event.IsSneaking(), event.IsSprinting()
+				if err := cnt.SpawnPlayer(
+					lg,
+					eid, uid,
+					x, y, z,
+					yaw, pitch,
+					sneaking, sprinting,
+				); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
+				panic(err)
+			}
+		}
+
+		if stop == true {
+			break
+		}
+	}
+}
+
+func (s *Server) handleDespawnEntityEvent(
+	chanForEvent ChanForDespawnEntityEvent,
+	player *Player,
+	cnt *Client,
+	chanForError ChanForError,
+	wg *sync.WaitGroup,
+) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
+	lg := NewLogger(
+		"despawn-entity-event-handler",
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
+	)
+	defer lg.Close()
+
+	lg.Debug("it is started to handle DespawnEntityEvent")
+	defer func() {
+		lg.Debug("it is finished to handle DespawnEntityEvent")
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				eid := event.GetEID()
+				if err := cnt.DespawnEntity(
+					lg,
+					eid,
+				); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
+				panic(err)
+			}
+		}
+
+		if stop == true {
+			break
+		}
+	}
+}
+
+func (s *Server) handleSetEntityRelativePosEvent(
+	chanForEvent ChanForSetEntityRelativePosEvent,
+	player *Player,
+	cnt *Client,
+	chanForError ChanForError,
+	wg *sync.WaitGroup,
+) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
+	lg := NewLogger(
+		"set-entity-relative-pos-event-handler",
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
+	)
+	defer lg.Close()
+
+	lg.Debug("it is started to handle SetEntityRelativePosEvent")
+	defer func() {
+		lg.Debug("it is finished to handle SetEntityRelativePosEvent")
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				eid := event.GetEID()
+				deltaX, deltaY, deltaZ :=
+					event.GetDeltaX(),
+					event.GetDeltaY(),
+					event.GetDeltaZ()
+				ground := event.GetGround()
+				if err := cnt.SetEntityRelativePos(
+					lg,
+					eid,
+					deltaX, deltaY, deltaZ,
+					ground,
+				); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
+				panic(err)
+			}
+		}
+
+		if stop == true {
+			break
+		}
+	}
+}
+
+func (s *Server) handleSetEntityLookEvent(
+	chanForEvent ChanForSetEntityLookEvent,
+	player *Player,
+	cnt *Client,
+	chanForError ChanForError,
+	wg *sync.WaitGroup,
+) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
+	lg := NewLogger(
+		"set-entity-look-event-handler",
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
+	)
+	defer lg.Close()
+
+	lg.Debug("it is started to handle SetEntityLookEvent")
+	defer func() {
+		lg.Debug("it is finished to handle SetEntityLookEvent")
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				eid := event.GetEID()
+				yaw, pitch :=
+					event.GetYaw(), event.GetPitch()
+				ground := event.GetGround()
+				if err := cnt.SetEntityLook(
+					lg,
+					eid,
+					yaw, pitch,
+					ground,
+				); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
+				panic(err)
+			}
+		}
+
+		if stop == true {
+			break
+		}
+	}
+}
+
+func (s *Server) handleSetEntityMetadataEvent(
+	chanForEvent ChanForSetEntityMetadataEvent,
+	player *Player,
+	cnt *Client,
+	chanForError ChanForError,
+	wg *sync.WaitGroup,
+) {
+	wg.Add(1)
+	defer func() {
+		wg.Done()
+	}()
+
+	lg := NewLogger(
+		"set-entity-look-event-handler",
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
+	)
+	defer lg.Close()
+
+	lg.Debug("it is started to handle SetEntityMetadataEvent")
+	defer func() {
+		lg.Debug("it is finished to handle SetEntityMetadataEvent")
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event, ok := <-chanForEvent:
+			if ok == false {
+				stop = true
+				break
+			}
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				eid := event.GetEID()
+				metadata := event.GetMetadata()
+				if err := cnt.SetEntityMetadata(
+					lg,
+					eid,
+					metadata,
+				); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
+				panic(err)
+			}
+		}
+
+		if stop == true {
+			break
+		}
+	}
 }
 
 func (s *Server) handleAddPlayerEvent(
 	chanForEvent ChanForAddPlayerEvent,
+	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
@@ -80,20 +453,24 @@ func (s *Server) handleAddPlayerEvent(
 
 	lg := NewLogger(
 		"add-player-event-handler",
-		NewLgElement("cnt", cnt),
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
+
 	lg.Debug("it is started to handle AddPlayerEvent")
+	defer func() {
+		lg.Debug("it is finished to handle AddPlayerEvent")
+	}()
+
 	defer func() {
 		if err := recover(); err != nil {
 			lg.Error(err)
 			chanForError <- err
 		}
-
-		lg.Debug("it is finished to handle AddPlayerEvent")
-		lg.Close()
 	}()
 
-	var stop bool
+	stop := false
 	for {
 		select {
 		case event, ok := <-chanForEvent:
@@ -101,30 +478,17 @@ func (s *Server) handleAddPlayerEvent(
 				stop = true
 				break
 			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
-
 			if err := func() error {
-				uid, username :=
-					event.GetUUID(), event.GetUsername()
-				texture, signature, err := UUIDToTextureString(uid)
-				if err != nil {
-					return err
-				}
-				displayName := &Chat{
-					Text: username,
-					Bold: true,
-				}
-				packet := NewAddPlayerPacket(
-					uid, username,
-					texture, signature,
-					0,
-					1000,
-					displayName,
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
 				)
-				if err := cnt.WriteWithComp(packet); err != nil {
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				uid, username := event.GetUUID(), event.GetUsername()
+				if err := cnt.AddPlayer(lg, uid, username); err != nil {
 					return err
 				}
 
@@ -133,19 +497,14 @@ func (s *Server) handleAddPlayerEvent(
 				event.Fail()
 				panic(err)
 			}
-			event.Done()
 
-			lg.Debug(
-				"it is finished to process event",
-			)
-			break
+			event.Done()
 		}
 
 		if stop == true {
 			break
 		}
 	}
-
 }
 
 func (s *Server) handleUpdateLatencyEvent(
@@ -161,20 +520,23 @@ func (s *Server) handleUpdateLatencyEvent(
 
 	lg := NewLogger(
 		"update-latency-event-handler",
-		NewLgElement("cnt", cnt),
+		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
+
 	lg.Debug("it is started to handle UpdateLatencyEvent")
+	defer func() {
+		lg.Debug("it is finished to handle UpdateLatencyEvent")
+	}()
+
 	defer func() {
 		if err := recover(); err != nil {
 			lg.Error(err)
 			chanForError <- err
 		}
-
-		lg.Debug("it is finished to handle UpdateLatencyEvent")
-		lg.Close()
 	}()
 
-	var stop bool
+	stop := false
 	for {
 		select {
 		case event, ok := <-chanForEvent:
@@ -182,25 +544,25 @@ func (s *Server) handleUpdateLatencyEvent(
 				stop = true
 				break
 			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
 
-			uid := event.GetUUID()
-			latency := event.GetLatency()
-			packet := NewUpdateLatencyPacket(
-				uid,
-				latency,
-			)
-			if err := cnt.WriteWithComp(packet); err != nil {
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
+
+				uid, latency := event.GetUUID(), event.GetLatency()
+				if err := cnt.UpdateLatency(lg, uid, latency); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
 				panic(err)
 			}
-
-			lg.Debug(
-				"it is finished to process event",
-			)
-			break
 		}
 
 		if stop == true {
@@ -212,6 +574,7 @@ func (s *Server) handleUpdateLatencyEvent(
 
 func (s *Server) handleRemovePlayerEvent(
 	chanForEvent ChanForRemovePlayerEvent,
+	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
@@ -223,20 +586,25 @@ func (s *Server) handleRemovePlayerEvent(
 
 	lg := NewLogger(
 		"remove-player-event-handler",
-		NewLgElement("cnt", cnt),
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
+
 	lg.Debug("it is started to handle RemovePlayerEvent")
 	defer func() {
+		lg.Debug("it is finished to handle RemovePlayerEvent")
+	}()
+
+	defer func() {
+
 		if err := recover(); err != nil {
 			lg.Error(err)
 			chanForError <- err
 		}
-
-		lg.Debug("it is finished to handle RemovePlayerEvent")
-		lg.Close()
 	}()
 
-	var stop bool
+	stop := false
 	for {
 		select {
 		case event, ok := <-chanForEvent:
@@ -244,35 +612,36 @@ func (s *Server) handleRemovePlayerEvent(
 				stop = true
 				break
 			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
 
-			uid := event.GetUUID()
-			packet := NewRemovePlayerPacket(
-				uid,
-			)
-			if err := cnt.WriteWithComp(packet); err != nil {
+				uid := event.GetUUID()
+				if err := cnt.RemovePlayer(lg, uid); err != nil {
+					return err
+				}
+
+				return nil
+			}(); err != nil {
 				panic(err)
 			}
-
-			lg.Debug(
-				"it is finished to process event",
-			)
-			break
 		}
 
 		if stop == true {
 			break
 		}
 	}
-
 }
 
 func (s *Server) handleConfirmKeepAliveEvent(
-	eid EID,
+	playerList *PlayerList,
 	chanForEvent ChanForConfirmKeepAliveEvent,
+	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
@@ -283,457 +652,82 @@ func (s *Server) handleConfirmKeepAliveEvent(
 	}()
 
 	lg := NewLogger(
-		"update-latency-event-handler",
-		NewLgElement("cnt", cnt),
+		"confirm-keep-alive-event-handler",
+		NewLgElement("player", player),
+		NewLgElement("client", cnt),
 	)
+	defer lg.Close()
+
 	lg.Debug("it is started to handle ConfirmKeepAliveEvent")
+	defer func() {
+		lg.Debug("it is finished to handle ConfirmKeepAliveEvent")
+	}()
+
 	defer func() {
 		if err := recover(); err != nil {
 			lg.Error(err)
 			chanForError <- err
 		}
-
-		lg.Debug("it is finished to handle ConfirmKeepAliveEvent")
-		lg.Close()
 	}()
 
-	world := s.world
-
 	start := time.Time{}
-	var payload int64
+	var payload0 int64
 
-	var stop bool
+	stop := false
 	for {
 		select {
-		case <-time.After(CheckKeepAliveTime):
+		case <-time.After(DelayForCheckKeepAlive):
 			if start.IsZero() == false {
 				break
 			}
-			payload = rand.Int63()
-			checkKeepAlivePacket :=
-				NewCheckKeepAlivePacket(payload)
-			if err := cnt.WriteWithComp(
-				checkKeepAlivePacket,
-			); err != nil {
+			payload0 = rand.Int63()
+			if err := cnt.CheckKeepAlive(lg, payload0); err != nil {
 				panic(err)
 			}
 			start = time.Now()
-			break
+
 		case event, ok := <-chanForEvent:
 			if ok == false {
 				stop = true
 				break
 			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
+			if err := func() error {
+				lg.Debug(
+					"it is started to process event",
+					NewLgElement("event", event),
+				)
+				defer func() {
+					lg.Debug("it is finished to process event")
+				}()
 
-			payload1 := event.GetPayload()
-			if payload != payload1 {
-				panic(errors.New("payload of keep-alive must be same as the given to handle ConfirmKeepAliveEvent"))
-			}
+				if err := func() error {
+					payload1 := event.GetPayload()
+					if payload1 != payload0 {
+						return errors.New("payload for keep-alive must be same as given")
+					}
+					end := time.Now()
+					latency := int32(end.Sub(start).Milliseconds())
 
-			end := time.Now()
-			latency := int32(end.Sub(start).Milliseconds())
-			world.UpdateLatency(
-				eid,
-				latency,
-			)
-			start = time.Time{}
+					if err := playerList.UpdateLatency(
+						lg,
+						player,
+						latency,
+						cnt,
+					); err != nil {
+						return err
+					}
 
-			lg.Debug(
-				"it is finished to process event",
-			)
-			break
-		}
+					return nil
+				}(); err != nil {
+					return err
+				}
 
-		if stop == true {
-			break
-		}
-	}
+				start = time.Time{}
 
-}
-
-func (s *Server) handleSpawnPlayerEvent(
-	chanForEvent ChanForSpawnPlayerEvent,
-	cnt *Client,
-	chanForError ChanForError,
-	wg *sync.WaitGroup,
-) {
-	wg.Add(1)
-	defer func() {
-		wg.Done()
-	}()
-
-	lg := NewLogger(
-		"spawn-player-event-handler",
-		NewLgElement("cnt", cnt),
-	)
-	lg.Debug("it is started to handle SpawnPlayerEvent")
-	defer func() {
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
-		}
-
-		lg.Debug("it is finished to handle SpawnPlayerEvent")
-		lg.Close()
-	}()
-
-	var stop bool
-	for {
-		select {
-		case event, ok := <-chanForEvent:
-			if ok == false {
-				stop = true
-				break
-			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
-
-			eid, uid :=
-				event.GetEID(), event.GetUUID()
-			x, y, z :=
-				event.GetX(), event.GetY(), event.GetZ()
-			yaw, pitch :=
-				event.GetYaw(), event.GetPitch()
-			packet := NewSpawnPlayerPacket(
-				eid, uid,
-				x, y, z,
-				yaw, pitch,
-			)
-			if err := cnt.WriteWithComp(packet); err != nil {
+				return nil
+			}(); err != nil {
 				panic(err)
 			}
-
-			lg.Debug(
-				"it is finished to process event",
-			)
-			break
-		}
-
-		if stop == true {
-			break
-		}
-	}
-
-}
-
-func (s *Server) handleDespawnEntityEvent(
-	chanForEvent ChanForDespawnEntityEvent,
-	cnt *Client,
-	chanForError ChanForError,
-	wg *sync.WaitGroup,
-) {
-	wg.Add(1)
-	defer func() {
-		wg.Done()
-	}()
-
-	lg := NewLogger(
-		"despawn-entity-event-handler",
-		NewLgElement("cnt", cnt),
-	)
-	lg.Debug("it is started to handle DespawnEntityEvent")
-	defer func() {
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
-		}
-
-		lg.Debug("it is finished to handle DespawnEntityEvent")
-		lg.Close()
-	}()
-
-	var stop bool
-	for {
-		select {
-		case event, ok := <-chanForEvent:
-			if ok == false {
-				stop = true
-				break
-			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
-
-			eid := event.GetEID()
-			packet := NewDespawnEntityPacket(
-				eid,
-			)
-			if err := cnt.WriteWithComp(packet); err != nil {
-				panic(err)
-			}
-
-			lg.Debug(
-				"it is finished to process event",
-			)
-			break
-		}
-
-		if stop == true {
-			break
-		}
-	}
-
-}
-
-func (s *Server) handleLoadChunkEvent(
-	chanForEvent ChanForLoadChunkEvent,
-	cnt *Client,
-	chanForError ChanForError,
-	wg *sync.WaitGroup,
-) {
-	wg.Add(1)
-	defer func() {
-		wg.Done()
-	}()
-
-	lg := NewLogger(
-		"load-chunk-event-handler",
-		NewLgElement("cnt", cnt),
-	)
-	lg.Debug("it is started to handle LoadChunkEvent")
-	defer func() {
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
-		}
-
-		lg.Debug("it is finished to handle LoadChunkEvent")
-		lg.Close()
-	}()
-
-	var stop bool
-	for {
-		select {
-		case event, ok := <-chanForEvent:
-			if ok == false {
-				stop = true
-				break
-			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
-
-			overworld, init := event.IsOverworld(), event.IsInit()
-			cx, cz := event.GetCX(), event.GetCZ()
-			chunk := event.GetChunk()
-			bitmask, data := chunk.GenerateData(init, overworld)
-			packet := NewSendChunkDataPacket(
-				cx, cz,
-				init,
-				bitmask,
-				data,
-			)
-			if err := cnt.WriteWithComp(packet); err != nil {
-				panic(err)
-			}
-
-			lg.Debug(
-				"it is finished to process event",
-			)
-			break
-		}
-
-		if stop == true {
-			break
-		}
-	}
-
-}
-
-func (s *Server) handleUnloadChunkEvent(
-	chanForEvent ChanForUnloadChunkEvent,
-	cnt *Client,
-	chanForError ChanForError,
-	wg *sync.WaitGroup,
-) {
-	wg.Add(1)
-	defer func() {
-		wg.Done()
-	}()
-
-	lg := NewLogger(
-		"upload-chunk-event-handler",
-		NewLgElement("cnt", cnt),
-	)
-	lg.Debug("it is started to handle UnloadChunkEvent")
-	defer func() {
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
-		}
-
-		lg.Debug("it is finished to handle UnloadChunkEvent")
-		lg.Close()
-	}()
-
-	var stop bool
-	for {
-		select {
-		case event, ok := <-chanForEvent:
-			if ok == false {
-				stop = true
-				break
-			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
-
-			cx, cz := event.GetCX(), event.GetCZ()
-			packet := NewUnloadChunkPacket(
-				cx, cz,
-			)
-			if err := cnt.WriteWithComp(packet); err != nil {
-				panic(err)
-			}
-
-			lg.Debug(
-				"it is finished to process event",
-			)
-			break
-		}
-
-		if stop == true {
-			break
-		}
-	}
-
-}
-
-func (s *Server) handleSetEntityLookEvent(
-	chanForEvent ChanForSetEntityLookEvent,
-	cnt *Client,
-	chanForError ChanForError,
-	wg *sync.WaitGroup,
-) {
-	wg.Add(1)
-	defer func() {
-		wg.Done()
-	}()
-
-	lg := NewLogger(
-		"set-entity-look-event-handler",
-		NewLgElement("cnt", cnt),
-	)
-	lg.Debug("it is started to handle SetEntityLookEvent")
-	defer func() {
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
-		}
-
-		lg.Debug("it is finished to handle SetEntityLookEvent")
-		lg.Close()
-	}()
-
-	var stop bool
-	for {
-		select {
-		case event, ok := <-chanForEvent:
-			if ok == false {
-				stop = true
-				break
-			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
-
-			eid := event.GetEID()
-			yaw, pitch := event.GetYaw(), event.GetPitch()
-			ground := event.GetGround()
-			setEntityLookPacket := NewSetEntityLookPacket(
-				eid,
-				yaw, pitch,
-				ground,
-			)
-			if err := cnt.WriteWithComp(setEntityLookPacket); err != nil {
-				panic(err)
-			}
-
-			setEntityHeadLookPacket := NewSetEntityHeadLookPacket(
-				eid, yaw,
-			)
-			if err := cnt.WriteWithComp(setEntityHeadLookPacket); err != nil {
-				panic(err)
-			}
-
-			lg.Debug(
-				"it is finished to process event",
-			)
-			break
-		}
-
-		if stop == true {
-			break
-		}
-	}
-
-}
-
-func (s *Server) handleSetEntityRelativePosEvent(
-	chanForEvent ChanForSetEntityRelativePosEvent,
-	cnt *Client,
-	chanForError ChanForError,
-	wg *sync.WaitGroup,
-) {
-	wg.Add(1)
-	defer func() {
-		wg.Done()
-	}()
-
-	lg := NewLogger(
-		"set-entity-relative-pos-event-handler",
-		NewLgElement("cnt", cnt),
-	)
-	lg.Debug("it is started to handle SetEntityRelativePosEvent")
-	defer func() {
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
-		}
-
-		lg.Debug("it is finished to handle SetEntityRelativePosEvent")
-		lg.Close()
-	}()
-
-	var stop bool
-	for {
-		select {
-		case event, ok := <-chanForEvent:
-			if ok == false {
-				stop = true
-				break
-			}
-			lg.Debug(
-				"it is started to process event",
-				NewLgElement("event", event),
-			)
-
-			eid := event.GetEID()
-			deltaX, deltaY, deltaZ :=
-				event.GetDeltaX(), event.GetDeltaY(), event.GetDeltaZ()
-			ground := event.GetGround()
-			packet := NewSetEntityRelativePosPacket(
-				eid,
-				deltaX, deltaY, deltaZ,
-				ground,
-			)
-			if err := cnt.WriteWithComp(packet); err != nil {
-				panic(err)
-			}
-
-			lg.Debug(
-				"it is finished to process event",
-			)
 			break
 		}
 
@@ -746,56 +740,69 @@ func (s *Server) handleSetEntityRelativePosEvent(
 
 func (s *Server) initClient(
 	lg *Logger,
+	playerList *PlayerList,
+	world *Overworld,
 	cnt *Client,
-	eid EID,
 	uid UID, username string,
 	wg *sync.WaitGroup,
 ) (
-	ChanForAddPlayerEvent,
-	ChanForUpdateLatencyEvent,
-	ChanForRemovePlayerEvent,
+	*Player,
 	ChanForConfirmKeepAliveEvent,
-	ChanForSpawnPlayerEvent,
-	ChanForDespawnEntityEvent,
-	ChanForLoadChunkEvent,
-	ChanForUnloadChunkEvent,
-	ChanForSetEntityLookEvent,
-	ChanForSetEntityRelativePosEvent,
 	ChanForError,
 	error,
 ) {
 	s.Lock()
 	defer s.Unlock()
 
-	lg.Debug("it is started to init client")
+	lg.Debug("it is started to init Connection")
 	defer func() {
-		lg.Debug("it is finished to init client")
+		lg.Debug("it is finished to init Connection")
 	}()
 
-	world := s.world
+	eid := s.countEID()
+
 	spawnX, spawnY, spawnZ :=
-		world.GetSpawnX(), world.GetSpawnY(), world.GetSpawnZ()
+		s.spawnX, s.spawnY, s.spawnZ
 	spawnYaw, spawnPitch :=
-		world.GetSpawnYaw(), world.GetSpawnPitch()
-	if err := cnt.JoinGame(
+		s.spawnYaw, s.spawnPitch
+
+	player := NewPlayer(
 		eid,
+		uid,
+		username,
+		spawnX, spawnY, spawnZ,
+		spawnYaw, spawnPitch,
+	)
+
+	if err := cnt.JoinGame(
+		lg, eid,
 		spawnX, spawnY, spawnZ,
 		spawnYaw, spawnPitch,
 	); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	chanForError := make(ChanForError, 1)
+	chanForError := make(
+		ChanForError,
+		MaxNumForChannel,
+	)
 
-	chanForAddPlayerEvent := make(ChanForAddPlayerEvent, 1)
+	chanForAddPlayerEvent := make(
+		ChanForAddPlayerEvent,
+		MaxNumForChannel,
+	)
 	go s.handleAddPlayerEvent(
 		chanForAddPlayerEvent,
+		player,
 		cnt,
 		chanForError,
 		wg,
 	)
 
-	chanForUpdateLatencyEvent := make(ChanForUpdateLatencyEvent, 1)
+	chanForUpdateLatencyEvent := make(
+		ChanForUpdateLatencyEvent,
+		MaxNumForChannel,
+	)
 	go s.handleUpdateLatencyEvent(
 		chanForUpdateLatencyEvent,
 		cnt,
@@ -803,167 +810,196 @@ func (s *Server) initClient(
 		wg,
 	)
 
-	chanForRemovePlayerEvent := make(ChanForRemovePlayerEvent, 1)
+	chanForRemovePlayerEvent := make(
+		ChanForRemovePlayerEvent,
+		MaxNumForChannel,
+	)
 	go s.handleRemovePlayerEvent(
 		chanForRemovePlayerEvent,
+		player,
 		cnt,
 		chanForError,
 		wg,
 	)
 
-	chanForConfirmKeepAliveEvent :=
-		make(ChanForConfirmKeepAliveEvent, 1)
-	go s.handleConfirmKeepAliveEvent(
-		eid,
-		chanForConfirmKeepAliveEvent,
-		cnt,
-		chanForError,
-		wg,
-	)
-
-	// TODO: set chan size in best practices
-	chanForSpawnPlayerEvent := make(ChanForSpawnPlayerEvent, 1)
-	go s.handleSpawnPlayerEvent(
-		chanForSpawnPlayerEvent,
-		cnt,
-		chanForError,
-		wg,
-	)
-
-	chanForDespawnEntityEvent := make(ChanForDespawnEntityEvent, 1)
-	go s.handleDespawnEntityEvent(
-		chanForDespawnEntityEvent,
-		cnt,
-		chanForError,
-		wg,
-	)
-
-	chanForLoadChunkEvent := make(ChanForLoadChunkEvent, 1)
-	go s.handleLoadChunkEvent(
-		chanForLoadChunkEvent,
-		cnt,
-		chanForError,
-		wg,
-	)
-
-	chanForUnloadChunkEvent := make(ChanForUnloadChunkEvent, 1)
-	go s.handleUnloadChunkEvent(
-		chanForUnloadChunkEvent,
-		cnt,
-		chanForError,
-		wg,
-	)
-
-	chanForSetEntityLookEvent :=
-		make(ChanForSetEntityLookEvent, 1)
-	go s.handleSetEntityLookEvent(
-		chanForSetEntityLookEvent,
-		cnt,
-		chanForError,
-		wg,
-	)
-
-	chanForSetEntityRelativePosEvent :=
-		make(ChanForSetEntityRelativePosEvent, 1)
-	go s.handleSetEntityRelativePosEvent(
-		chanForSetEntityRelativePosEvent,
-		cnt,
-		chanForError,
-		wg,
-	)
-
-	world.InitPlayer(
-		eid,
-		uid, username,
+	if err := playerList.InitPlayer(
+		lg,
+		player,
 		cnt,
 		chanForAddPlayerEvent,
 		chanForUpdateLatencyEvent,
 		chanForRemovePlayerEvent,
-		chanForSpawnPlayerEvent,
-		chanForDespawnEntityEvent,
-		chanForLoadChunkEvent,
-		chanForUnloadChunkEvent,
-		chanForSetEntityLookEvent,
-		chanForSetEntityRelativePosEvent,
+	); err != nil {
+		return nil, nil, nil, err
+	}
+
+	chanForConfirmKeepAliveEvent := make(
+		ChanForConfirmKeepAliveEvent,
+		MaxNumForChannel,
+	)
+	go s.handleConfirmKeepAliveEvent(
+		playerList,
+		chanForConfirmKeepAliveEvent,
+		player,
+		cnt,
+		chanForError,
+		wg,
 	)
 
-	return chanForAddPlayerEvent,
-		chanForUpdateLatencyEvent,
-		chanForRemovePlayerEvent,
-		chanForConfirmKeepAliveEvent,
+	chanForSpawnPlayerEvent := make(
+		ChanForSpawnPlayerEvent,
+		MaxNumForChannel,
+	)
+	go s.handleSpawnPlayerEvent(
+		chanForSpawnPlayerEvent,
+		player,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	chanForDespawnEntityEvent := make(
+		ChanForDespawnEntityEvent,
+		MaxNumForChannel,
+	)
+	go s.handleDespawnEntityEvent(
+		chanForDespawnEntityEvent,
+		player,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	chanForSetEntityRelativePosEvent := make(
+		ChanForSetEntityRelativePosEvent,
+		MaxNumForChannel,
+	)
+	go s.handleSetEntityRelativePosEvent(
+		chanForSetEntityRelativePosEvent,
+		player,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	chanForSetEntityLookEvent := make(
+		ChanForSetEntityLookEvent,
+		MaxNumForChannel,
+	)
+	go s.handleSetEntityLookEvent(
+		chanForSetEntityLookEvent,
+		player,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	chanForSetEntityMetadataEvent := make(
+		ChanForSetEntityMetadataEvent,
+		MaxNumForChannel,
+	)
+	go s.handleSetEntityMetadataEvent(
+		chanForSetEntityMetadataEvent,
+		player,
+		cnt,
+		chanForError,
+		wg,
+	)
+
+	if err := world.InitPlayer(
+		lg,
+		player,
+		cnt,
 		chanForSpawnPlayerEvent,
 		chanForDespawnEntityEvent,
-		chanForLoadChunkEvent,
-		chanForUnloadChunkEvent,
-		chanForSetEntityLookEvent,
 		chanForSetEntityRelativePosEvent,
+		chanForSetEntityLookEvent,
+		chanForSetEntityMetadataEvent,
+	); err != nil {
+		return nil, nil, nil, err
+	}
+
+	return player,
+		chanForConfirmKeepAliveEvent,
 		chanForError,
 		nil
 }
 
 func (s *Server) closeClient(
 	lg *Logger,
-	eid EID,
-	chanForAddPlayerEvent ChanForAddPlayerEvent,
-	chanForUpdateLatencyEvent ChanForUpdateLatencyEvent,
-	chanForRemovePlayerEvent ChanForRemovePlayerEvent,
+	playerList *PlayerList,
+	world *Overworld,
+	player *Player,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
-	chanForSpawnPlayerEvent ChanForSpawnPlayerEvent,
-	chanForDespawnEntityEvent ChanForDespawnEntityEvent,
-	chanForLoadChunkEvent ChanForLoadChunkEvent,
-	chanForUnloadChunkEvent ChanForUnloadChunkEvent,
-	chanForSetEntityLookEvent ChanForSetEntityLookEvent,
-	chanForSetEntityRelativePosEvent ChanForSetEntityRelativePosEvent,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
 ) {
 	s.Lock()
 	defer s.Unlock()
 
-	lg.Debug("it is started to close client")
+	lg.Debug("it is started to close Connection")
 	defer func() {
-		lg.Debug("it is finished to close client")
+		lg.Debug("it is finished to close Connection")
 	}()
 
-	world := s.world
+	chanForSpawnPlayerEvent,
+		chanForDespawnEntityEvent,
+		chanForSetEntityLookEvent,
+		chanForSetEntityRelativePosEvent,
+		chanForSetEntityMetadataEvent :=
+		world.ClosePlayer(
+			lg,
+			player,
+		)
+	close(chanForSpawnPlayerEvent)
+	close(chanForDespawnEntityEvent)
+	close(chanForSetEntityRelativePosEvent)
+	close(chanForSetEntityLookEvent)
+	close(chanForSetEntityMetadataEvent)
 
-	world.ClosePlayer(eid)
+	close(chanForConfirmKeepAliveEvent)
+
+	chanForAddPlayerEvent,
+		chanForUpdateLatencyEvent,
+		chanForRemovePlayerEvent :=
+		playerList.ClosePlayer(
+			lg,
+			player,
+		)
 	close(chanForAddPlayerEvent)
 	close(chanForUpdateLatencyEvent)
 	close(chanForRemovePlayerEvent)
-	close(chanForConfirmKeepAliveEvent)
-	close(chanForSpawnPlayerEvent)
-	close(chanForDespawnEntityEvent)
-	close(chanForLoadChunkEvent)
-	close(chanForUnloadChunkEvent)
-	close(chanForSetEntityLookEvent)
-	close(chanForSetEntityRelativePosEvent)
 
 	wg.Wait()
 	close(chanForError)
 }
 
 func (s *Server) handleClient(
+	playerList *PlayerList,
+	world *Overworld,
 	cnt *Client,
 ) {
-	cnt.Init()
-	defer cnt.Close()
 
 	addr := cnt.GetAddr()
 	lg := NewLogger(
 		"client-handler",
 		NewLgElement("addr", addr),
 	)
+	defer lg.Close()
+
 	lg.Debug("it is started to handle Client")
 	defer func() {
+		lg.Debug("it is finished to handle Client")
+	}()
 
+	defer func() {
 		if err := recover(); err != nil {
 			lg.Error(err)
 		}
-
-		lg.Debug("it is finished to handle Client")
-		lg.Close()
 	}()
+
+	cnt.Init(lg)
+	defer cnt.Close(lg)
 
 	max, online :=
 		s.max, s.online
@@ -1002,22 +1038,14 @@ func (s *Server) handleClient(
 
 	wg := new(sync.WaitGroup)
 
-	eid := s.countEID()
-	chanForAddPlayerEvent,
-		chanForUpdateLatencyEvent,
-		chanForRemovePlayerEvent,
+	player,
 		chanForConfirmKeepAliveEvent,
-		chanForSpawnPlayerEvent,
-		chanForDespawnEntityEvent,
-		chanForLoadChunkEvent,
-		chanForUnloadChunkEvent,
-		chanForSetEntityLookEvent,
-		chanForSetEntityRelativePosEvent,
 		chanForError,
 		err := s.initClient(
 		lg,
+		playerList,
+		world,
 		cnt,
-		eid,
 		uid, username,
 		wg,
 	)
@@ -1026,47 +1054,37 @@ func (s *Server) handleClient(
 	}
 	defer s.closeClient(
 		lg,
-		eid,
-		chanForAddPlayerEvent,
-		chanForUpdateLatencyEvent,
-		chanForRemovePlayerEvent,
-		chanForConfirmKeepAliveEvent,
-		chanForSpawnPlayerEvent,
-		chanForDespawnEntityEvent,
-		chanForLoadChunkEvent,
-		chanForUnloadChunkEvent,
-		chanForSetEntityLookEvent,
-		chanForSetEntityRelativePosEvent,
-		chanForError,
-		wg,
-	)
-
-	world := s.world
-	go cnt.HandlePlayState(
-		eid,
-		chanForConfirmKeepAliveEvent,
+		playerList,
 		world,
+		player,
+		chanForConfirmKeepAliveEvent,
 		chanForError,
 		wg,
 	)
 
 	for {
-		var stop bool
-
 		select {
-		case <-chanForError:
-			stop = true
+		case <-time.After(LoopDelayForPlayState):
+			if err := cnt.LoopForPlayState(
+				lg,
+				world,
+				player,
+				chanForConfirmKeepAliveEvent,
+			); err != nil {
+				panic(err)
+			}
 			break
+		case err := <-chanForError:
+			panic(err)
 		}
 
-		if stop == true {
-			break
-		}
 	}
 }
 
-func (s *Server) Render() {
-
+func (s *Server) Render(
+	playerList *PlayerList,
+	world *Overworld,
+) {
 	addr := s.addr
 	network := Network
 	lg := NewLogger(
@@ -1076,17 +1094,16 @@ func (s *Server) Render() {
 	)
 	defer lg.Close()
 
-	lg.Info("It is started to render.")
+	lg.Info("it is started to render")
+	defer func() {
+		lg.Info("it is finished to render")
+	}()
 
 	ln, err := net.Listen(network, addr)
-
 	if err != nil {
 		panic(err)
 	}
 	defer func() {
-		lg.Info(
-			"It is finished to render.",
-		)
 		_ = ln.Close()
 	}()
 
@@ -1097,7 +1114,7 @@ func (s *Server) Render() {
 		}
 
 		lg.Info(
-			"The server accepted a new connection.",
+			"server accepted a new connection",
 			NewLgElement("addr", conn.RemoteAddr()),
 		)
 
@@ -1105,13 +1122,15 @@ func (s *Server) Render() {
 		if err != nil {
 			panic(err)
 		}
-
 		cnt := NewClient(
 			cid,
 			conn,
 		)
-
-		go s.handleClient(cnt)
+		go s.handleClient(
+			playerList,
+			world,
+			cnt,
+		)
 	}
 
 }

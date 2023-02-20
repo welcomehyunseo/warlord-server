@@ -21,7 +21,9 @@ const TakeActionPacketID = 0x15
 type InPacket interface {
 	Packet
 
-	Unpack(*Data) error
+	Unpack(
+		*Data,
+	) error
 }
 
 type HandshakePacket struct {
