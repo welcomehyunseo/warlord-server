@@ -13,6 +13,7 @@ const CompleteLoginPacketID = 0x02
 const EnableCompPacketID = 0x03
 
 const SpawnPlayerPacketID = 0x05
+const SendChatMessagePacketID = 0x0F
 const UnloadChunkPacketID = 0x1D
 const CheckKeepAlivePacketID = 0x1F
 const SendChunkDataPacketID = 0x20
@@ -361,6 +362,50 @@ func (p *SpawnPlayerPacket) String() string {
 	)
 }
 
+type SendChatMessagePacket struct {
+	*packet
+	chat *Chat
+}
+
+func NewSendChatMessagePacket(
+	chat *Chat,
+) *SendChatMessagePacket {
+	return &SendChatMessagePacket{
+		newPacket(
+			Outbound,
+			PlayState,
+			SendChatMessagePacketID,
+		),
+		chat,
+	}
+}
+
+func (p *SendChatMessagePacket) Pack() (
+	*Data,
+	error,
+) {
+	data := NewData()
+	if err := data.WriteChat(p.chat); err != nil {
+		return nil, err
+	}
+	if err := data.WriteUint8(0); err != nil { // 0: chat box
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func (p *SendChatMessagePacket) GetChat() *Chat {
+	return p.chat
+}
+
+func (p *SendChatMessagePacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, chat: %s }",
+		p.packet, p.chat,
+	)
+}
+
 type UnloadChunkPacket struct {
 	*packet
 	cx int32
@@ -371,13 +416,12 @@ func NewUnloadChunkPacket(
 	cx, cz int32,
 ) *UnloadChunkPacket {
 	return &UnloadChunkPacket{
-		packet: newPacket(
+		newPacket(
 			Outbound,
 			PlayState,
 			UnloadChunkPacketID,
 		),
-		cx: cx,
-		cz: cz,
+		cx, cz,
 	}
 }
 

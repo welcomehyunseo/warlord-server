@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"math"
 )
@@ -71,6 +72,33 @@ type Chat struct {
 	Color         string  `json:"color,omitempty"`
 	Insertion     string  `json:"insertion,omitempty"`
 	Extra         []*Chat `json:"extra,omitempty"`
+}
+
+func (c *Chat) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"text: %s, "+
+			"bold: %v, "+
+			"italic: %v, "+
+			"underlined: %v, "+
+			"strikethrough: %v, "+
+			"obfuscated: %v, "+
+			"font: %s, "+
+			"color: %s, "+
+			"insertion: %s, "+
+			"extra: %v "+
+			"}",
+		c.Text,
+		c.Bold,
+		c.Italic,
+		c.Underlined,
+		c.Strikethrough,
+		c.Obfuscated,
+		c.Font,
+		c.Color,
+		c.Insertion,
+		c.Extra,
+	)
 }
 
 func compare(

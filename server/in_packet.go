@@ -10,6 +10,7 @@ const PingPacketID = 0x01
 const StartLoginPacketID = 0x00
 
 const FinishTeleportPacketID = 0x00
+const EnterChatMessagePacketID = 0x02
 const ClickButtonPacketID = 0x03
 const ChangeSettingsPacketID = 0x04
 const ConfirmKeepAlivePacketID = 0x0B
@@ -195,6 +196,44 @@ func (p *StartLoginPacket) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, username: %s }",
 		p.packet, p.username,
+	)
+}
+
+type EnterChatMessagePacket struct {
+	*packet
+	text string
+}
+
+func NewEnterChatMessagePacket() *EnterChatMessagePacket {
+	return &EnterChatMessagePacket{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			EnterChatMessagePacketID,
+		),
+	}
+}
+
+func (p *EnterChatMessagePacket) Unpack(
+	data *Data,
+) error {
+	text, err := data.ReadString()
+	if err != nil {
+		return err
+	}
+	p.text = text
+
+	return nil
+}
+
+func (p *EnterChatMessagePacket) GetText() string {
+	return p.text
+}
+
+func (p *EnterChatMessagePacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, text: %s }",
+		p.packet, p.text,
 	)
 }
 

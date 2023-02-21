@@ -1,8 +1,10 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"go/types"
+	"math/rand"
 	"sort"
 	"sync"
 )
@@ -64,6 +66,9 @@ type Overworld struct {
 
 	rndDist int32
 
+	spawnX, spawnY, spawnZ float64
+	spawnYaw, spawnPitch   float32
+
 	chunks map[ChunkPosStr]*Chunk
 
 	players                    map[EID]*Player
@@ -80,9 +85,14 @@ type Overworld struct {
 
 func NewOverworld(
 	rndDist int32,
+	spawnX, spawnY, spawnZ float64,
+	spawnYaw, spawnPitch float32,
 ) *Overworld {
 	return &Overworld{
 		rndDist: rndDist,
+
+		spawnX: spawnX, spawnY: spawnY, spawnZ: spawnZ,
+		spawnYaw: spawnYaw, spawnPitch: spawnPitch,
 
 		chunks: make(map[ChunkPosStr]*Chunk),
 
@@ -101,7 +111,7 @@ func NewOverworld(
 
 func (w *Overworld) InitPlayer(
 	lg *Logger,
-	player *Player,
+	eid EID, uid UID, username string,
 	cnt *Client,
 	chanForSpawnPlayerEvent ChanForSpawnPlayerEvent,
 	chanForDespawnEntityEvent ChanForDespawnEntityEvent,
@@ -114,14 +124,57 @@ func (w *Overworld) InitPlayer(
 
 	lg.Debug(
 		"it is started to init player in Overworld",
-		NewLgElement("player", player),
-		NewLgElement("cnt", cnt),
+		NewLgElement("eid", eid),
+		NewLgElement("uid", uid),
+		NewLgElement("username", username),
 	)
 	defer func() {
 		lg.Debug("it is finished to init player in Overworld")
 	}()
 
-	eid := player.GetEid()
+	spawnX, spawnY, spawnZ :=
+		w.spawnX, w.spawnY, w.spawnZ
+	spawnYaw, spawnPitch :=
+		w.spawnYaw, w.spawnPitch
+	player := NewPlayer(
+		eid, uid, username,
+		spawnX, spawnY, spawnZ,
+		spawnYaw, spawnPitch,
+	)
+
+	if err := func() error {
+		payload := rand.Int31()
+		teleportPacket := NewTeleportPacket(
+			spawnX, spawnY, spawnZ,
+			spawnYaw, spawnPitch,
+			payload,
+		)
+		if err := cnt.writeWithComp(
+			teleportPacket,
+		); err != nil {
+			return err
+		}
+
+		state := PlayState
+		inPacket, err := cnt.readWithComp(state)
+		if err != nil {
+			return err
+		}
+		finishTeleportPacket, ok :=
+			inPacket.(*FinishTeleportPacket)
+		if ok == false {
+			return errors.New("it is invalid packet to init play state")
+		}
+		payload1 := finishTeleportPacket.GetPayload()
+		if payload != payload1 {
+			return errors.New("it is invalid payload of FinishTeleportPacket to init play state")
+		}
+
+		return nil
+	}(); err != nil {
+		return err
+	}
+
 	w.players[eid] = player
 	w.chansForSpawnPlayerEvent[eid] = chanForSpawnPlayerEvent
 	w.chansForDespawnEntityEvent[eid] = chanForDespawnEntityEvent
@@ -129,7 +182,6 @@ func (w *Overworld) InitPlayer(
 	w.chansForSetEntityLookEvent[eid] = chanForSetEntityLookEvent
 	w.chansForSetEntityMetadataEvent[eid] = chanForSetEntityMetadataEvent
 
-	uid := player.GetUid()
 	x, y, z :=
 		player.GetX(), player.GetY(), player.GetZ()
 	yaw, pitch :=
@@ -216,7 +268,7 @@ func (w *Overworld) InitPlayer(
 
 func (w *Overworld) UpdatePlayerPos(
 	lg *Logger,
-	player *Player,
+	eid EID,
 	x, y, z float64,
 	ground bool,
 ) error {
@@ -225,7 +277,7 @@ func (w *Overworld) UpdatePlayerPos(
 
 	lg.Debug(
 		"it is started to update player pos in Overworld",
-		NewLgElement("player", player),
+		NewLgElement("eid", eid),
 		NewLgElement("x", x),
 		NewLgElement("y", y),
 		NewLgElement("z", z),
@@ -236,7 +288,7 @@ func (w *Overworld) UpdatePlayerPos(
 	}()
 
 	// TODO: ground
-	eid := player.GetEid()
+	player := w.players[eid]
 	player.UpdatePos(
 		x, y, z,
 	)
@@ -266,7 +318,7 @@ func (w *Overworld) UpdatePlayerPos(
 
 func (w *Overworld) UpdatePlayerLook(
 	lg *Logger,
-	player *Player,
+	eid EID,
 	yaw, pitch float32,
 	ground bool,
 ) error {
@@ -275,7 +327,7 @@ func (w *Overworld) UpdatePlayerLook(
 
 	lg.Debug(
 		"it is started to update player look in Overworld",
-		NewLgElement("player", player),
+		NewLgElement("eid", eid),
 		NewLgElement("yaw", yaw),
 		NewLgElement("pitch", pitch),
 		NewLgElement("ground", ground),
@@ -284,7 +336,7 @@ func (w *Overworld) UpdatePlayerLook(
 		lg.Debug("it is finished to update player look in Overworld")
 	}()
 
-	eid := player.GetEid()
+	player := w.players[eid]
 	player.UpdateLook(
 		yaw, pitch,
 	)
@@ -307,7 +359,7 @@ func (w *Overworld) UpdatePlayerLook(
 
 func (w *Overworld) UpdatePlayerSneaking(
 	lg *Logger,
-	player *Player,
+	eid EID,
 	sneaking bool,
 ) error {
 	w.RLock()
@@ -315,15 +367,14 @@ func (w *Overworld) UpdatePlayerSneaking(
 
 	lg.Debug(
 		"it is started to update player sneaking in Overworld",
-		NewLgElement("player", player),
+		NewLgElement("eid", eid),
 		NewLgElement("sneaking", sneaking),
 	)
 	defer func() {
 		lg.Debug("it is finished to update player sneaking in Overworld")
 	}()
 
-	eid := player.GetEid()
-
+	player := w.players[eid]
 	if sneaking == true {
 		player.StartSneaking()
 	} else {
@@ -355,7 +406,7 @@ func (w *Overworld) UpdatePlayerSneaking(
 
 func (w *Overworld) UpdatePlayerSprinting(
 	lg *Logger,
-	player *Player,
+	eid EID,
 	sprinting bool,
 ) error {
 	w.RLock()
@@ -363,15 +414,14 @@ func (w *Overworld) UpdatePlayerSprinting(
 
 	lg.Debug(
 		"it is started to update player sprinting in Overworld",
-		NewLgElement("player", player),
+		NewLgElement("eid", eid),
 		NewLgElement("sprinting", sprinting),
 	)
 	defer func() {
 		lg.Debug("it is finished to update player sprinting in Overworld")
 	}()
 
-	eid := player.GetEid()
-
+	player := w.players[eid]
 	if sprinting == true {
 		player.StartSprinting()
 	} else {
@@ -403,7 +453,7 @@ func (w *Overworld) UpdatePlayerSprinting(
 
 func (w *Overworld) UpdatePlayerChunk(
 	lg *Logger,
-	player *Player,
+	eid EID,
 	cnt *Client,
 ) error {
 	w.Lock()
@@ -411,12 +461,13 @@ func (w *Overworld) UpdatePlayerChunk(
 
 	lg.Debug(
 		"it is started to update player chunk in Overworld",
-		NewLgElement("player", player),
+		NewLgElement("eid", eid),
 	)
 	defer func() {
 		lg.Debug("it is finished to update player chunk in Overworld")
 	}()
 
+	player := w.players[eid]
 	x, z := player.GetX(), player.GetZ()
 	cx, cz := toChunkPos(x, z)
 	prevX, prevZ := player.GetPrevX(), player.GetPrevZ()
@@ -561,7 +612,7 @@ func (w *Overworld) UpdatePlayerChunk(
 
 func (w *Overworld) ClosePlayer(
 	lg *Logger,
-	player *Player,
+	eid EID,
 ) (
 	ChanForSpawnPlayerEvent,
 	ChanForDespawnEntityEvent,
@@ -574,13 +625,13 @@ func (w *Overworld) ClosePlayer(
 
 	lg.Debug(
 		"it is started to close player in Overworld",
-		NewLgElement("player", player),
+		NewLgElement("eid", eid),
 	)
 	defer func() {
 		lg.Debug("it is finished to close player in Overworld")
 	}()
 
-	eid := player.GetEid()
+	player := w.players[eid]
 
 	x, z := player.GetX(), player.GetZ()
 	cx, cz := toChunkPos(x, z)

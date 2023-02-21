@@ -37,19 +37,12 @@ type Server struct {
 	favicon string // base64 png image string
 	text    string // description of server
 
-	spawnX     float64
-	spawnY     float64
-	spawnZ     float64
-	spawnYaw   float32
-	spawnPitch float32
 }
 
 func NewServer(
 	addr string,
 	max int,
 	favicon, text string,
-	spawnX, spawnY, spawnZ float64,
-	spawnYaw, spawnPitch float32,
 ) *Server {
 
 	return &Server{
@@ -60,12 +53,6 @@ func NewServer(
 
 		favicon: favicon,
 		text:    text,
-
-		spawnX:     spawnX,
-		spawnY:     spawnY,
-		spawnZ:     spawnZ,
-		spawnYaw:   spawnYaw,
-		spawnPitch: spawnPitch,
 	}
 }
 
@@ -77,7 +64,6 @@ func (s *Server) countEID() EID {
 
 func (s *Server) handleSpawnPlayerEvent(
 	chanForEvent ChanForSpawnPlayerEvent,
-	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
@@ -89,7 +75,6 @@ func (s *Server) handleSpawnPlayerEvent(
 
 	lg := NewLogger(
 		"spawn-player-event-handler",
-		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
 	defer lg.Close()
@@ -155,7 +140,6 @@ func (s *Server) handleSpawnPlayerEvent(
 
 func (s *Server) handleDespawnEntityEvent(
 	chanForEvent ChanForDespawnEntityEvent,
-	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
@@ -167,7 +151,6 @@ func (s *Server) handleDespawnEntityEvent(
 
 	lg := NewLogger(
 		"despawn-entity-event-handler",
-		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
 	defer lg.Close()
@@ -223,7 +206,6 @@ func (s *Server) handleDespawnEntityEvent(
 
 func (s *Server) handleSetEntityRelativePosEvent(
 	chanForEvent ChanForSetEntityRelativePosEvent,
-	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
@@ -235,7 +217,6 @@ func (s *Server) handleSetEntityRelativePosEvent(
 
 	lg := NewLogger(
 		"set-entity-relative-pos-event-handler",
-		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
 	defer lg.Close()
@@ -298,7 +279,6 @@ func (s *Server) handleSetEntityRelativePosEvent(
 
 func (s *Server) handleSetEntityLookEvent(
 	chanForEvent ChanForSetEntityLookEvent,
-	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
@@ -310,7 +290,6 @@ func (s *Server) handleSetEntityLookEvent(
 
 	lg := NewLogger(
 		"set-entity-look-event-handler",
-		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
 	defer lg.Close()
@@ -371,7 +350,6 @@ func (s *Server) handleSetEntityLookEvent(
 
 func (s *Server) handleSetEntityMetadataEvent(
 	chanForEvent ChanForSetEntityMetadataEvent,
-	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
@@ -383,7 +361,6 @@ func (s *Server) handleSetEntityMetadataEvent(
 
 	lg := NewLogger(
 		"set-entity-look-event-handler",
-		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
 	defer lg.Close()
@@ -441,7 +418,6 @@ func (s *Server) handleSetEntityMetadataEvent(
 
 func (s *Server) handleAddPlayerEvent(
 	chanForEvent ChanForAddPlayerEvent,
-	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
@@ -453,7 +429,6 @@ func (s *Server) handleAddPlayerEvent(
 
 	lg := NewLogger(
 		"add-player-event-handler",
-		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
 	defer lg.Close()
@@ -487,8 +462,12 @@ func (s *Server) handleAddPlayerEvent(
 					lg.Debug("it is finished to process event")
 				}()
 
-				uid, username := event.GetUUID(), event.GetUsername()
-				if err := cnt.AddPlayer(lg, uid, username); err != nil {
+				uid, username :=
+					event.GetUUID(), event.GetUsername()
+				if err := cnt.AddPlayer(
+					lg,
+					uid, username,
+				); err != nil {
 					return err
 				}
 
@@ -555,7 +534,10 @@ func (s *Server) handleUpdateLatencyEvent(
 				}()
 
 				uid, latency := event.GetUUID(), event.GetLatency()
-				if err := cnt.UpdateLatency(lg, uid, latency); err != nil {
+				if err := cnt.UpdateLatency(
+					lg,
+					uid, latency,
+				); err != nil {
 					return err
 				}
 
@@ -574,7 +556,6 @@ func (s *Server) handleUpdateLatencyEvent(
 
 func (s *Server) handleRemovePlayerEvent(
 	chanForEvent ChanForRemovePlayerEvent,
-	player *Player,
 	cnt *Client,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
@@ -586,7 +567,6 @@ func (s *Server) handleRemovePlayerEvent(
 
 	lg := NewLogger(
 		"remove-player-event-handler",
-		NewLgElement("player", player),
 		NewLgElement("client", cnt),
 	)
 	defer lg.Close()
@@ -641,7 +621,7 @@ func (s *Server) handleRemovePlayerEvent(
 func (s *Server) handleConfirmKeepAliveEvent(
 	playerList *PlayerList,
 	chanForEvent ChanForConfirmKeepAliveEvent,
-	player *Player,
+	uid UID,
 	cnt *Client,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
@@ -653,7 +633,7 @@ func (s *Server) handleConfirmKeepAliveEvent(
 
 	lg := NewLogger(
 		"confirm-keep-alive-event-handler",
-		NewLgElement("player", player),
+		NewLgElement("uid", uid),
 		NewLgElement("client", cnt),
 	)
 	defer lg.Close()
@@ -710,7 +690,7 @@ func (s *Server) handleConfirmKeepAliveEvent(
 
 					if err := playerList.UpdateLatency(
 						lg,
-						player,
+						uid,
 						latency,
 						cnt,
 					); err != nil {
@@ -746,7 +726,7 @@ func (s *Server) initClient(
 	uid UID, username string,
 	wg *sync.WaitGroup,
 ) (
-	*Player,
+	EID,
 	ChanForConfirmKeepAliveEvent,
 	ChanForError,
 	error,
@@ -761,25 +741,11 @@ func (s *Server) initClient(
 
 	eid := s.countEID()
 
-	spawnX, spawnY, spawnZ :=
-		s.spawnX, s.spawnY, s.spawnZ
-	spawnYaw, spawnPitch :=
-		s.spawnYaw, s.spawnPitch
-
-	player := NewPlayer(
-		eid,
-		uid,
-		username,
-		spawnX, spawnY, spawnZ,
-		spawnYaw, spawnPitch,
-	)
-
 	if err := cnt.JoinGame(
-		lg, eid,
-		spawnX, spawnY, spawnZ,
-		spawnYaw, spawnPitch,
+		lg,
+		eid,
 	); err != nil {
-		return nil, nil, nil, err
+		return 0, nil, nil, err
 	}
 
 	chanForError := make(
@@ -793,7 +759,6 @@ func (s *Server) initClient(
 	)
 	go s.handleAddPlayerEvent(
 		chanForAddPlayerEvent,
-		player,
 		cnt,
 		chanForError,
 		wg,
@@ -816,7 +781,6 @@ func (s *Server) initClient(
 	)
 	go s.handleRemovePlayerEvent(
 		chanForRemovePlayerEvent,
-		player,
 		cnt,
 		chanForError,
 		wg,
@@ -824,13 +788,13 @@ func (s *Server) initClient(
 
 	if err := playerList.InitPlayer(
 		lg,
-		player,
+		uid, username,
 		cnt,
 		chanForAddPlayerEvent,
 		chanForUpdateLatencyEvent,
 		chanForRemovePlayerEvent,
 	); err != nil {
-		return nil, nil, nil, err
+		return 0, nil, nil, err
 	}
 
 	chanForConfirmKeepAliveEvent := make(
@@ -840,7 +804,7 @@ func (s *Server) initClient(
 	go s.handleConfirmKeepAliveEvent(
 		playerList,
 		chanForConfirmKeepAliveEvent,
-		player,
+		uid,
 		cnt,
 		chanForError,
 		wg,
@@ -852,7 +816,6 @@ func (s *Server) initClient(
 	)
 	go s.handleSpawnPlayerEvent(
 		chanForSpawnPlayerEvent,
-		player,
 		cnt,
 		chanForError,
 		wg,
@@ -864,7 +827,6 @@ func (s *Server) initClient(
 	)
 	go s.handleDespawnEntityEvent(
 		chanForDespawnEntityEvent,
-		player,
 		cnt,
 		chanForError,
 		wg,
@@ -876,7 +838,6 @@ func (s *Server) initClient(
 	)
 	go s.handleSetEntityRelativePosEvent(
 		chanForSetEntityRelativePosEvent,
-		player,
 		cnt,
 		chanForError,
 		wg,
@@ -888,7 +849,6 @@ func (s *Server) initClient(
 	)
 	go s.handleSetEntityLookEvent(
 		chanForSetEntityLookEvent,
-		player,
 		cnt,
 		chanForError,
 		wg,
@@ -900,7 +860,6 @@ func (s *Server) initClient(
 	)
 	go s.handleSetEntityMetadataEvent(
 		chanForSetEntityMetadataEvent,
-		player,
 		cnt,
 		chanForError,
 		wg,
@@ -908,7 +867,7 @@ func (s *Server) initClient(
 
 	if err := world.InitPlayer(
 		lg,
-		player,
+		eid, uid, username,
 		cnt,
 		chanForSpawnPlayerEvent,
 		chanForDespawnEntityEvent,
@@ -916,10 +875,10 @@ func (s *Server) initClient(
 		chanForSetEntityLookEvent,
 		chanForSetEntityMetadataEvent,
 	); err != nil {
-		return nil, nil, nil, err
+		return 0, nil, nil, err
 	}
 
-	return player,
+	return eid,
 		chanForConfirmKeepAliveEvent,
 		chanForError,
 		nil
@@ -929,7 +888,7 @@ func (s *Server) closeClient(
 	lg *Logger,
 	playerList *PlayerList,
 	world *Overworld,
-	player *Player,
+	eid EID, uid UID,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 	chanForError ChanForError,
 	wg *sync.WaitGroup,
@@ -949,7 +908,7 @@ func (s *Server) closeClient(
 		chanForSetEntityMetadataEvent :=
 		world.ClosePlayer(
 			lg,
-			player,
+			eid,
 		)
 	close(chanForSpawnPlayerEvent)
 	close(chanForDespawnEntityEvent)
@@ -964,7 +923,7 @@ func (s *Server) closeClient(
 		chanForRemovePlayerEvent :=
 		playerList.ClosePlayer(
 			lg,
-			player,
+			uid,
 		)
 	close(chanForAddPlayerEvent)
 	close(chanForUpdateLatencyEvent)
@@ -1038,17 +997,18 @@ func (s *Server) handleClient(
 
 	wg := new(sync.WaitGroup)
 
-	player,
+	eid,
 		chanForConfirmKeepAliveEvent,
 		chanForError,
-		err := s.initClient(
-		lg,
-		playerList,
-		world,
-		cnt,
-		uid, username,
-		wg,
-	)
+		err :=
+		s.initClient(
+			lg,
+			playerList,
+			world,
+			cnt,
+			uid, username,
+			wg,
+		)
 	if err != nil {
 		panic(err)
 	}
@@ -1056,7 +1016,7 @@ func (s *Server) handleClient(
 		lg,
 		playerList,
 		world,
-		player,
+		eid, uid,
 		chanForConfirmKeepAliveEvent,
 		chanForError,
 		wg,
@@ -1068,7 +1028,7 @@ func (s *Server) handleClient(
 			if err := cnt.LoopForPlayState(
 				lg,
 				world,
-				player,
+				eid,
 				chanForConfirmKeepAliveEvent,
 			); err != nil {
 				panic(err)

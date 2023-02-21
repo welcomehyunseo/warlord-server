@@ -8,7 +8,7 @@ func main() {
 	lc := server.NewLoggerConfigurator()
 	lc.SetLogLevel(server.DebugLevel)
 	//lc.EnableReport()
-	lc.SetFilter("server-renderer")
+	//lc.SetFilter("server-renderer")
 	//lc.SetFilter("client-handler")
 	//lc.SetFilter("confirm-keep-alive-event-handler")
 	//lc.SetFilter("set-entity-relative-pos-event-handler")
@@ -27,13 +27,15 @@ func main() {
 		max,
 		favicon,
 		desc,
-		spawnX, spawnY, spawnZ,
-		spawnYaw, spawnPitch,
 	)
 
 	rndDist := int32(5)
 	playerList := server.NewPlayerList()
-	world := server.NewOverworld(rndDist)
+	world := server.NewOverworld(
+		rndDist,
+		spawnX, spawnY, spawnZ,
+		spawnYaw, spawnPitch,
+	)
 	world.MakeFlat()
 	s.Render(
 		playerList,

@@ -4,27 +4,50 @@ import (
 	"sync"
 )
 
+type PlayerListItem struct {
+	uid      UID
+	username string
+}
+
+func NewPlayerListItem(
+	uid UID,
+	username string,
+) *PlayerListItem {
+	return &PlayerListItem{
+		uid,
+		username,
+	}
+}
+
+func (i *PlayerListItem) GetUID() UID {
+	return i.uid
+}
+
+func (i *PlayerListItem) GetUsername() string {
+	return i.username
+}
+
 type PlayerList struct {
 	sync.RWMutex
 
-	players                    map[EID]*Player
-	chansForAddPlayerEvent     map[EID]ChanForAddPlayerEvent
-	chansForUpdateLatencyEvent map[EID]ChanForUpdateLatencyEvent
-	chansForRemovePlayerEvent  map[EID]ChanForRemovePlayerEvent
+	items                      map[UID]*PlayerListItem
+	chansForAddPlayerEvent     map[UID]ChanForAddPlayerEvent
+	chansForUpdateLatencyEvent map[UID]ChanForUpdateLatencyEvent
+	chansForRemovePlayerEvent  map[UID]ChanForRemovePlayerEvent
 }
 
 func NewPlayerList() *PlayerList {
 	return &PlayerList{
-		players:                    make(map[EID]*Player),
-		chansForAddPlayerEvent:     make(map[EID]ChanForAddPlayerEvent),
-		chansForUpdateLatencyEvent: make(map[EID]ChanForUpdateLatencyEvent),
-		chansForRemovePlayerEvent:  make(map[EID]ChanForRemovePlayerEvent),
+		items:                      make(map[UID]*PlayerListItem),
+		chansForAddPlayerEvent:     make(map[UID]ChanForAddPlayerEvent),
+		chansForUpdateLatencyEvent: make(map[UID]ChanForUpdateLatencyEvent),
+		chansForRemovePlayerEvent:  make(map[UID]ChanForRemovePlayerEvent),
 	}
 }
 
 func (l *PlayerList) InitPlayer(
 	lg *Logger,
-	player *Player,
+	uid UID, username string,
 	cnt *Client,
 	chanForAddPlayerEvent ChanForAddPlayerEvent,
 	chanForUpdateLatencyEvent ChanForUpdateLatencyEvent,
@@ -35,19 +58,18 @@ func (l *PlayerList) InitPlayer(
 
 	lg.Debug(
 		"it is started to init player in PlayerList",
-		NewLgElement("player", player),
+		NewLgElement("uid", uid),
+		NewLgElement("username", username),
 		NewLgElement("cnt", cnt),
 	)
 	defer func() {
 		lg.Debug("it is finished to init player in PlayerList")
 	}()
 
-	uid, username :=
-		player.GetUid(), player.GetUsername()
-	for eid1, player1 := range l.players {
+	for eid1, item := range l.items {
 		uid1, username1 :=
-			player1.GetUid(),
-			player1.GetUsername()
+			item.GetUID(),
+			item.GetUsername()
 		if err := cnt.AddPlayer(
 			lg, uid1, username1,
 		); err != nil {
@@ -68,18 +90,21 @@ func (l *PlayerList) InitPlayer(
 		return err
 	}
 
-	eid := player.GetEid()
-	l.players[eid] = player
-	l.chansForAddPlayerEvent[eid] = chanForAddPlayerEvent
-	l.chansForUpdateLatencyEvent[eid] = chanForUpdateLatencyEvent
-	l.chansForRemovePlayerEvent[eid] = chanForRemovePlayerEvent
+	item := NewPlayerListItem(
+		uid,
+		username,
+	)
+	l.items[uid] = item
+	l.chansForAddPlayerEvent[uid] = chanForAddPlayerEvent
+	l.chansForUpdateLatencyEvent[uid] = chanForUpdateLatencyEvent
+	l.chansForRemovePlayerEvent[uid] = chanForRemovePlayerEvent
 
 	return nil
 }
 
 func (l *PlayerList) UpdateLatency(
 	lg *Logger,
-	player *Player,
+	uid UID,
 	latency int32,
 	cnt *Client,
 ) error {
@@ -88,24 +113,21 @@ func (l *PlayerList) UpdateLatency(
 
 	lg.Debug(
 		"it is started to update latency in PlayerList",
-		NewLgElement("player", player),
+		NewLgElement("uid", uid),
 		NewLgElement("latency", latency),
-		NewLgElement("cnt", cnt),
 	)
 	defer func() {
 		lg.Debug("it is finished to update latency in PlayerList")
 	}()
 
-	eid := player.GetEid()
-	uid := player.GetUid()
 	event := NewUpdateLatencyEvent(
 		uid, latency,
 	)
-	for eid1, _ := range l.players {
-		if eid == eid1 {
+	for uid1, _ := range l.items {
+		if uid == uid1 {
 			continue
 		}
-		chanForEvent := l.chansForUpdateLatencyEvent[eid1]
+		chanForEvent := l.chansForUpdateLatencyEvent[uid1]
 		chanForEvent <- event
 	}
 
@@ -121,7 +143,7 @@ func (l *PlayerList) UpdateLatency(
 
 func (l *PlayerList) ClosePlayer(
 	lg *Logger,
-	player *Player,
+	uid UID,
 ) (
 	ChanForAddPlayerEvent,
 	ChanForUpdateLatencyEvent,
@@ -132,28 +154,26 @@ func (l *PlayerList) ClosePlayer(
 
 	lg.Debug(
 		"it is started to close player in PlayerList",
-		NewLgElement("player", player),
+		NewLgElement("uid", uid),
 	)
 	defer func() {
 		lg.Debug("it is finished to close player in PlayerList")
 	}()
 
-	eid := player.GetEid()
-	chanForAddPlayerEvent := l.chansForAddPlayerEvent[eid]
-	chanForUpdateLatencyEvent := l.chansForUpdateLatencyEvent[eid]
-	chanForRemovePlayerEvent := l.chansForRemovePlayerEvent[eid]
+	chanForAddPlayerEvent := l.chansForAddPlayerEvent[uid]
+	chanForUpdateLatencyEvent := l.chansForUpdateLatencyEvent[uid]
+	chanForRemovePlayerEvent := l.chansForRemovePlayerEvent[uid]
 
-	delete(l.chansForAddPlayerEvent, eid)
-	delete(l.chansForUpdateLatencyEvent, eid)
-	delete(l.chansForRemovePlayerEvent, eid)
-	delete(l.players, eid)
+	delete(l.chansForAddPlayerEvent, uid)
+	delete(l.chansForUpdateLatencyEvent, uid)
+	delete(l.chansForRemovePlayerEvent, uid)
+	delete(l.items, uid)
 
-	uid := player.GetUid()
 	event := NewRemovePlayerEvent(
 		uid,
 	)
-	for eid1, _ := range l.players {
-		chanForEvent := l.chansForRemovePlayerEvent[eid1]
+	for uid1, _ := range l.items {
+		chanForEvent := l.chansForRemovePlayerEvent[uid1]
 		chanForEvent <- event
 	}
 

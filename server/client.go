@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"io"
-	"math/rand"
 	"net"
 	"sync"
 )
@@ -140,6 +139,9 @@ func distribute(
 		switch pid {
 		case FinishTeleportPacketID:
 			inPacket = NewFinishTeleportPacket()
+			break
+		case EnterChatMessagePacketID:
+			inPacket = NewEnterChatMessagePacket()
 			break
 		case ChangeSettingsPacketID:
 			inPacket = NewChangeSettingsPacket()
@@ -520,8 +522,6 @@ func (cnt *Client) HandleLoginState(
 func (cnt *Client) JoinGame(
 	lg *Logger,
 	eid EID,
-	spawnX, spawnY, spawnZ float64,
-	spawnYaw, spawnPitch float32,
 ) error {
 	lg.Debug("it is started to join game in client")
 	defer func() {
@@ -559,31 +559,10 @@ func (cnt *Client) JoinGame(
 		0,
 		0,
 	)
-	if err := cnt.writeWithComp(setAbilitiesPacket); err != nil {
+	if err := cnt.writeWithComp(
+		setAbilitiesPacket,
+	); err != nil {
 		return err
-	}
-
-	payload := rand.Int31()
-	teleportPacket := NewTeleportPacket(
-		spawnX, spawnY, spawnZ,
-		spawnYaw, spawnPitch,
-		payload,
-	)
-	if err := cnt.writeWithComp(teleportPacket); err != nil {
-		return err
-	}
-
-	inPacket2, err := cnt.readWithComp(state)
-	if err != nil {
-		return err
-	}
-	finishTeleportPacket, ok := inPacket2.(*FinishTeleportPacket)
-	if ok == false {
-		return errors.New("it is invalid packet to init play state")
-	}
-	payload1 := finishTeleportPacket.GetPayload()
-	if payload != payload1 {
-		return errors.New("it is invalid payload of FinishTeleportPacket to init play state")
 	}
 
 	return nil
@@ -592,7 +571,7 @@ func (cnt *Client) JoinGame(
 func (cnt *Client) LoopForPlayState(
 	lg *Logger,
 	world *Overworld,
-	player *Player,
+	eid EID,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 ) error {
 	lg.Debug("it is started to loop for play state in client")
@@ -606,8 +585,6 @@ func (cnt *Client) LoopForPlayState(
 		return err
 	}
 
-	//eid := player.GetEid()
-
 	lg.Debug(
 		"client read packet to loop for play state in client",
 		NewLgElement("InPacket", inPacket),
@@ -617,13 +594,30 @@ func (cnt *Client) LoopForPlayState(
 
 	switch inPacket.(type) {
 	case *ConfirmKeepAlivePacket: // 0x0B
-		confirmKeepAlivePacket := inPacket.(*ConfirmKeepAlivePacket)
-		payload := confirmKeepAlivePacket.GetPayload()
+		confirmKeepAlivePacket :=
+			inPacket.(*ConfirmKeepAlivePacket)
+		payload :=
+			confirmKeepAlivePacket.GetPayload()
 		confirmKeepAliveEvent :=
 			NewConfirmKeepAliveEvent(
 				payload,
 			)
 		chanForConfirmKeepAliveEvent <- confirmKeepAliveEvent
+		break
+	case *EnterChatMessagePacket:
+		enterChatMessagePacket :=
+			inPacket.(*EnterChatMessagePacket)
+		text := enterChatMessagePacket.GetText()
+		message := &Chat{
+			Text: text,
+		}
+		sendChatMessagePacket :=
+			NewSendChatMessagePacket(message)
+		if err := cnt.writeWithComp(
+			sendChatMessagePacket,
+		); err != nil {
+			return err
+		}
 		break
 	case *ChangePosPacket:
 		changePosPacket := inPacket.(*ChangePosPacket)
@@ -635,7 +629,7 @@ func (cnt *Client) LoopForPlayState(
 
 		if err := world.UpdatePlayerPos(
 			lg,
-			player,
+			eid,
 			x, y, z,
 			ground,
 		); err != nil {
@@ -644,7 +638,7 @@ func (cnt *Client) LoopForPlayState(
 
 		if err := world.UpdatePlayerChunk(
 			lg,
-			player,
+			eid,
 			cnt,
 		); err != nil {
 			return err
@@ -659,7 +653,7 @@ func (cnt *Client) LoopForPlayState(
 
 		if err := world.UpdatePlayerLook(
 			lg,
-			player,
+			eid,
 			yaw, pitch,
 			ground,
 		); err != nil {
@@ -677,7 +671,7 @@ func (cnt *Client) LoopForPlayState(
 
 		if err := world.UpdatePlayerPos(
 			lg,
-			player,
+			eid,
 			x, y, z,
 			ground,
 		); err != nil {
@@ -690,7 +684,7 @@ func (cnt *Client) LoopForPlayState(
 
 		if err := world.UpdatePlayerLook(
 			lg,
-			player,
+			eid,
 			yaw, pitch,
 			ground,
 		); err != nil {
@@ -699,7 +693,7 @@ func (cnt *Client) LoopForPlayState(
 
 		if err := world.UpdatePlayerChunk(
 			lg,
-			player,
+			eid,
 			cnt,
 		); err != nil {
 			return err
@@ -719,7 +713,7 @@ func (cnt *Client) LoopForPlayState(
 		if startSneaking == true {
 			if err := world.UpdatePlayerSneaking(
 				lg,
-				player,
+				eid,
 				true,
 			); err != nil {
 				return err
@@ -727,7 +721,7 @@ func (cnt *Client) LoopForPlayState(
 		} else if stopSneaking == true {
 			if err := world.UpdatePlayerSneaking(
 				lg,
-				player,
+				eid,
 				false,
 			); err != nil {
 				return err
@@ -735,7 +729,7 @@ func (cnt *Client) LoopForPlayState(
 		} else if startSprinting == true {
 			if err := world.UpdatePlayerSprinting(
 				lg,
-				player,
+				eid,
 				true,
 			); err != nil {
 				return err
@@ -743,7 +737,7 @@ func (cnt *Client) LoopForPlayState(
 		} else if stopSprinting == true {
 			if err := world.UpdatePlayerSprinting(
 				lg,
-				player,
+				eid,
 				false,
 			); err != nil {
 				return err
