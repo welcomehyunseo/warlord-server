@@ -34,7 +34,9 @@ func main() {
 		spawnX, spawnY, spawnZ,
 		spawnYaw, spawnPitch,
 	)
-	world.MakeFlat()
+	world.MakeFlat(
+		server.StoneBlock,
+	)
 	s.Render(
 		world,
 	)

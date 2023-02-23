@@ -742,6 +742,7 @@ func (cnt *Client) LoopForPlayState(
 			}
 		}
 
+		break
 	}
 
 	for _, outPacket := range outPackets {

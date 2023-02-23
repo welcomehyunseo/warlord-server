@@ -17,6 +17,8 @@ type ChanForSetEntityMetadataEvent chan *SetEntityMetadataEvent
 type ChanForLoadChunkEvent chan *LoadChunkEvent
 type ChanForUnloadChunkEvent chan *UnloadChunkEvent
 
+type ChanForChangeWorldEvent chan *ChangeWorldEvent
+
 type AddPlayerEvent struct {
 	uid      UID
 	username string
@@ -458,4 +460,20 @@ func (e *UnloadChunkEvent) String() string {
 		e.cx,
 		e.cz,
 	)
+}
+
+type ChangeWorldEvent struct {
+	world Overworld
+}
+
+func NewChangeWorldEvent(
+	world Overworld,
+) *ChangeWorldEvent {
+	return &ChangeWorldEvent{
+		world,
+	}
+}
+
+func (e *ChangeWorldEvent) GetWorld() Overworld {
+	return e.world
 }

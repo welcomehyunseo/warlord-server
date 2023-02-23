@@ -12,7 +12,7 @@ var NilUID = UID(uuid.Nil)
 
 type Entity interface {
 	GetEid() EID
-	GetUid() UID
+	GetUID() UID
 
 	GetX() float64
 	GetY() float64
@@ -82,7 +82,7 @@ func (e *entity) GetEid() EID {
 	return e.eid
 }
 
-func (e *entity) GetUid() UID {
+func (e *entity) GetUID() UID {
 	return e.uid
 }
 

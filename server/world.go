@@ -144,7 +144,9 @@ type Overworld interface {
 		ChanForRemovePlayerEvent,
 	)
 
-	MakeFlat()
+	MakeFlat(
+		block *Block,
+	)
 }
 
 type overworld struct {
@@ -155,14 +157,13 @@ type overworld struct {
 	spawnX, spawnY, spawnZ float64
 	spawnYaw, spawnPitch   float32
 
-	playerList                 map[EID]*PlayerListItem
+	players                    map[EID]Player
 	chansForAddPlayerEvent     map[EID]ChanForAddPlayerEvent
 	chansForUpdateLatencyEvent map[EID]ChanForUpdateLatencyEvent
 	chansForRemovePlayerEvent  map[EID]ChanForRemovePlayerEvent
 
 	chunks map[ChunkPosStr]*Chunk
 
-	players                           map[EID]Player
 	chansForSpawnPlayerEvent          map[EID]ChanForSpawnPlayerEvent
 	chansForDespawnEntityEvent        map[EID]ChanForDespawnEntityEvent
 	chansForSetEntityLookEvent        map[EID]ChanForSetEntityLookEvent
@@ -186,14 +187,13 @@ func newOverworld(
 		spawnX: spawnX, spawnY: spawnY, spawnZ: spawnZ,
 		spawnYaw: spawnYaw, spawnPitch: spawnPitch,
 
-		playerList:                 make(map[EID]*PlayerListItem),
+		players:                    make(map[EID]Player),
 		chansForAddPlayerEvent:     make(map[EID]ChanForAddPlayerEvent),
 		chansForUpdateLatencyEvent: make(map[EID]ChanForUpdateLatencyEvent),
 		chansForRemovePlayerEvent:  make(map[EID]ChanForRemovePlayerEvent),
 
 		chunks: make(map[ChunkPosStr]*Chunk),
 
-		players:                           make(map[EID]Player),
 		chansForSpawnPlayerEvent:          make(map[EID]ChanForSpawnPlayerEvent),
 		chansForDespawnEntityEvent:        make(map[EID]ChanForDespawnEntityEvent),
 		chansForSetEntityLookEvent:        make(map[EID]ChanForSetEntityLookEvent),
@@ -229,11 +229,11 @@ func (w *overworld) InitPlayer(
 	eid := player.GetEid()
 
 	uid, username :=
-		player.GetUid(), player.GetUsername()
-	for eid1, item := range w.playerList {
+		player.GetUID(), player.GetUsername()
+	for eid1, player1 := range w.players {
 		uid1, username1 :=
-			item.GetUID(),
-			item.GetUsername()
+			player1.GetUID(),
+			player1.GetUsername()
 		if err := cnt.AddPlayer(
 			uid1, username1,
 		); err != nil {
@@ -252,11 +252,9 @@ func (w *overworld) InitPlayer(
 	); err != nil {
 		return err
 	}
-	item := NewPlayerListItem(
-		uid,
-		username,
-	)
-	w.playerList[eid] = item
+
+	w.players[eid] = player
+
 	w.chansForAddPlayerEvent[eid] =
 		chanForAddPlayerEvent
 	w.chansForUpdateLatencyEvent[eid] =
@@ -368,7 +366,7 @@ func (w *overworld) InitPlayer(
 				player1 := w.players[eid1]
 				eid1, uid1 :=
 					player1.GetEid(),
-					player1.GetUid()
+					player1.GetUID()
 				x1, y1, z1 :=
 					player1.GetX(),
 					player1.GetY(),
@@ -420,7 +418,7 @@ func (w *overworld) UpdatePlayerLatency(
 	event := NewUpdateLatencyEvent(
 		uid, latency,
 	)
-	for eid1, _ := range w.playerList {
+	for eid1, _ := range w.players {
 		chanForEvent :=
 			w.chansForUpdateLatencyEvent[eid1]
 		chanForEvent <- event
@@ -614,7 +612,7 @@ func (w *overworld) UpdatePlayerChunk(
 			for eid1, _ := range a {
 				player1 := w.players[eid1]
 				eid1, uid1 :=
-					player1.GetEid(), player1.GetUid()
+					player1.GetEid(), player1.GetUID()
 				x1, y1, z1 :=
 					player1.GetX(), player1.GetY(), player1.GetZ()
 				yaw1, pitch1 :=
@@ -765,18 +763,16 @@ func (w *overworld) ClosePlayer(
 	delete(w.chansForLoadChunkEvent, eid)
 	delete(w.chansForUnloadChunkEvent, eid)
 
-	delete(w.players, eid)
-
 	chanForAddPlayerEvent := w.chansForAddPlayerEvent[eid]
 	chanForUpdateLatencyEvent := w.chansForUpdateLatencyEvent[eid]
 	chanForRemovePlayerEvent := w.chansForRemovePlayerEvent[eid]
 
-	uid := player.GetUid()
+	uid := player.GetUID()
 	removePlayerEvent :=
 		NewRemovePlayerEvent(
 			uid,
 		)
-	for eid1, _ := range w.playerList {
+	for eid1, _ := range w.players {
 		chanForEvent := w.chansForRemovePlayerEvent[eid1]
 		chanForEvent <- removePlayerEvent
 	}
@@ -785,7 +781,7 @@ func (w *overworld) ClosePlayer(
 	delete(w.chansForUpdateLatencyEvent, eid)
 	delete(w.chansForRemovePlayerEvent, eid)
 
-	delete(w.playerList, eid)
+	delete(w.players, eid)
 
 	return chanForSpawnPlayerEvent,
 		chanForDespawnEntityEvent,
@@ -799,7 +795,9 @@ func (w *overworld) ClosePlayer(
 		chanForRemovePlayerEvent
 }
 
-func (w *overworld) MakeFlat() {
+func (w *overworld) MakeFlat(
+	block *Block,
+) {
 	w.Lock()
 	defer w.Unlock()
 
@@ -809,7 +807,7 @@ func (w *overworld) MakeFlat() {
 			part := NewChunkPart()
 			for z := 0; z < ChunkPartWidth; z++ {
 				for x := 0; x < ChunkPartWidth; x++ {
-					part.SetBlock(uint8(x), 0, uint8(z), StoneBlock)
+					part.SetBlock(uint8(x), 0, uint8(z), block)
 				}
 			}
 

@@ -21,10 +21,39 @@ const MaxNumForChannel = 16
 type ChanForError chan any
 
 type GreenRoomManager struct {
+	sync.RWMutex
+
+	rooms   map[int]*GreenRoom // room by index
+	indices map[EID]int        // id by eid
+
+	chansForChangeWorldEvent map[EID]ChanForChangeWorldEvent
 }
 
 func NewGreenRoomManager() *GreenRoomManager {
-	return &GreenRoomManager{}
+	return &GreenRoomManager{
+		rooms:   make(map[int]*GreenRoom),
+		indices: make(map[EID]int),
+	}
+}
+
+func (m *GreenRoomManager) InitPlayer(
+	eid EID,
+	chanForChangeWorldEvent ChanForChangeWorldEvent,
+) error {
+	m.Lock()
+	defer m.Unlock()
+
+	m.chansForChangeWorldEvent[eid] =
+		chanForChangeWorldEvent
+
+	return nil
+}
+
+func (m *GreenRoomManager) ClosePlayer() error {
+	m.Lock()
+	defer m.Unlock()
+
+	return nil
 }
 
 type Server struct {
@@ -79,9 +108,9 @@ func (s *Server) initClient(
 	s.Lock()
 	defer s.Unlock()
 
-	lg.Debug("it is started to init Connection")
+	lg.Debug("it is started to init Client")
 	defer func() {
-		lg.Debug("it is finished to init Connection")
+		lg.Debug("it is finished to init Client")
 	}()
 
 	eid := s.countEID()
