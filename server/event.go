@@ -4,39 +4,136 @@ import (
 	"fmt"
 )
 
-type ChanForSpawnPlayerEvent chan *SpawnPlayerEvent
-type ChanForDespawnEntityEvent chan *DespawnEntityEvent
-
-type ChanForSetEntityRelativePosEvent chan *SetEntityRelativePosEvent
-type ChanForSetEntityLookEvent chan *SetEntityLookEvent
-type ChanForSetEntityMetadataEvent chan *SetEntityMetadataEvent
-
 type ChanForAddPlayerEvent chan *AddPlayerEvent
 type ChanForUpdateLatencyEvent chan *UpdateLatencyEvent
 type ChanForRemovePlayerEvent chan *RemovePlayerEvent
-
 type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
 
-type DespawnEntityEvent struct {
-	eid EID
+type ChanForSpawnPlayerEvent chan *SpawnPlayerEvent
+type ChanForDespawnEntityEvent chan *DespawnEntityEvent
+type ChanForSetEntityRelativePosEvent chan *SetEntityRelativePosEvent
+type ChanForSetEntityLookEvent chan *SetEntityLookEvent
+type ChanForSetEntityMetadataEvent chan *SetEntityMetadataEvent
+type ChanForLoadChunkEvent chan *LoadChunkEvent
+type ChanForUnloadChunkEvent chan *UnloadChunkEvent
+
+type AddPlayerEvent struct {
+	uid      UID
+	username string
+	ctx      chan bool
 }
 
-func NewDespawnEntityEvent(
-	eid EID,
-) *DespawnEntityEvent {
-	return &DespawnEntityEvent{
-		eid: eid,
+func NewAddPlayerEvent(
+	uid UID,
+	username string,
+) *AddPlayerEvent {
+	return &AddPlayerEvent{
+		uid:      uid,
+		username: username,
+		ctx:      make(chan bool, 1),
 	}
 }
 
-func (e *DespawnEntityEvent) GetEID() EID {
-	return e.eid
+func (e *AddPlayerEvent) GetUUID() UID {
+	return e.uid
 }
 
-func (e *DespawnEntityEvent) String() string {
+func (e *AddPlayerEvent) GetUsername() string {
+	return e.username
+}
+
+func (e *AddPlayerEvent) Done() {
+	e.ctx <- true
+}
+
+func (e *AddPlayerEvent) Fail() {
+	e.ctx <- false
+}
+
+func (e *AddPlayerEvent) Wait() {
+	<-e.ctx
+	close(e.ctx)
+}
+
+func (e *AddPlayerEvent) String() string {
 	return fmt.Sprintf(
-		"{ eid: %d }",
-		e.eid,
+		"{ uid: %+v, username: %s } ",
+		e.uid, e.username,
+	)
+}
+
+type UpdateLatencyEvent struct {
+	uid     UID
+	latency int32
+}
+
+func NewUpdateLatencyEvent(
+	uid UID,
+	latency int32,
+) *UpdateLatencyEvent {
+	return &UpdateLatencyEvent{
+		uid:     uid,
+		latency: latency,
+	}
+}
+
+func (e *UpdateLatencyEvent) GetUUID() UID {
+	return e.uid
+}
+
+func (e *UpdateLatencyEvent) GetLatency() int32 {
+	return e.latency
+}
+
+func (e *UpdateLatencyEvent) String() string {
+	return fmt.Sprintf(
+		"{ uid: %+v, latency: %d } ",
+		e.uid, e.latency,
+	)
+}
+
+type RemovePlayerEvent struct {
+	uid UID
+}
+
+func NewRemovePlayerEvent(
+	uid UID,
+) *RemovePlayerEvent {
+	return &RemovePlayerEvent{
+		uid: uid,
+	}
+}
+
+func (e *RemovePlayerEvent) GetUUID() UID {
+	return e.uid
+}
+
+func (e *RemovePlayerEvent) String() string {
+	return fmt.Sprintf(
+		"{ uid: %+v } ",
+		e.uid,
+	)
+}
+
+type ConfirmKeepAliveEvent struct {
+	payload int64
+}
+
+func NewConfirmKeepAliveEvent(
+	payload int64,
+) *ConfirmKeepAliveEvent {
+	return &ConfirmKeepAliveEvent{
+		payload: payload,
+	}
+}
+
+func (e *ConfirmKeepAliveEvent) GetPayload() int64 {
+	return e.payload
+}
+
+func (e *ConfirmKeepAliveEvent) String() string {
+	return fmt.Sprintf(
+		"{ payload: %d }", e.payload,
 	)
 }
 
@@ -114,6 +211,29 @@ func (p *SpawnPlayerEvent) String() string {
 		p.x, p.y, p.z,
 		p.yaw, p.pitch,
 		p.sneaking, p.sprinting,
+	)
+}
+
+type DespawnEntityEvent struct {
+	eid EID
+}
+
+func NewDespawnEntityEvent(
+	eid EID,
+) *DespawnEntityEvent {
+	return &DespawnEntityEvent{
+		eid: eid,
+	}
+}
+
+func (e *DespawnEntityEvent) GetEID() EID {
+	return e.eid
+}
+
+func (e *DespawnEntityEvent) String() string {
+	return fmt.Sprintf(
+		"{ eid: %d }",
+		e.eid,
 	)
 }
 
@@ -254,122 +374,88 @@ func (e *SetEntityMetadataEvent) String() string {
 	)
 }
 
-type AddPlayerEvent struct {
-	uid      UID
-	username string
-	ctx      chan bool
+type LoadChunkEvent struct {
+	overworld, init bool
+	cx, cz          int32
+	chunk           *Chunk
 }
 
-func NewAddPlayerEvent(
-	uid UID,
-	username string,
-) *AddPlayerEvent {
-	return &AddPlayerEvent{
-		uid:      uid,
-		username: username,
-		ctx:      make(chan bool, 1),
+func NewLoadChunkEvent(
+	overworld, init bool,
+	cx, cz int32,
+	chunk *Chunk,
+) *LoadChunkEvent {
+	return &LoadChunkEvent{
+		overworld, init,
+		cx, cz,
+		chunk,
 	}
 }
 
-func (e *AddPlayerEvent) GetUUID() UID {
-	return e.uid
+func (e *LoadChunkEvent) GetOverworld() bool {
+	return e.overworld
 }
 
-func (e *AddPlayerEvent) GetUsername() string {
-	return e.username
+func (e *LoadChunkEvent) GetInit() bool {
+	return e.init
 }
 
-func (e *AddPlayerEvent) Done() {
-	e.ctx <- true
+func (e *LoadChunkEvent) GetCx() int32 {
+	return e.cx
 }
 
-func (e *AddPlayerEvent) Fail() {
-	e.ctx <- false
+func (e *LoadChunkEvent) GetCz() int32 {
+	return e.cz
 }
 
-func (e *AddPlayerEvent) Wait() {
-	<-e.ctx
-	close(e.ctx)
+func (e *LoadChunkEvent) GetChunk() *Chunk {
+	return e.chunk
 }
 
-func (e *AddPlayerEvent) String() string {
+func (e *LoadChunkEvent) String() string {
 	return fmt.Sprintf(
-		"{ uid: %+v, username: %s } ",
-		e.uid, e.username,
+		"{ "+
+			"overworld: %v, "+
+			"init: %v, "+
+			"cx: %d, "+
+			"cz: %d, "+
+			"chunk: %s "+
+			"}",
+		e.overworld,
+		e.init,
+		e.cx,
+		e.cz,
+		e.chunk,
 	)
 }
 
-type UpdateLatencyEvent struct {
-	uid     UID
-	latency int32
+type UnloadChunkEvent struct {
+	cx, cz int32
 }
 
-func NewUpdateLatencyEvent(
-	uid UID,
-	latency int32,
-) *UpdateLatencyEvent {
-	return &UpdateLatencyEvent{
-		uid:     uid,
-		latency: latency,
+func NewUnloadChunkEvent(
+	cx, cz int32,
+) *UnloadChunkEvent {
+	return &UnloadChunkEvent{
+		cx, cz,
 	}
 }
 
-func (e *UpdateLatencyEvent) GetUUID() UID {
-	return e.uid
+func (e *UnloadChunkEvent) GetCx() int32 {
+	return e.cx
 }
 
-func (e *UpdateLatencyEvent) GetLatency() int32 {
-	return e.latency
+func (e *UnloadChunkEvent) GetCz() int32 {
+	return e.cz
 }
 
-func (e *UpdateLatencyEvent) String() string {
+func (e *UnloadChunkEvent) String() string {
 	return fmt.Sprintf(
-		"{ uid: %+v, latency: %d } ",
-		e.uid, e.latency,
-	)
-}
-
-type RemovePlayerEvent struct {
-	uid UID
-}
-
-func NewRemovePlayerEvent(
-	uid UID,
-) *RemovePlayerEvent {
-	return &RemovePlayerEvent{
-		uid: uid,
-	}
-}
-
-func (e *RemovePlayerEvent) GetUUID() UID {
-	return e.uid
-}
-
-func (e *RemovePlayerEvent) String() string {
-	return fmt.Sprintf(
-		"{ uid: %+v } ",
-		e.uid,
-	)
-}
-
-type ConfirmKeepAliveEvent struct {
-	payload int64
-}
-
-func NewConfirmKeepAliveEvent(
-	payload int64,
-) *ConfirmKeepAliveEvent {
-	return &ConfirmKeepAliveEvent{
-		payload: payload,
-	}
-}
-
-func (e *ConfirmKeepAliveEvent) GetPayload() int64 {
-	return e.payload
-}
-
-func (e *ConfirmKeepAliveEvent) String() string {
-	return fmt.Sprintf(
-		"{ payload: %d }", e.payload,
+		"{ "+
+			"cx: %d, "+
+			"cz: %d, "+
+			"}",
+		e.cx,
+		e.cz,
 	)
 }

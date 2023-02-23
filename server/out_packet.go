@@ -26,6 +26,7 @@ const UpdateLatencyPacketID = 0x2E
 const RemovePlayerPacketID = 0x2E
 const TeleportPacketID = 0x2F
 const DespawnEntityPacketID = 0x32
+const RespawnPacketID = 0x35
 const SetEntityHeadLookPacketID = 0x36
 const SetEntityMetadataPacketID = 0x3C
 const SetSpawnPosPacketID = 0x46
@@ -1327,6 +1328,87 @@ func (p *DespawnEntityPacket) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, eid: %d }",
 		p.packet, p.eid,
+	)
+}
+
+type RespawnPacket struct {
+	*packet
+	dimension  int32
+	difficulty uint8
+	gamemode   uint8
+	level      string
+}
+
+func NewRespawnPacket(
+	dimension int32,
+	difficulty uint8,
+	gamemode uint8,
+	level string,
+) *RespawnPacket {
+	return &RespawnPacket{
+		newPacket(
+			Outbound,
+			PlayState,
+			RespawnPacketID,
+		),
+		dimension,
+		difficulty,
+		gamemode,
+		level,
+	}
+}
+
+func (p *RespawnPacket) Pack() (
+	*Data,
+	error,
+) {
+	data := NewData()
+	if err := data.WriteInt32(p.dimension); err != nil {
+		return nil, err
+	}
+	if err := data.WriteUint8(p.difficulty); err != nil {
+		return nil, err
+	}
+	if err := data.WriteUint8(p.gamemode); err != nil {
+		return nil, err
+	}
+	if err := data.WriteString(p.level); err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func (p *RespawnPacket) GetDimension() int32 {
+	return p.dimension
+}
+
+func (p *RespawnPacket) GetDifficulty() uint8 {
+	return p.difficulty
+}
+
+func (p *RespawnPacket) GetGamemode() uint8 {
+	return p.gamemode
+}
+
+func (p *RespawnPacket) GetLevel() string {
+	return p.level
+}
+
+func (p *RespawnPacket) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"dimension: %d, "+
+			"difficulty: %d, "+
+			"gamemode: %d, "+
+			"level: %s "+
+			"}",
+		p.packet,
+		p.dimension,
+		p.difficulty,
+		p.gamemode,
+		p.level,
 	)
 }
 

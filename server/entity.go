@@ -10,27 +10,71 @@ type UID uuid.UUID
 
 var NilUID = UID(uuid.Nil)
 
+type Entity interface {
+	GetEid() EID
+	GetUid() UID
+
+	GetX() float64
+	GetY() float64
+	GetZ() float64
+
+	GetPrevX() float64
+	GetPrevY() float64
+	GetPrevZ() float64
+	SetPos(
+		x, y, z float64,
+		ground bool,
+	)
+	UpdatePos(
+		world Overworld,
+		x, y, z float64,
+		ground bool,
+	) error
+
+	GetYaw() float32
+	GetPitch() float32
+	SetLook(
+		yaw, pitch float32,
+		ground bool,
+	)
+	UpdateLook(
+		world Overworld,
+		yaw, pitch float32,
+		ground bool,
+	) error
+
+	IsGround() bool
+
+	IsSneaking() bool
+	UpdateSneaking(
+		world Overworld,
+		sneaking bool,
+	) error
+
+	IsSprinting() bool
+	UpdateSprinting(
+		world Overworld,
+		sprinting bool,
+	) error
+}
+
 type entity struct {
 	eid                 EID
 	uid                 UID
 	x, y, z             float64
-	yaw, pitch          float32
 	prevX, prevY, prevZ float64
+	yaw, pitch          float32
+	ground              bool
 	sneaking, sprinting bool
 }
 
 func newEntity(
 	eid EID,
 	uid UID,
-	x, y, z float64,
-	yaw, pitch float32,
 ) *entity {
 	return &entity{
 		eid: eid,
 		uid: uid,
-		x:   x, y: y, z: z,
-		yaw: yaw, pitch: pitch,
-		prevX: x, prevY: y, prevZ: z,
 	}
 }
 
@@ -54,21 +98,6 @@ func (e *entity) GetZ() float64 {
 	return e.z
 }
 
-func (e *entity) GetYaw() float32 {
-	return e.yaw
-}
-
-func (e *entity) GetPitch() float32 {
-	return e.pitch
-}
-
-func (e *entity) UpdateLook(
-	yaw, pitch float32,
-) {
-	e.yaw = yaw
-	e.pitch = pitch
-}
-
 func (e *entity) GetPrevX() float64 {
 	return e.prevX
 }
@@ -81,20 +110,9 @@ func (e *entity) GetPrevZ() float64 {
 	return e.prevZ
 }
 
-func (e *entity) GetDeltaX() int16 {
-	return int16(((e.x * 32) - (e.prevX * 32)) * 128)
-}
-
-func (e *entity) GetDeltaY() int16 {
-	return int16(((e.y * 32) - (e.prevY * 32)) * 128)
-}
-
-func (e *entity) GetDeltaZ() int16 {
-	return int16(((e.z * 32) - (e.prevZ * 32)) * 128)
-}
-
-func (e *entity) UpdatePos(
+func (e *entity) SetPos(
 	x, y, z float64,
+	ground bool,
 ) {
 	e.prevX = e.x
 	e.prevY = e.y
@@ -102,30 +120,80 @@ func (e *entity) UpdatePos(
 	e.x = x
 	e.y = y
 	e.z = z
+	e.ground = ground
+}
+
+func (e *entity) UpdatePos(
+	world Overworld,
+	x, y, z float64,
+	ground bool,
+) error {
+	e.SetPos(
+		x, y, z,
+		ground,
+	)
+
+	return nil
+}
+
+func (e *entity) GetYaw() float32 {
+	return e.yaw
+}
+
+func (e *entity) GetPitch() float32 {
+	return e.pitch
+}
+
+func (e *entity) SetLook(
+	yaw, pitch float32,
+	ground bool,
+) {
+	e.yaw = yaw
+	e.pitch = pitch
+	e.ground = ground
+}
+
+func (e *entity) UpdateLook(
+	world Overworld,
+	yaw, pitch float32,
+	ground bool,
+) error {
+	e.SetLook(
+		yaw, pitch,
+		ground,
+	)
+
+	return nil
+}
+
+func (e *entity) IsGround() bool {
+	return e.ground
 }
 
 func (e *entity) IsSneaking() bool {
 	return e.sneaking
 }
 
-func (e *entity) StartSneaking() {
-	e.sneaking = true
-}
+func (e *entity) UpdateSneaking(
+	world Overworld,
+	sneaking bool,
+) error {
+	e.sneaking = sneaking
 
-func (e *entity) StopSneaking() {
-	e.sneaking = false
+	return nil
 }
 
 func (e *entity) IsSprinting() bool {
 	return e.sprinting
 }
 
-func (e *entity) StartSprinting() {
-	e.sprinting = true
-}
+func (e *entity) UpdateSprinting(
+	world Overworld,
+	sprinting bool,
+) error {
+	e.sprinting = sprinting
 
-func (e *entity) StopSprinting() {
-	e.sprinting = false
+	return nil
 }
 
 func (e *entity) String() string {
@@ -147,6 +215,10 @@ func (e *entity) String() string {
 	)
 }
 
+type Living interface {
+	Entity
+}
+
 type living struct {
 	*entity
 }
@@ -154,15 +226,11 @@ type living struct {
 func newLiving(
 	eid EID,
 	uid UID,
-	x, y, z float64,
-	yaw, pitch float32,
 ) *living {
 	return &living{
 		entity: newEntity(
 			eid,
 			uid,
-			x, y, z,
-			yaw, pitch,
 		),
 	}
 }
@@ -174,38 +242,189 @@ func (l *living) String() string {
 	)
 }
 
-type Player struct {
+type Player interface {
+	Living
+
+	EnterChatMessage(
+		text string,
+	) error
+	GetUsername() string
+}
+
+type player struct {
 	*living
 
 	username string
 }
 
-func NewPlayer(
+func newPlayer(
 	eid EID,
 	uid UID,
 	username string,
-	x, y, z float64,
-	yaw, pitch float32,
-
-) *Player {
-	return &Player{
+) *player {
+	return &player{
 		living: newLiving(
 			eid,
 			uid,
-			x, y, z,
-			yaw, pitch,
 		),
 		username: username,
 	}
 }
 
-func (p *Player) GetUsername() string {
+func (p *player) EnterChatMessage(
+	text string,
+) error {
+
+	return nil
+}
+
+func (p *player) UpdatePos(
+	world Overworld,
+	x, y, z float64,
+	ground bool,
+) error {
+	if err := p.living.UpdatePos(
+		world,
+		x, y, z,
+		ground,
+	); err != nil {
+		return err
+	}
+
+	eid := p.eid
+	prevX, prevY, prevZ :=
+		p.prevX, p.prevY, p.prevZ
+	deltaX, deltaY, deltaZ :=
+		int16(((x*32)-(prevX*32))*128),
+		int16(((y*32)-(prevY*32))*128),
+		int16(((z*32)-(prevZ*32))*128)
+	if err := world.UpdatePlayerPos(
+		eid,
+		deltaX, deltaY, deltaZ,
+		ground,
+	); err != nil {
+		return err
+	}
+
+	uid := p.uid
+	yaw, pitch :=
+		p.yaw, p.pitch
+	sneaking, sprinting :=
+		p.sneaking, p.sprinting
+	if err := world.UpdatePlayerChunk(
+		eid, uid,
+		x, y, z,
+		prevX, prevY, prevZ,
+		yaw, pitch,
+		sneaking, sprinting,
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *player) UpdateLook(
+	world Overworld,
+	yaw, pitch float32,
+	ground bool,
+) error {
+	if err := p.living.UpdateLook(
+		world,
+		yaw, pitch,
+		ground,
+	); err != nil {
+		return err
+	}
+
+	eid := p.eid
+	if err := world.UpdatePlayerLook(
+		eid,
+		yaw, pitch,
+		ground,
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *player) UpdateSneaking(
+	world Overworld,
+	sneaking bool,
+) error {
+	if err := p.living.UpdateSneaking(
+		world,
+		sneaking,
+	); err != nil {
+		return err
+	}
+
+	eid := p.eid
+	if err := world.UpdatePlayerSneaking(
+		eid,
+		sneaking,
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *player) UpdateSprinting(
+	world Overworld,
+	sprinting bool,
+) error {
+	if err := p.living.UpdateSprinting(
+		world,
+		sprinting,
+	); err != nil {
+		return err
+	}
+
+	eid := p.eid
+	if err := world.UpdatePlayerSprinting(
+		eid,
+		sprinting,
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *player) GetUsername() string {
 	return p.username
 }
 
-func (p *Player) String() string {
+func (p *player) String() string {
 	return fmt.Sprintf(
 		"{ living: %+v, username: %s }",
 		p.living, p.username,
+	)
+}
+
+type Guest struct {
+	*player
+}
+
+func NewGuest(
+	eid EID,
+	uid UID,
+	username string,
+) *Guest {
+	return &Guest{
+		player: newPlayer(
+			eid,
+			uid,
+			username,
+		),
+	}
+}
+
+func (p *Guest) String() string {
+	return fmt.Sprintf(
+		"{ player: %+v }",
+		p.player,
 	)
 }

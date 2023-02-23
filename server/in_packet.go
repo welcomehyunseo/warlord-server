@@ -13,6 +13,7 @@ const FinishTeleportPacketID = 0x00
 const EnterChatMessagePacketID = 0x02
 const ClickButtonPacketID = 0x03
 const ChangeSettingsPacketID = 0x04
+const InteractWithEntityPacketID = 0x0A
 const ConfirmKeepAlivePacketID = 0x0B
 const ChangePosPacketID = 0x0D
 const ChangePosAndLookPacketID = 0x0E
@@ -277,8 +278,8 @@ func (p *FinishTeleportPacket) String() string {
 type ClickButtonPacket struct {
 	*packet
 
-	respawn bool // when the client is ready to complete login and respawn after death
-	stats   bool // when the client opens the statistics menu
+	respawn bool // when the Client is ready to complete login and respawn after death
+	stats   bool // when the Client opens the statistics menu
 }
 
 func NewClickButtonPacket() *ClickButtonPacket {
@@ -488,6 +489,80 @@ func (p *ChangeSettingsPacket) String() string {
 		p.leftPants, p.rightPants,
 		p.hat,
 		p.mainHand,
+	)
+}
+
+type InteractWithEntityPacket struct {
+	*packet
+	target                    EID
+	num                       int32
+	targetX, targetY, targetZ float32
+	hand                      int32
+}
+
+func NewInteractWithEntityPacket() *InteractWithEntityPacket {
+	return &InteractWithEntityPacket{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			InteractWithEntityPacketID,
+		),
+	}
+}
+
+func (p *InteractWithEntityPacket) Unpack(
+	data *Data,
+) error {
+	target, err := data.ReadVarInt()
+	if err != nil {
+		return err
+	}
+	p.target = EID(target)
+	num, err := data.ReadVarInt()
+	if err != nil {
+		return err
+	}
+	p.num = num
+	if num == 2 {
+		targetX, err := data.ReadFloat32()
+		if err != nil {
+			return err
+		}
+		p.targetX = targetX
+		targetY, err := data.ReadFloat32()
+		if err != nil {
+			return err
+		}
+		p.targetY = targetY
+		targetZ, err := data.ReadFloat32()
+		if err != nil {
+			return err
+		}
+		p.targetZ = targetZ
+	}
+	if num == 0 || num == 2 {
+		hand, err := data.ReadVarInt()
+		if err != nil {
+			return err
+		}
+		p.hand = hand
+	}
+	return nil
+}
+
+func (p *InteractWithEntityPacket) String() string {
+	return fmt.Sprintf(
+		"{ packet: %+v, "+
+			"target: %d, "+
+			"num: %d, "+
+			"targetX: %f, targetY: %f, targetZ: %f, "+
+			"hand: %d "+
+			"}",
+		p.packet,
+		p.target,
+		p.num,
+		p.targetX, p.targetY, p.targetZ,
+		p.hand,
 	)
 }
 
