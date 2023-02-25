@@ -29,16 +29,28 @@ func main() {
 		float64(0), float64(70), float64(0)
 	spawnYaw, spawnPitch :=
 		float32(0), float32(0)
-	world := server.NewLobby(
+	lobby := server.NewLobby(
 		rndDist,
 		spawnX, spawnY, spawnZ,
 		spawnYaw, spawnPitch,
 	)
-	world.MakeFlat(
+	lobby.MakeFlat(
 		server.StoneBlock,
 	)
+	gameManager :=
+		server.NewGameManager(
+			lobby,
+			[]*server.Game{
+				server.NewGame(
+					rndDist,
+					spawnX, spawnY, spawnZ,
+					spawnYaw, spawnPitch,
+				),
+			}...,
+		)
 	s.Render(
-		world,
+		gameManager,
+		lobby,
 	)
 
 }

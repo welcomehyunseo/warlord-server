@@ -11,7 +11,7 @@ type UID uuid.UUID
 var NilUID = UID(uuid.Nil)
 
 type Entity interface {
-	GetEid() EID
+	GetEID() EID
 	GetUID() UID
 
 	GetX() float64
@@ -21,24 +21,14 @@ type Entity interface {
 	GetPrevX() float64
 	GetPrevY() float64
 	GetPrevZ() float64
-	SetPos(
-		x, y, z float64,
-		ground bool,
-	)
 	UpdatePos(
-		world Overworld,
 		x, y, z float64,
 		ground bool,
 	) error
 
 	GetYaw() float32
 	GetPitch() float32
-	SetLook(
-		yaw, pitch float32,
-		ground bool,
-	)
 	UpdateLook(
-		world Overworld,
 		yaw, pitch float32,
 		ground bool,
 	) error
@@ -47,13 +37,11 @@ type Entity interface {
 
 	IsSneaking() bool
 	UpdateSneaking(
-		world Overworld,
 		sneaking bool,
 	) error
 
 	IsSprinting() bool
 	UpdateSprinting(
-		world Overworld,
 		sprinting bool,
 	) error
 }
@@ -78,7 +66,7 @@ func newEntity(
 	}
 }
 
-func (e *entity) GetEid() EID {
+func (e *entity) GetEID() EID {
 	return e.eid
 }
 
@@ -110,10 +98,10 @@ func (e *entity) GetPrevZ() float64 {
 	return e.prevZ
 }
 
-func (e *entity) SetPos(
+func (e *entity) UpdatePos(
 	x, y, z float64,
 	ground bool,
-) {
+) error {
 	e.prevX = e.x
 	e.prevY = e.y
 	e.prevZ = e.z
@@ -121,17 +109,6 @@ func (e *entity) SetPos(
 	e.y = y
 	e.z = z
 	e.ground = ground
-}
-
-func (e *entity) UpdatePos(
-	world Overworld,
-	x, y, z float64,
-	ground bool,
-) error {
-	e.SetPos(
-		x, y, z,
-		ground,
-	)
 
 	return nil
 }
@@ -144,24 +121,13 @@ func (e *entity) GetPitch() float32 {
 	return e.pitch
 }
 
-func (e *entity) SetLook(
-	yaw, pitch float32,
-	ground bool,
-) {
-	e.yaw = yaw
-	e.pitch = pitch
-	e.ground = ground
-}
-
 func (e *entity) UpdateLook(
-	world Overworld,
 	yaw, pitch float32,
 	ground bool,
 ) error {
-	e.SetLook(
-		yaw, pitch,
-		ground,
-	)
+	e.yaw = yaw
+	e.pitch = pitch
+	e.ground = ground
 
 	return nil
 }
@@ -175,7 +141,6 @@ func (e *entity) IsSneaking() bool {
 }
 
 func (e *entity) UpdateSneaking(
-	world Overworld,
 	sneaking bool,
 ) error {
 	e.sneaking = sneaking
@@ -188,7 +153,6 @@ func (e *entity) IsSprinting() bool {
 }
 
 func (e *entity) UpdateSprinting(
-	world Overworld,
 	sprinting bool,
 ) error {
 	e.sprinting = sprinting
@@ -246,6 +210,7 @@ type Player interface {
 	Living
 
 	EnterChatMessage(
+		gameManager *GameManager,
 		text string,
 	) error
 	GetUsername() string
@@ -272,51 +237,35 @@ func newPlayer(
 }
 
 func (p *player) EnterChatMessage(
+	gameManager *GameManager,
 	text string,
 ) error {
+
+	if text == "join" {
+		if err := gameManager.Join(
+			p,
+			0,
+		); err != nil {
+			return err
+		}
+	} else if text == "leave" {
+		if err := gameManager.Leave(
+			p,
+		); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
 
 func (p *player) UpdatePos(
-	world Overworld,
 	x, y, z float64,
 	ground bool,
 ) error {
 	if err := p.living.UpdatePos(
-		world,
 		x, y, z,
 		ground,
-	); err != nil {
-		return err
-	}
-
-	eid := p.eid
-	prevX, prevY, prevZ :=
-		p.prevX, p.prevY, p.prevZ
-	deltaX, deltaY, deltaZ :=
-		int16(((x*32)-(prevX*32))*128),
-		int16(((y*32)-(prevY*32))*128),
-		int16(((z*32)-(prevZ*32))*128)
-	if err := world.UpdatePlayerPos(
-		eid,
-		deltaX, deltaY, deltaZ,
-		ground,
-	); err != nil {
-		return err
-	}
-
-	uid := p.uid
-	yaw, pitch :=
-		p.yaw, p.pitch
-	sneaking, sprinting :=
-		p.sneaking, p.sprinting
-	if err := world.UpdatePlayerChunk(
-		eid, uid,
-		x, y, z,
-		prevX, prevY, prevZ,
-		yaw, pitch,
-		sneaking, sprinting,
 	); err != nil {
 		return err
 	}
@@ -325,21 +274,10 @@ func (p *player) UpdatePos(
 }
 
 func (p *player) UpdateLook(
-	world Overworld,
 	yaw, pitch float32,
 	ground bool,
 ) error {
 	if err := p.living.UpdateLook(
-		world,
-		yaw, pitch,
-		ground,
-	); err != nil {
-		return err
-	}
-
-	eid := p.eid
-	if err := world.UpdatePlayerLook(
-		eid,
 		yaw, pitch,
 		ground,
 	); err != nil {
@@ -350,19 +288,9 @@ func (p *player) UpdateLook(
 }
 
 func (p *player) UpdateSneaking(
-	world Overworld,
 	sneaking bool,
 ) error {
 	if err := p.living.UpdateSneaking(
-		world,
-		sneaking,
-	); err != nil {
-		return err
-	}
-
-	eid := p.eid
-	if err := world.UpdatePlayerSneaking(
-		eid,
 		sneaking,
 	); err != nil {
 		return err
@@ -372,19 +300,9 @@ func (p *player) UpdateSneaking(
 }
 
 func (p *player) UpdateSprinting(
-	world Overworld,
 	sprinting bool,
 ) error {
 	if err := p.living.UpdateSprinting(
-		world,
-		sprinting,
-	); err != nil {
-		return err
-	}
-
-	eid := p.eid
-	if err := world.UpdatePlayerSprinting(
-		eid,
 		sprinting,
 	); err != nil {
 		return err
@@ -423,6 +341,31 @@ func NewGuest(
 }
 
 func (p *Guest) String() string {
+	return fmt.Sprintf(
+		"{ player: %+v }",
+		p.player,
+	)
+}
+
+type Warlord struct {
+	*player
+}
+
+func NewWarlord(
+	eid EID,
+	uid UID,
+	username string,
+) *Warlord {
+	return &Warlord{
+		player: newPlayer(
+			eid,
+			uid,
+			username,
+		),
+	}
+}
+
+func (p *Warlord) String() string {
 	return fmt.Sprintf(
 		"{ player: %+v }",
 		p.player,

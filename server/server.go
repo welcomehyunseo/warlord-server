@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"github.com/google/uuid"
 	"net"
 	"sync"
@@ -11,7 +12,7 @@ const Network = "tcp"   // network type of server
 const McName = "1.12.2" // minecraft version name
 const ProtVer = 340     // protocol version
 
-const CompThold = 16 // threshold for compression
+const CompThold = 1 // threshold for compression
 
 const DelayForCheckKeepAlive = time.Millisecond * 1000
 const LoopDelayForPlayState = time.Millisecond * 1
@@ -19,42 +20,6 @@ const LoopDelayForPlayState = time.Millisecond * 1
 const MaxNumForChannel = 16
 
 type ChanForError chan any
-
-type GreenRoomManager struct {
-	sync.RWMutex
-
-	rooms   map[int]*GreenRoom // room by index
-	indices map[EID]int        // id by eid
-
-	chansForChangeWorldEvent map[EID]ChanForChangeWorldEvent
-}
-
-func NewGreenRoomManager() *GreenRoomManager {
-	return &GreenRoomManager{
-		rooms:   make(map[int]*GreenRoom),
-		indices: make(map[EID]int),
-	}
-}
-
-func (m *GreenRoomManager) InitPlayer(
-	eid EID,
-	chanForChangeWorldEvent ChanForChangeWorldEvent,
-) error {
-	m.Lock()
-	defer m.Unlock()
-
-	m.chansForChangeWorldEvent[eid] =
-		chanForChangeWorldEvent
-
-	return nil
-}
-
-func (m *GreenRoomManager) ClosePlayer() error {
-	m.Lock()
-	defer m.Unlock()
-
-	return nil
-}
 
 type Server struct {
 	sync.RWMutex
@@ -95,14 +60,21 @@ func (s *Server) countEID() EID {
 
 func (s *Server) initClient(
 	lg *Logger,
+	gameManager *GameManager,
 	world Overworld,
-	cnt *Client,
 	uid UID, username string,
+	cnt *Client,
 	wg *sync.WaitGroup,
 ) (
 	Player,
-	ChanForConfirmKeepAliveEvent,
+
+	*DimContext,
 	ChanForError,
+	context.CancelFunc,
+
+	ChanForConfirmKeepAliveEvent,
+	ChanForChangeDimEvent,
+
 	error,
 ) {
 	s.Lock()
@@ -115,164 +87,162 @@ func (s *Server) initClient(
 
 	eid := s.countEID()
 
-	if err := cnt.JoinGame(
-		lg,
-		eid,
-	); err != nil {
-		return nil, nil, nil, err
-	}
+	player := NewGuest(
+		eid, uid, username,
+	)
+	dimContext := NewDimContext(
+		world,
+		player,
+	)
 
 	chanForError := make(
 		ChanForError,
 		MaxNumForChannel,
 	)
 
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+
+	if err := cnt.JoinGame(
+		lg,
+		eid,
+	); err != nil {
+		return nil, nil, nil, cancel, nil, nil, err
+	}
+
+	chanForUpdateChunkEvent := make(
+		ChanForUpdateChunkEvent,
+		MaxNumForChannel,
+	)
+	go cnt.HandleUpdateChunkEvent(
+		chanForUpdateChunkEvent,
+		dimContext,
+		chanForError,
+		ctx,
+		wg,
+	)
+
 	chanForAddPlayerEvent := make(
 		ChanForAddPlayerEvent,
 		MaxNumForChannel,
 	)
-	go cnt.HandleAddPlayerEvent(
-		chanForAddPlayerEvent,
-		chanForError,
-		wg,
-	)
-
 	chanForUpdateLatencyEvent := make(
 		ChanForUpdateLatencyEvent,
 		MaxNumForChannel,
 	)
-	go cnt.HandleUpdateLatencyEvent(
-		chanForUpdateLatencyEvent,
-		chanForError,
-		wg,
-	)
-
 	chanForRemovePlayerEvent := make(
 		ChanForRemovePlayerEvent,
 		MaxNumForChannel,
 	)
-	go cnt.HandleRemovePlayerEvent(
+	chanForSpawnPlayerEvent := make(
+		ChanForSpawnPlayerEvent,
+		MaxNumForChannel,
+	)
+	chanForDespawnEntityEvent := make(
+		ChanForDespawnEntityEvent,
+		MaxNumForChannel,
+	)
+	chanForSetEntityRelativePosEvent := make(
+		ChanForSetEntityRelativePosEvent,
+		MaxNumForChannel,
+	)
+	chanForSetEntityLookEvent := make(
+		ChanForSetEntityLookEvent,
+		MaxNumForChannel,
+	)
+	chanForSetEntityMetadataEvent := make(
+		ChanForSetEntityMetadataEvent,
+		MaxNumForChannel,
+	)
+	chanForLoadChunkEvent := make(
+		ChanForLoadChunkEvent,
+		MaxNumForChannel,
+	)
+	chanForUnloadChunkEvent := make(
+		ChanForUnloadChunkEvent,
+		MaxNumForChannel,
+	)
+	go cnt.HandleCommonEvents(
+		chanForAddPlayerEvent,
+		chanForUpdateLatencyEvent,
 		chanForRemovePlayerEvent,
+		chanForSpawnPlayerEvent,
+		chanForDespawnEntityEvent,
+		chanForSetEntityRelativePosEvent,
+		chanForSetEntityLookEvent,
+		chanForSetEntityMetadataEvent,
+		chanForLoadChunkEvent,
+		chanForUnloadChunkEvent,
+
 		chanForError,
+		ctx,
 		wg,
 	)
+
+	if err := world.InitPlayer(
+		player,
+
+		chanForAddPlayerEvent,
+		chanForUpdateLatencyEvent,
+		chanForRemovePlayerEvent,
+		chanForSpawnPlayerEvent,
+		chanForDespawnEntityEvent,
+		chanForSetEntityRelativePosEvent,
+		chanForSetEntityLookEvent,
+		chanForSetEntityMetadataEvent,
+		chanForLoadChunkEvent,
+		chanForUnloadChunkEvent,
+
+		chanForUpdateChunkEvent,
+
+		cnt,
+	); err != nil {
+		return nil, nil, nil, cancel, nil, nil, err
+	}
 
 	chanForConfirmKeepAliveEvent := make(
 		ChanForConfirmKeepAliveEvent,
 		MaxNumForChannel,
 	)
 	go cnt.HandleConfirmKeepAliveEvent(
-		world,
 		chanForConfirmKeepAliveEvent,
-		uid,
+		dimContext,
 		chanForError,
+		ctx,
 		wg,
 	)
 
-	chanForSpawnPlayerEvent := make(
-		ChanForSpawnPlayerEvent,
+	chanForChangeDimEvent := make(
+		ChanForChangeDimEvent,
 		MaxNumForChannel,
 	)
-	go cnt.HandleSpawnPlayerEvent(
-		chanForSpawnPlayerEvent,
-		chanForError,
-		wg,
-	)
-
-	chanForDespawnEntityEvent := make(
-		ChanForDespawnEntityEvent,
-		MaxNumForChannel,
-	)
-	go cnt.HandleDespawnEntityEvent(
-		chanForDespawnEntityEvent,
-		chanForError,
-		wg,
-	)
-
-	chanForSetEntityRelativePosEvent := make(
-		ChanForSetEntityRelativePosEvent,
-		MaxNumForChannel,
-	)
-	go cnt.HandleSetEntityRelativePosEvent(
-		chanForSetEntityRelativePosEvent,
-		chanForError,
-		wg,
-	)
-
-	chanForSetEntityLookEvent := make(
-		ChanForSetEntityLookEvent,
-		MaxNumForChannel,
-	)
-	go cnt.HandleSetEntityLookEvent(
-		chanForSetEntityLookEvent,
-		chanForError,
-		wg,
-	)
-
-	chanForSetEntityMetadataEvent := make(
-		ChanForSetEntityMetadataEvent,
-		MaxNumForChannel,
-	)
-	go cnt.HandleSetEntityMetadataEvent(
-		chanForSetEntityMetadataEvent,
-		chanForError,
-		wg,
-	)
-
-	chanForLoadChunkEvent := make(
-		ChanForLoadChunkEvent,
-		MaxNumForChannel,
-	)
-	go cnt.HandleLoadChunkEvent(
-		chanForLoadChunkEvent,
-		chanForError,
-		wg,
-	)
-
-	chanForUnloadChunkEvent := make(
-		ChanForUnloadChunkEvent,
-		MaxNumForChannel,
-	)
-	go cnt.HandleUnloadChunkEvent(
-		chanForUnloadChunkEvent,
-		chanForError,
-		wg,
-	)
-
-	player := NewGuest(
-		eid, uid, username,
-	)
-	if err := world.InitPlayer(
-		player,
-
-		cnt,
-		chanForAddPlayerEvent,
-		chanForUpdateLatencyEvent,
-		chanForRemovePlayerEvent,
-
-		chanForSpawnPlayerEvent,
-		chanForDespawnEntityEvent,
-		chanForSetEntityRelativePosEvent,
-		chanForSetEntityLookEvent,
-		chanForSetEntityMetadataEvent,
-		chanForLoadChunkEvent,
-		chanForUnloadChunkEvent,
+	if err := gameManager.InitPlayer(
+		eid,
+		chanForChangeDimEvent,
 	); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, cancel, nil, nil, err
 	}
 
 	return player,
-		chanForConfirmKeepAliveEvent,
+
+		dimContext,
 		chanForError,
+		cancel,
+
+		chanForConfirmKeepAliveEvent,
+		chanForChangeDimEvent,
+
 		nil
 }
 
 func (s *Server) closeClient(
 	lg *Logger,
+	gameManager *GameManager,
 	world Overworld,
 	player Player,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 	chanForError ChanForError,
+	cancel context.CancelFunc,
 	wg *sync.WaitGroup,
 ) {
 	s.Lock()
@@ -283,21 +253,34 @@ func (s *Server) closeClient(
 		lg.Debug("it is finished to close Client")
 	}()
 
-	eid := player.GetEid()
+	cancel()
 
-	chanForSpawnPlayerEvent,
+	eid := player.GetEID()
+
+	chanForChangeDimEvent :=
+		gameManager.ClosePlayer(eid)
+	close(chanForChangeDimEvent)
+
+	close(chanForConfirmKeepAliveEvent)
+
+	chanForAddPlayerEvent,
+		chanForUpdateLatencyEvent,
+		chanForRemovePlayerEvent,
+		chanForSpawnPlayerEvent,
 		chanForDespawnEntityEvent,
 		chanForSetEntityLookEvent,
 		chanForSetEntityRelativePosEvent,
 		chanForSetEntityMetadataEvent,
 		chanForLoadChunkEvent,
 		chanForUnloadChunkEvent,
-		chanForAddPlayerEvent,
-		chanForUpdateLatencyEvent,
-		chanForRemovePlayerEvent :=
+
+		chanForUpdateChunkEvent :=
 		world.ClosePlayer(
-			eid,
+			player,
 		)
+	close(chanForAddPlayerEvent)
+	close(chanForUpdateLatencyEvent)
+	close(chanForRemovePlayerEvent)
 	close(chanForSpawnPlayerEvent)
 	close(chanForDespawnEntityEvent)
 	close(chanForSetEntityRelativePosEvent)
@@ -306,18 +289,16 @@ func (s *Server) closeClient(
 	close(chanForLoadChunkEvent)
 	close(chanForUnloadChunkEvent)
 
-	close(chanForAddPlayerEvent)
-	close(chanForUpdateLatencyEvent)
-	close(chanForRemovePlayerEvent)
-
-	close(chanForConfirmKeepAliveEvent)
+	close(chanForUpdateChunkEvent)
 
 	wg.Wait()
+
 	close(chanForError)
 }
 
 func (s *Server) handleClient(
-	world Overworld,
+	gameManager *GameManager,
+	lobby *Lobby,
 	cnt *Client,
 ) {
 
@@ -366,28 +347,29 @@ func (s *Server) handleClient(
 	}
 
 	lg.Debug(
-		"Client has successfully logged in",
+		"client has successfully logged in",
 		NewLgElement("uid", uid),
 		NewLgElement("username", username),
 	)
 
-	//ctx := context.Background()
-	//ctx, cancel := context.WithCancel(ctx)
-	//defer func() {
-	//	cancel()
-	//}()
+	var world Overworld
+	world = lobby
 
 	wg := new(sync.WaitGroup)
 
 	player,
-		chanForConfirmKeepAliveEvent,
+		dimContext,
 		chanForError,
+		cancel,
+		chanForConfirmKeepAliveEvent,
+		chanForChangeDimEvent,
 		err :=
 		s.initClient(
 			lg,
+			gameManager,
 			world,
-			cnt,
 			uid, username,
+			cnt,
 			wg,
 		)
 	if err != nil {
@@ -395,24 +377,43 @@ func (s *Server) handleClient(
 	}
 	defer s.closeClient(
 		lg,
+		gameManager,
 		world,
 		player,
 		chanForConfirmKeepAliveEvent,
 		chanForError,
+		cancel,
 		wg,
 	)
+
+	//eid := player.GetEID()
 
 	for {
 		select {
 		case <-time.After(LoopDelayForPlayState):
 			if err := cnt.LoopForPlayState(
 				lg,
+				gameManager,
 				world,
 				player,
 				chanForConfirmKeepAliveEvent,
 			); err != nil {
 				panic(err)
 			}
+
+			break
+		case event := <-chanForChangeDimEvent:
+			world, player :=
+				event.GetWorld(),
+				event.GetPlayer()
+			if err := dimContext.Change(
+				world,
+				player,
+				cnt,
+			); err != nil {
+				panic(err)
+			}
+
 			break
 		case err := <-chanForError:
 			panic(err)
@@ -422,7 +423,8 @@ func (s *Server) handleClient(
 }
 
 func (s *Server) Render(
-	world Overworld,
+	gameManager *GameManager,
+	lobby *Lobby,
 ) {
 	addr := s.addr
 	network := Network
@@ -466,7 +468,8 @@ func (s *Server) Render(
 			conn,
 		)
 		go s.handleClient(
-			world,
+			gameManager,
+			lobby,
 			cnt,
 		)
 	}

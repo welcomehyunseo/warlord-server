@@ -4,11 +4,11 @@ import (
 	"fmt"
 )
 
+type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
+
 type ChanForAddPlayerEvent chan *AddPlayerEvent
 type ChanForUpdateLatencyEvent chan *UpdateLatencyEvent
 type ChanForRemovePlayerEvent chan *RemovePlayerEvent
-type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
-
 type ChanForSpawnPlayerEvent chan *SpawnPlayerEvent
 type ChanForDespawnEntityEvent chan *DespawnEntityEvent
 type ChanForSetEntityRelativePosEvent chan *SetEntityRelativePosEvent
@@ -17,7 +17,9 @@ type ChanForSetEntityMetadataEvent chan *SetEntityMetadataEvent
 type ChanForLoadChunkEvent chan *LoadChunkEvent
 type ChanForUnloadChunkEvent chan *UnloadChunkEvent
 
-type ChanForChangeWorldEvent chan *ChangeWorldEvent
+type ChanForUpdateChunkEvent chan *UpdateChunkEvent
+
+type ChanForChangeDimEvent chan *ChangeDimEvent
 
 type AddPlayerEvent struct {
 	uid      UID
@@ -96,6 +98,7 @@ func (e *UpdateLatencyEvent) String() string {
 
 type RemovePlayerEvent struct {
 	uid UID
+	ctx chan bool
 }
 
 func NewRemovePlayerEvent(
@@ -103,11 +106,25 @@ func NewRemovePlayerEvent(
 ) *RemovePlayerEvent {
 	return &RemovePlayerEvent{
 		uid: uid,
+		ctx: make(chan bool, 1),
 	}
 }
 
 func (e *RemovePlayerEvent) GetUUID() UID {
 	return e.uid
+}
+
+func (e *RemovePlayerEvent) Done() {
+	e.ctx <- true
+}
+
+func (e *RemovePlayerEvent) Fail() {
+	e.ctx <- false
+}
+
+func (e *RemovePlayerEvent) Wait() {
+	<-e.ctx
+	close(e.ctx)
 }
 
 func (e *RemovePlayerEvent) String() string {
@@ -137,6 +154,37 @@ func (e *ConfirmKeepAliveEvent) String() string {
 	return fmt.Sprintf(
 		"{ payload: %d }", e.payload,
 	)
+}
+
+type UpdateChunkEvent struct {
+	currCx, currCz int32
+	prevCx, prevCz int32
+}
+
+func NewUpdateChunkEvent(
+	currCx, currCz int32,
+	prevCx, prevCz int32,
+) *UpdateChunkEvent {
+	return &UpdateChunkEvent{
+		currCx, currCz,
+		prevCx, prevCz,
+	}
+}
+
+func (e *UpdateChunkEvent) GetCurrCx() int32 {
+	return e.currCx
+}
+
+func (e *UpdateChunkEvent) GetCurrCz() int32 {
+	return e.currCz
+}
+
+func (e *UpdateChunkEvent) GetPrevCx() int32 {
+	return e.prevCx
+}
+
+func (e *UpdateChunkEvent) GetPrevCz() int32 {
+	return e.prevCz
 }
 
 type SpawnPlayerEvent struct {
@@ -240,11 +288,9 @@ func (e *DespawnEntityEvent) String() string {
 }
 
 type SetEntityRelativePosEvent struct {
-	eid    EID
-	deltaX int16
-	deltaY int16
-	deltaZ int16
-	ground bool
+	eid                    EID
+	deltaX, deltaY, deltaZ int16
+	ground                 bool
 }
 
 func NewSetEntityRelativePosEvent(
@@ -253,11 +299,9 @@ func NewSetEntityRelativePosEvent(
 	ground bool,
 ) *SetEntityRelativePosEvent {
 	return &SetEntityRelativePosEvent{
-		eid:    eid,
-		deltaX: deltaX,
-		deltaY: deltaY,
-		deltaZ: deltaZ,
-		ground: ground,
+		eid,
+		deltaX, deltaY, deltaZ,
+		ground,
 	}
 }
 
@@ -285,15 +329,11 @@ func (e *SetEntityRelativePosEvent) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"eid: %d, "+
-			"deltaX: %d, "+
-			"deltaY: %d, "+
-			"deltaZ: %d, "+
+			"deltaX: %d, deltaY: %d, deltaZ: %d, "+
 			"ground: %v "+
 			"}",
 		e.eid,
-		e.deltaX,
-		e.deltaY,
-		e.deltaZ,
+		e.deltaX, e.deltaY, e.deltaZ,
 		e.ground,
 	)
 }
@@ -419,14 +459,12 @@ func (e *LoadChunkEvent) String() string {
 		"{ "+
 			"overworld: %v, "+
 			"init: %v, "+
-			"cx: %d, "+
-			"cz: %d, "+
+			"cx: %d, cz: %d, "+
 			"chunk: %s "+
 			"}",
 		e.overworld,
 		e.init,
-		e.cx,
-		e.cz,
+		e.cx, e.cz,
 		e.chunk,
 	)
 }
@@ -462,18 +500,25 @@ func (e *UnloadChunkEvent) String() string {
 	)
 }
 
-type ChangeWorldEvent struct {
-	world Overworld
+type ChangeDimEvent struct {
+	world  Overworld
+	player Player
 }
 
-func NewChangeWorldEvent(
+func NewChangeDimEvent(
 	world Overworld,
-) *ChangeWorldEvent {
-	return &ChangeWorldEvent{
+	player Player,
+) *ChangeDimEvent {
+	return &ChangeDimEvent{
 		world,
+		player,
 	}
 }
 
-func (e *ChangeWorldEvent) GetWorld() Overworld {
+func (e *ChangeDimEvent) GetWorld() Overworld {
 	return e.world
+}
+
+func (e *ChangeDimEvent) GetPlayer() Player {
+	return e.player
 }
