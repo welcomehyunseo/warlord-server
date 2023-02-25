@@ -209,10 +209,6 @@ func (l *living) String() string {
 type Player interface {
 	Living
 
-	EnterChatMessage(
-		gameManager *GameManager,
-		text string,
-	) error
 	GetUsername() string
 }
 
@@ -234,29 +230,6 @@ func newPlayer(
 		),
 		username: username,
 	}
-}
-
-func (p *player) EnterChatMessage(
-	gameManager *GameManager,
-	text string,
-) error {
-
-	if text == "join" {
-		if err := gameManager.Join(
-			p,
-			0,
-		); err != nil {
-			return err
-		}
-	} else if text == "leave" {
-		if err := gameManager.Leave(
-			p,
-		); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (p *player) UpdatePos(

@@ -112,8 +112,8 @@ type Overworld interface {
 	) error
 	UpdatePlayerChunk(
 		player Player,
-		currCx, currCz int32,
 		prevCx, prevCz int32,
+		currCx, currCz int32,
 	) error
 	UpdatePlayerLook(
 		player Player,
@@ -507,8 +507,8 @@ func (w *overworld) UpdatePlayerPos(
 
 func (w *overworld) UpdatePlayerChunk(
 	player Player,
-	currCx, currCz int32,
 	prevCx, prevCz int32,
+	currCx, currCz int32,
 ) error {
 	w.Lock()
 	defer w.Unlock()

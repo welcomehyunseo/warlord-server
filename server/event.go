@@ -4,8 +4,6 @@ import (
 	"fmt"
 )
 
-type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
-
 type ChanForAddPlayerEvent chan *AddPlayerEvent
 type ChanForUpdateLatencyEvent chan *UpdateLatencyEvent
 type ChanForRemovePlayerEvent chan *RemovePlayerEvent
@@ -19,6 +17,7 @@ type ChanForUnloadChunkEvent chan *UnloadChunkEvent
 
 type ChanForUpdateChunkEvent chan *UpdateChunkEvent
 
+type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
 type ChanForChangeDimEvent chan *ChangeDimEvent
 
 type AddPlayerEvent struct {

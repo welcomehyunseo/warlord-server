@@ -601,9 +601,8 @@ func (cnt *Client) JoinGame(
 
 func (cnt *Client) LoopForPlayState(
 	lg *Logger,
-	gameManager *GameManager,
-	world Overworld,
-	player Player,
+	gameManager *GameMgr,
+	dim *Dim,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 ) error {
 	lg.Debug("it is started to loop for play state in Client")
@@ -649,8 +648,7 @@ func (cnt *Client) LoopForPlayState(
 		enterChatMessagePacket :=
 			inPacket.(*EnterChatMessagePacket)
 		text := enterChatMessagePacket.GetText()
-		if err := player.EnterChatMessage(
-			gameManager,
+		if err := dim.EnterChatMessage(
 			text,
 		); err != nil {
 			return err
@@ -664,8 +662,7 @@ func (cnt *Client) LoopForPlayState(
 			changePosPacket.GetY(),
 			changePosPacket.GetZ()
 		ground := changePosPacket.GetGround()
-		if err := world.UpdatePlayerPos(
-			player,
+		if err := dim.UpdatePlayerPos(
 			x, y, z,
 			ground,
 		); err != nil {
@@ -679,8 +676,7 @@ func (cnt *Client) LoopForPlayState(
 			changeLookPacket.GetYaw(),
 			changeLookPacket.GetPitch()
 		ground := changeLookPacket.GetGround()
-		if err := world.UpdatePlayerLook(
-			player,
+		if err := dim.UpdatePlayerLook(
 			yaw, pitch,
 			ground,
 		); err != nil {
@@ -696,8 +692,7 @@ func (cnt *Client) LoopForPlayState(
 			changePosAndLookPacket.GetY(),
 			changePosAndLookPacket.GetZ()
 		ground := changePosAndLookPacket.GetGround()
-		if err := world.UpdatePlayerPos(
-			player,
+		if err := dim.UpdatePlayerPos(
 			x, y, z,
 			ground,
 		); err != nil {
@@ -707,8 +702,7 @@ func (cnt *Client) LoopForPlayState(
 		yaw, pitch :=
 			changePosAndLookPacket.GetYaw(),
 			changePosAndLookPacket.GetPitch()
-		if err := world.UpdatePlayerLook(
-			player,
+		if err := dim.UpdatePlayerLook(
 			yaw, pitch,
 			ground,
 		); err != nil {
@@ -727,29 +721,25 @@ func (cnt *Client) LoopForPlayState(
 		stopSprinting :=
 			takeActionPacket.IsSprintingStopped()
 		if startSneaking == true {
-			if err := world.UpdatePlayerSneaking(
-				player,
+			if err := dim.UpdatePlayerSneaking(
 				true,
 			); err != nil {
 				return err
 			}
 		} else if stopSneaking == true {
-			if err := world.UpdatePlayerSneaking(
-				player,
+			if err := dim.UpdatePlayerSneaking(
 				false,
 			); err != nil {
 				return err
 			}
 		} else if startSprinting == true {
-			if err := world.UpdatePlayerSprinting(
-				player,
+			if err := dim.UpdatePlayerSprinting(
 				true,
 			); err != nil {
 				return err
 			}
 		} else if stopSprinting == true {
-			if err := world.UpdatePlayerSprinting(
-				player,
+			if err := dim.UpdatePlayerSprinting(
 				false,
 			); err != nil {
 				return err
@@ -772,9 +762,62 @@ func (cnt *Client) LoopForPlayState(
 	return nil
 }
 
+func (cnt *Client) HandleChangeDimEvent(
+	chanForChangeDimEvent ChanForChangeDimEvent,
+	dim *Dim,
+	chanForError ChanForError,
+	ctx context.Context,
+	wg *sync.WaitGroup,
+) {
+	wg.Add(1)
+	defer wg.Done()
+
+	lg := NewLogger(
+		"change-dim-event-handler",
+		NewLgElement("Client", cnt),
+	)
+	defer lg.Close()
+
+	lg.Debug("it is started to handle events")
+	defer lg.Debug("it is finished to handle events")
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	stop := false
+	for {
+		select {
+		case event := <-chanForChangeDimEvent:
+			world, player :=
+				event.GetWorld(),
+				event.GetPlayer()
+			if err := dim.Change(
+				world,
+				player,
+				cnt,
+			); err != nil {
+				panic(err)
+			}
+
+			break
+		case <-ctx.Done():
+			stop = true
+			break
+		}
+
+		if stop == true {
+			break
+		}
+	}
+}
+
 func (cnt *Client) HandleConfirmKeepAliveEvent(
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
-	dimContext *DimContext,
+	dim *Dim,
 	chanForError ChanForError,
 	ctx context.Context,
 	wg *sync.WaitGroup,
@@ -803,8 +846,6 @@ func (cnt *Client) HandleConfirmKeepAliveEvent(
 
 	stop := false
 	for {
-		world, player := dimContext.Load()
-
 		select {
 		case <-time.After(DelayForCheckKeepAlive):
 			if start.IsZero() == false {
@@ -830,9 +871,7 @@ func (cnt *Client) HandleConfirmKeepAliveEvent(
 
 			end := time.Now()
 			latency := int32(end.Sub(start).Milliseconds())
-			uid := player.GetUID()
-			if err := world.UpdatePlayerLatency(
-				uid,
+			if err := dim.UpdatePlayerLatency(
 				latency,
 			); err != nil {
 				panic(err)
@@ -1018,7 +1057,7 @@ func (cnt *Client) HandleCommonEvents(
 
 func (cnt *Client) HandleUpdateChunkEvent(
 	chanForEvent ChanForUpdateChunkEvent,
-	dimContext *DimContext,
+	dim *Dim,
 	chanForError ChanForError,
 	ctx context.Context,
 	wg *sync.WaitGroup,
@@ -1044,8 +1083,6 @@ func (cnt *Client) HandleUpdateChunkEvent(
 
 	stop := false
 	for {
-		world, player := dimContext.Load()
-
 		select {
 		case event := <-chanForEvent:
 			currCx, currCz :=
@@ -1054,10 +1091,9 @@ func (cnt *Client) HandleUpdateChunkEvent(
 			prevCx, prevCz :=
 				event.GetPrevCx(),
 				event.GetPrevCz()
-			if err := world.UpdatePlayerChunk(
-				player,
-				currCx, currCz,
+			if err := dim.UpdatePlayerChunk(
 				prevCx, prevCz,
+				currCx, currCz,
 			); err != nil {
 				panic(err)
 			}

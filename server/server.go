@@ -60,21 +60,16 @@ func (s *Server) countEID() EID {
 
 func (s *Server) initClient(
 	lg *Logger,
-	gameManager *GameManager,
+	gameManager *GameMgr,
 	world Overworld,
 	uid UID, username string,
 	cnt *Client,
-	wg *sync.WaitGroup,
 ) (
-	Player,
-
-	*DimContext,
+	*Dim,
+	ChanForConfirmKeepAliveEvent,
 	ChanForError,
 	context.CancelFunc,
-
-	ChanForConfirmKeepAliveEvent,
-	ChanForChangeDimEvent,
-
+	*sync.WaitGroup,
 	error,
 ) {
 	s.Lock()
@@ -90,7 +85,9 @@ func (s *Server) initClient(
 	player := NewGuest(
 		eid, uid, username,
 	)
-	dimContext := NewDimContext(
+
+	dim := NewDim(
+		gameManager,
 		world,
 		player,
 	)
@@ -103,20 +100,22 @@ func (s *Server) initClient(
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 
+	wg := new(sync.WaitGroup)
+
 	if err := cnt.JoinGame(
 		lg,
 		eid,
 	); err != nil {
-		return nil, nil, nil, cancel, nil, nil, err
+		return nil, nil, nil, cancel, nil, err
 	}
 
-	chanForUpdateChunkEvent := make(
-		ChanForUpdateChunkEvent,
+	chanForChangeDimEvent := make(
+		ChanForChangeDimEvent,
 		MaxNumForChannel,
 	)
-	go cnt.HandleUpdateChunkEvent(
-		chanForUpdateChunkEvent,
-		dimContext,
+	go cnt.HandleChangeDimEvent(
+		chanForChangeDimEvent,
+		dim,
 		chanForError,
 		ctx,
 		wg,
@@ -179,9 +178,20 @@ func (s *Server) initClient(
 		wg,
 	)
 
-	if err := world.InitPlayer(
-		player,
+	chanForUpdateChunkEvent := make(
+		ChanForUpdateChunkEvent,
+		MaxNumForChannel,
+	)
+	go cnt.HandleUpdateChunkEvent(
+		chanForUpdateChunkEvent,
+		dim,
+		chanForError,
+		ctx,
+		wg,
+	)
 
+	if err := dim.Init(
+		chanForChangeDimEvent,
 		chanForAddPlayerEvent,
 		chanForUpdateLatencyEvent,
 		chanForRemovePlayerEvent,
@@ -192,12 +202,10 @@ func (s *Server) initClient(
 		chanForSetEntityMetadataEvent,
 		chanForLoadChunkEvent,
 		chanForUnloadChunkEvent,
-
 		chanForUpdateChunkEvent,
-
 		cnt,
 	); err != nil {
-		return nil, nil, nil, cancel, nil, nil, err
+		return nil, nil, nil, cancel, nil, err
 	}
 
 	chanForConfirmKeepAliveEvent := make(
@@ -206,40 +214,23 @@ func (s *Server) initClient(
 	)
 	go cnt.HandleConfirmKeepAliveEvent(
 		chanForConfirmKeepAliveEvent,
-		dimContext,
+		dim,
 		chanForError,
 		ctx,
 		wg,
 	)
 
-	chanForChangeDimEvent := make(
-		ChanForChangeDimEvent,
-		MaxNumForChannel,
-	)
-	if err := gameManager.InitPlayer(
-		eid,
-		chanForChangeDimEvent,
-	); err != nil {
-		return nil, nil, nil, cancel, nil, nil, err
-	}
-
-	return player,
-
-		dimContext,
+	return dim,
+		chanForConfirmKeepAliveEvent,
 		chanForError,
 		cancel,
-
-		chanForConfirmKeepAliveEvent,
-		chanForChangeDimEvent,
-
+		wg,
 		nil
 }
 
 func (s *Server) closeClient(
 	lg *Logger,
-	gameManager *GameManager,
-	world Overworld,
-	player Player,
+	dim *Dim,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 	chanForError ChanForError,
 	cancel context.CancelFunc,
@@ -255,15 +246,10 @@ func (s *Server) closeClient(
 
 	cancel()
 
-	eid := player.GetEID()
-
-	chanForChangeDimEvent :=
-		gameManager.ClosePlayer(eid)
-	close(chanForChangeDimEvent)
-
 	close(chanForConfirmKeepAliveEvent)
 
-	chanForAddPlayerEvent,
+	chanForChangeDimEvent,
+		chanForAddPlayerEvent,
 		chanForUpdateLatencyEvent,
 		chanForRemovePlayerEvent,
 		chanForSpawnPlayerEvent,
@@ -273,11 +259,9 @@ func (s *Server) closeClient(
 		chanForSetEntityMetadataEvent,
 		chanForLoadChunkEvent,
 		chanForUnloadChunkEvent,
-
 		chanForUpdateChunkEvent :=
-		world.ClosePlayer(
-			player,
-		)
+		dim.Close()
+	close(chanForChangeDimEvent)
 	close(chanForAddPlayerEvent)
 	close(chanForUpdateLatencyEvent)
 	close(chanForRemovePlayerEvent)
@@ -288,7 +272,6 @@ func (s *Server) closeClient(
 	close(chanForSetEntityMetadataEvent)
 	close(chanForLoadChunkEvent)
 	close(chanForUnloadChunkEvent)
-
 	close(chanForUpdateChunkEvent)
 
 	wg.Wait()
@@ -297,7 +280,7 @@ func (s *Server) closeClient(
 }
 
 func (s *Server) handleClient(
-	gameManager *GameManager,
+	gameManager *GameMgr,
 	lobby *Lobby,
 	cnt *Client,
 ) {
@@ -352,34 +335,26 @@ func (s *Server) handleClient(
 		NewLgElement("username", username),
 	)
 
-	var world Overworld
-	world = lobby
-
-	wg := new(sync.WaitGroup)
-
-	player,
-		dimContext,
+	dim,
+		chanForConfirmKeepAliveEvent,
 		chanForError,
 		cancel,
-		chanForConfirmKeepAliveEvent,
-		chanForChangeDimEvent,
+		wg,
 		err :=
 		s.initClient(
 			lg,
 			gameManager,
-			world,
+			lobby,
 			uid, username,
 			cnt,
-			wg,
 		)
 	if err != nil {
+		cancel()
 		panic(err)
 	}
 	defer s.closeClient(
 		lg,
-		gameManager,
-		world,
-		player,
+		dim,
 		chanForConfirmKeepAliveEvent,
 		chanForError,
 		cancel,
@@ -394,22 +369,8 @@ func (s *Server) handleClient(
 			if err := cnt.LoopForPlayState(
 				lg,
 				gameManager,
-				world,
-				player,
+				dim,
 				chanForConfirmKeepAliveEvent,
-			); err != nil {
-				panic(err)
-			}
-
-			break
-		case event := <-chanForChangeDimEvent:
-			world, player :=
-				event.GetWorld(),
-				event.GetPlayer()
-			if err := dimContext.Change(
-				world,
-				player,
-				cnt,
 			); err != nil {
 				panic(err)
 			}
@@ -423,7 +384,7 @@ func (s *Server) handleClient(
 }
 
 func (s *Server) Render(
-	gameManager *GameManager,
+	gameManager *GameMgr,
 	lobby *Lobby,
 ) {
 	addr := s.addr

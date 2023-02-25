@@ -40,7 +40,7 @@ func (g *Game) GetGreenRoom() *GreenRoom {
 	return g.greenRoom
 }
 
-type GameManager struct {
+type GameMgr struct {
 	sync.RWMutex
 
 	lobby *Lobby
@@ -51,11 +51,11 @@ type GameManager struct {
 	chansForChangeDimEvent map[EID]ChanForChangeDimEvent
 }
 
-func NewGameManager(
+func NewGameMgr(
 	lobby *Lobby,
 	games ...*Game,
-) *GameManager {
-	return &GameManager{
+) *GameMgr {
+	return &GameMgr{
 		lobby: lobby,
 
 		games:   games,
@@ -65,40 +65,40 @@ func NewGameManager(
 	}
 }
 
-func (m *GameManager) InitPlayer(
+func (mgr *GameMgr) Init(
 	eid EID,
 	chanForChangeDimEvent ChanForChangeDimEvent,
 ) error {
-	m.Lock()
-	defer m.Unlock()
+	mgr.Lock()
+	defer mgr.Unlock()
 
-	m.chansForChangeDimEvent[eid] =
+	mgr.chansForChangeDimEvent[eid] =
 		chanForChangeDimEvent
 
 	return nil
 }
 
-func (m *GameManager) Join(
+func (mgr *GameMgr) Join(
 	player Player,
 	index int,
 ) error {
-	m.Lock()
-	defer m.Unlock()
+	mgr.Lock()
+	defer mgr.Unlock()
 
 	eid := player.GetEID()
 
-	if _, has := m.indices[eid]; has == true {
+	if _, has := mgr.indices[eid]; has == true {
 		return errors.New("player is already joined to room")
 	}
 
-	length := len(m.games)
+	length := len(mgr.games)
 	if length-1 < index {
 		return errors.New("room for that index does not existed to join")
 	}
 
-	game := m.games[index]
+	game := mgr.games[index]
 
-	m.indices[eid] = index
+	mgr.indices[eid] = index
 
 	uid, username :=
 		player.GetUID(),
@@ -114,25 +114,25 @@ func (m *GameManager) Join(
 			warlord,
 		)
 	chanForChangeDimEvent :=
-		m.chansForChangeDimEvent[eid]
+		mgr.chansForChangeDimEvent[eid]
 	chanForChangeDimEvent <- changeDimEvent
 
 	return nil
 }
 
-func (m *GameManager) Leave(
+func (mgr *GameMgr) Leave(
 	player Player,
 ) error {
-	m.Lock()
-	defer m.Unlock()
+	mgr.Lock()
+	defer mgr.Unlock()
 
 	eid := player.GetEID()
 
-	if _, has := m.indices[eid]; has == false {
+	if _, has := mgr.indices[eid]; has == false {
 		return errors.New("room is not existed to leave")
 	}
 
-	delete(m.indices, eid)
+	delete(mgr.indices, eid)
 
 	uid, username :=
 		player.GetUID(),
@@ -141,32 +141,32 @@ func (m *GameManager) Leave(
 	guest := NewGuest(
 		eid, uid, username,
 	)
-	lobby := m.lobby
+	lobby := mgr.lobby
 	changeDimEvent :=
 		NewChangeDimEvent(
 			lobby,
 			guest,
 		)
 	chanForChangeDimEvent :=
-		m.chansForChangeDimEvent[eid]
+		mgr.chansForChangeDimEvent[eid]
 	chanForChangeDimEvent <- changeDimEvent
 
 	return nil
 }
 
-func (m *GameManager) ClosePlayer(
+func (mgr *GameMgr) Close(
 	eid EID,
 ) ChanForChangeDimEvent {
-	m.Lock()
-	defer m.Unlock()
+	mgr.Lock()
+	defer mgr.Unlock()
 
 	chanForChangeDimEvent :=
-		m.chansForChangeDimEvent[eid]
+		mgr.chansForChangeDimEvent[eid]
 
-	delete(m.chansForChangeDimEvent, eid)
+	delete(mgr.chansForChangeDimEvent, eid)
 
-	if _, has := m.indices[eid]; has == true {
-		delete(m.indices, eid)
+	if _, has := mgr.indices[eid]; has == true {
+		delete(mgr.indices, eid)
 	}
 
 	return chanForChangeDimEvent

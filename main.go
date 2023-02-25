@@ -38,7 +38,7 @@ func main() {
 		server.StoneBlock,
 	)
 	gameManager :=
-		server.NewGameManager(
+		server.NewGameMgr(
 			lobby,
 			[]*server.Game{
 				server.NewGame(
