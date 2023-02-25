@@ -37,19 +37,7 @@ func main() {
 	lobby.MakeFlat(
 		server.StoneBlock,
 	)
-	gameManager :=
-		server.NewGameMgr(
-			lobby,
-			[]*server.Game{
-				server.NewGame(
-					rndDist,
-					spawnX, spawnY, spawnZ,
-					spawnYaw, spawnPitch,
-				),
-			}...,
-		)
 	s.Render(
-		gameManager,
 		lobby,
 	)
 

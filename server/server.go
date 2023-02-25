@@ -60,7 +60,6 @@ func (s *Server) countEID() EID {
 
 func (s *Server) initClient(
 	lg *Logger,
-	gameManager *GameMgr,
 	world Overworld,
 	uid UID, username string,
 	cnt *Client,
@@ -87,7 +86,6 @@ func (s *Server) initClient(
 	)
 
 	dim := NewDim(
-		gameManager,
 		world,
 		player,
 	)
@@ -172,7 +170,6 @@ func (s *Server) initClient(
 		chanForSetEntityMetadataEvent,
 		chanForLoadChunkEvent,
 		chanForUnloadChunkEvent,
-
 		chanForError,
 		ctx,
 		wg,
@@ -191,7 +188,6 @@ func (s *Server) initClient(
 	)
 
 	if err := dim.Init(
-		chanForChangeDimEvent,
 		chanForAddPlayerEvent,
 		chanForUpdateLatencyEvent,
 		chanForRemovePlayerEvent,
@@ -248,8 +244,7 @@ func (s *Server) closeClient(
 
 	close(chanForConfirmKeepAliveEvent)
 
-	chanForChangeDimEvent,
-		chanForAddPlayerEvent,
+	chanForAddPlayerEvent,
 		chanForUpdateLatencyEvent,
 		chanForRemovePlayerEvent,
 		chanForSpawnPlayerEvent,
@@ -261,7 +256,6 @@ func (s *Server) closeClient(
 		chanForUnloadChunkEvent,
 		chanForUpdateChunkEvent :=
 		dim.Close()
-	close(chanForChangeDimEvent)
 	close(chanForAddPlayerEvent)
 	close(chanForUpdateLatencyEvent)
 	close(chanForRemovePlayerEvent)
@@ -280,7 +274,6 @@ func (s *Server) closeClient(
 }
 
 func (s *Server) handleClient(
-	gameManager *GameMgr,
 	lobby *Lobby,
 	cnt *Client,
 ) {
@@ -343,7 +336,6 @@ func (s *Server) handleClient(
 		err :=
 		s.initClient(
 			lg,
-			gameManager,
 			lobby,
 			uid, username,
 			cnt,
@@ -368,7 +360,6 @@ func (s *Server) handleClient(
 		case <-time.After(LoopDelayForPlayState):
 			if err := cnt.LoopForPlayState(
 				lg,
-				gameManager,
 				dim,
 				chanForConfirmKeepAliveEvent,
 			); err != nil {
@@ -384,7 +375,6 @@ func (s *Server) handleClient(
 }
 
 func (s *Server) Render(
-	gameManager *GameMgr,
 	lobby *Lobby,
 ) {
 	addr := s.addr
@@ -429,7 +419,6 @@ func (s *Server) Render(
 			conn,
 		)
 		go s.handleClient(
-			gameManager,
 			lobby,
 			cnt,
 		)

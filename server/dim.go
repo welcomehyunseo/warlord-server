@@ -7,25 +7,21 @@ import (
 type Dim struct {
 	sync.RWMutex
 
-	gameMgr *GameMgr
-	world   Overworld
-	player  Player
+	world  Overworld
+	player Player
 }
 
 func NewDim(
-	gameMgr *GameMgr,
 	world Overworld,
 	player Player,
 ) *Dim {
 	return &Dim{
-		gameMgr: gameMgr,
-		world:   world,
-		player:  player,
+		world:  world,
+		player: player,
 	}
 }
 
 func (dim *Dim) Init(
-	chanForChangeDimEvent ChanForChangeDimEvent,
 	chanForAddPlayerEvent ChanForAddPlayerEvent,
 	chanForUpdateLatencyEvent ChanForUpdateLatencyEvent,
 	chanForRemovePlayerEvent ChanForRemovePlayerEvent,
@@ -42,17 +38,8 @@ func (dim *Dim) Init(
 	dim.Lock()
 	defer dim.Unlock()
 
-	gameMgr := dim.gameMgr
 	world := dim.world
 	player := dim.player
-
-	eid := player.GetEID()
-	if err := gameMgr.Init(
-		eid,
-		chanForChangeDimEvent,
-	); err != nil {
-		return err
-	}
 
 	if err := world.InitPlayer(
 		player,
@@ -100,7 +87,6 @@ func (dim *Dim) Change(
 		chanForSetEntityMetadataEvent,
 		chanForLoadChunkEvent,
 		chanForUnloadChunkEvent,
-
 		chanForUpdateChunkEvent :=
 		prevWorld.ClosePlayer(
 			prevPlayer,
@@ -108,7 +94,6 @@ func (dim *Dim) Change(
 
 	if err := world.InitPlayer(
 		player,
-
 		chanForAddPlayerEvent,
 		chanForUpdateLatencyEvent,
 		chanForRemovePlayerEvent,
@@ -119,9 +104,7 @@ func (dim *Dim) Change(
 		chanForSetEntityMetadataEvent,
 		chanForLoadChunkEvent,
 		chanForUnloadChunkEvent,
-
 		chanForUpdateChunkEvent,
-
 		cnt,
 	); err != nil {
 		return err
@@ -135,24 +118,6 @@ func (dim *Dim) EnterChatMessage(
 ) error {
 	dim.RLock()
 	defer dim.RUnlock()
-
-	gameMgr := dim.gameMgr
-	player := dim.player
-
-	if text == "join" {
-		if err := gameMgr.Join(
-			player,
-			0,
-		); err != nil {
-			return err
-		}
-	} else if text == "leave" {
-		if err := gameMgr.Leave(
-			player,
-		); err != nil {
-			return err
-		}
-	}
 
 	return nil
 }
@@ -278,7 +243,6 @@ func (dim *Dim) UpdatePlayerSprinting(
 }
 
 func (dim *Dim) Close() (
-	ChanForChangeDimEvent,
 	ChanForAddPlayerEvent,
 	ChanForUpdateLatencyEvent,
 	ChanForRemovePlayerEvent,
@@ -294,13 +258,8 @@ func (dim *Dim) Close() (
 	dim.Lock()
 	defer dim.Unlock()
 
-	gameMgr := dim.gameMgr
 	world := dim.world
 	player := dim.player
-
-	eid := player.GetEID()
-	chanForChangeDimEvent :=
-		gameMgr.Close(eid)
 
 	chanForAddPlayerEvent,
 		chanForUpdateLatencyEvent,
@@ -315,8 +274,7 @@ func (dim *Dim) Close() (
 		chanForUpdateChunkEvent :=
 		world.ClosePlayer(player)
 
-	return chanForChangeDimEvent,
-		chanForAddPlayerEvent,
+	return chanForAddPlayerEvent,
 		chanForUpdateLatencyEvent,
 		chanForRemovePlayerEvent,
 		chanForSpawnPlayerEvent,

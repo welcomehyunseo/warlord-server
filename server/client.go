@@ -601,7 +601,6 @@ func (cnt *Client) JoinGame(
 
 func (cnt *Client) LoopForPlayState(
 	lg *Logger,
-	gameManager *GameMgr,
 	dim *Dim,
 	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
 ) error {
