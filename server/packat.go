@@ -59,3 +59,20 @@ func (p *packet) String() string {
 		p.bound, p.state, p.id,
 	)
 }
+
+type InPacket interface {
+	Packet
+
+	Unpack(
+		*Data,
+	) error
+}
+
+type OutPacket interface {
+	Packet
+
+	Pack() (
+		*Data,
+		error,
+	)
+}

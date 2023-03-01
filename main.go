@@ -20,8 +20,7 @@ func main() {
 	s := server.NewServer(
 		addr,
 		max,
-		favicon,
-		desc,
+		favicon, desc,
 	)
 
 	headCmdMgr := server.NewHeadCmdMgr()

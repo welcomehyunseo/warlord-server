@@ -29,14 +29,6 @@ const InPacketIDToStopJumpWithHorse = 0x15
 const InPacketIDToOpenHorseInventory = 0x15
 const InPacketIDToStartFlyingWithElytra = 0x15
 
-type InPacket interface {
-	Packet
-
-	Unpack(
-		*Data,
-	) error
-}
-
 type InPacketToHandshake struct {
 	*packet
 	version int32

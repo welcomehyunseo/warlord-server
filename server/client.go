@@ -5,15 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"io"
 	"math/rand"
 	"net"
 	"sync"
 	"time"
 )
-
-type CID = uuid.UUID
 
 func readVarInt(
 	r io.Reader,
@@ -226,9 +223,7 @@ func distribute(
 }
 
 type Client struct {
-	sync.Mutex
-
-	cid CID
+	*sync.Mutex
 
 	addr net.Addr
 
@@ -236,15 +231,14 @@ type Client struct {
 }
 
 func NewClient(
-	cid CID,
 	conn net.Conn,
 ) *Client {
 	addr := conn.RemoteAddr()
 
 	return &Client{
-		cid:  cid,
-		addr: addr,
-		conn: conn,
+		new(sync.Mutex),
+		addr,
+		conn,
 	}
 }
 
@@ -649,22 +643,18 @@ func (cnt *Client) LoopForPlayState(
 
 	switch inPacket.(type) {
 	case *InPacketToInteractWithEntity:
-		interactWithEntityPacket :=
-			inPacket.(*InPacketToInteractWithEntity)
-		fmt.Println(interactWithEntityPacket)
+		IWEPacket := inPacket.(*InPacketToInteractWithEntity)
+		fmt.Println(IWEPacket)
 
 		break
 	case *InPacketToConfirmKeepAlive: // 0x0B
-		confirmKeepAlivePacket :=
+		CKAPacket :=
 			inPacket.(*InPacketToConfirmKeepAlive)
-		payload :=
-			confirmKeepAlivePacket.GetPayload()
-		confirmKeepAliveEvent :=
-			NewConfirmKeepAliveEvent(
-				payload,
-			)
-		chanForCKAEvent <- confirmKeepAliveEvent
-
+		payload := CKAPacket.GetPayload()
+		CKAEvent := NewConfirmKeepAliveEvent(
+			payload,
+		)
+		chanForCKAEvent <- CKAEvent
 		break
 	case *InPacketToEnterChatText:
 		enterChatMessagePacket :=
@@ -688,62 +678,56 @@ func (cnt *Client) LoopForPlayState(
 				return err
 			}
 		}
-
 		break
 	case *InPacketToChangePos:
-		changePosPacket := inPacket.(*InPacketToChangePos)
+		CPPacket := inPacket.(*InPacketToChangePos)
 		x, y, z :=
-			changePosPacket.GetX(),
-			changePosPacket.GetY(),
-			changePosPacket.GetZ()
-		ground := changePosPacket.GetGround()
+			CPPacket.GetX(),
+			CPPacket.GetY(),
+			CPPacket.GetZ()
+		ground := CPPacket.GetGround()
 		if err := dim.UpdatePlayerPos(
 			x, y, z,
 			ground,
 		); err != nil {
 			return err
 		}
-
 		break
 	case *InPacketToChangeLook:
-		changeLookPacket := inPacket.(*InPacketToChangeLook)
+		CLPacket := inPacket.(*InPacketToChangeLook)
 		yaw, pitch :=
-			changeLookPacket.GetYaw(),
-			changeLookPacket.GetPitch()
-		ground := changeLookPacket.GetGround()
+			CLPacket.GetYaw(),
+			CLPacket.GetPitch()
+		ground := CLPacket.GetGround()
 		if err := dim.UpdatePlayerLook(
 			yaw, pitch,
 			ground,
 		); err != nil {
 			return err
 		}
-
 		break
 	case *InPacketToChangePosAndLook:
-
-		changePosAndLookPacket := inPacket.(*InPacketToChangePosAndLook)
+		CPALPacket := inPacket.(*InPacketToChangePosAndLook)
 		x, y, z :=
-			changePosAndLookPacket.GetX(),
-			changePosAndLookPacket.GetY(),
-			changePosAndLookPacket.GetZ()
-		ground := changePosAndLookPacket.GetGround()
+			CPALPacket.GetX(),
+			CPALPacket.GetY(),
+			CPALPacket.GetZ()
+		ground := CPALPacket.GetGround()
 		if err := dim.UpdatePlayerPos(
 			x, y, z,
 			ground,
 		); err != nil {
 			return err
 		}
-
 		yaw, pitch :=
-			changePosAndLookPacket.GetYaw(),
-			changePosAndLookPacket.GetPitch()
+			CPALPacket.GetYaw(),
+			CPALPacket.GetPitch()
 		if err := dim.UpdatePlayerLook(
 			yaw, pitch,
 			ground,
 		); err != nil {
 			return err
 		}
-
 		break
 	case *InPacketToStartSneaking:
 		//packet := inPacket.(*InPacketToStartSneaking)
@@ -1381,10 +1365,6 @@ func (cnt *Client) UnloadChunk(
 	}
 
 	return nil
-}
-
-func (cnt *Client) GetCID() CID {
-	return cnt.cid
 }
 
 func (cnt *Client) GetAddr() string {
