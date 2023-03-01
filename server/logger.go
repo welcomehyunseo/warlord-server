@@ -218,7 +218,7 @@ func (c *Logger) Debug(
 	ms := time.Now().UnixMilli()
 	str := lgElementsToString(elements)
 	fmt.Printf(
-		"{ timestamp: %d, level: %s, name: %s, %s, message: %s, %s }\n",
+		"{ timestamp: %d, level: %s, name: %s, %s, msg: %s, %s }\n",
 		ms, DebugLevelStr, name, prefix, message, str,
 	)
 }
@@ -241,7 +241,7 @@ func (c *Logger) Info(
 	ms := time.Now().UnixMilli()
 	str := lgElementsToString(elements)
 	fmt.Printf(
-		"{ timestamp: %d, level: %s, name: %s, %s, message: %s, %s }\n",
+		"{ timestamp: %d, level: %s, name: %s, %s, msg: %s, %s }\n",
 		ms, InfoLevelStr, name, prefix, message, str,
 	)
 }

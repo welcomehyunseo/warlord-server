@@ -82,7 +82,7 @@ func (md *metadata) writeString(
 	return nil
 }
 
-//func (md *metadata) writeChat(
+//func (md *md) writeChat(
 //	index uint8, value *Chat,
 //) error {
 //	data := md.data

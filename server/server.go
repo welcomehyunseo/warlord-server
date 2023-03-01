@@ -60,11 +60,11 @@ func (s *Server) countEID() EID {
 
 func (s *Server) initClient(
 	lg *Logger,
-	world Overworld,
+	space *Space,
 	uid UID, username string,
 	cnt *Client,
 ) (
-	*Dim,
+	*Dimension,
 	ChanForConfirmKeepAliveEvent,
 	ChanForError,
 	context.CancelFunc,
@@ -80,15 +80,6 @@ func (s *Server) initClient(
 	}()
 
 	eid := s.countEID()
-
-	player := NewGuest(
-		eid, uid, username,
-	)
-
-	dim := NewDim(
-		world,
-		player,
-	)
 
 	chanForError := make(
 		ChanForError,
@@ -107,109 +98,103 @@ func (s *Server) initClient(
 		return nil, nil, nil, cancel, nil, err
 	}
 
-	chanForChangeDimEvent := make(
-		ChanForChangeDimEvent,
-		MaxNumForChannel,
-	)
-	go cnt.HandleChangeDimEvent(
-		chanForChangeDimEvent,
-		dim,
-		chanForError,
-		ctx,
-		wg,
-	)
-
-	chanForAddPlayerEvent := make(
+	chanForAPEvent := make(
 		ChanForAddPlayerEvent,
 		MaxNumForChannel,
 	)
-	chanForUpdateLatencyEvent := make(
+	chanForULEvent := make(
 		ChanForUpdateLatencyEvent,
 		MaxNumForChannel,
 	)
-	chanForRemovePlayerEvent := make(
+	chanForRPEvent := make(
 		ChanForRemovePlayerEvent,
 		MaxNumForChannel,
 	)
-	chanForSpawnPlayerEvent := make(
+	chanForSPEvent := make(
 		ChanForSpawnPlayerEvent,
 		MaxNumForChannel,
 	)
-	chanForDespawnEntityEvent := make(
+	chanForDEEvent := make(
 		ChanForDespawnEntityEvent,
 		MaxNumForChannel,
 	)
-	chanForSetEntityRelativePosEvent := make(
+	chanForSERPEvent := make(
 		ChanForSetEntityRelativePosEvent,
 		MaxNumForChannel,
 	)
-	chanForSetEntityLookEvent := make(
+	chanForSELEvent := make(
 		ChanForSetEntityLookEvent,
 		MaxNumForChannel,
 	)
-	chanForSetEntityMetadataEvent := make(
+	chanForSEMEvent := make(
 		ChanForSetEntityMetadataEvent,
 		MaxNumForChannel,
 	)
-	chanForLoadChunkEvent := make(
+	chanForLCEvent := make(
 		ChanForLoadChunkEvent,
 		MaxNumForChannel,
 	)
-	chanForUnloadChunkEvent := make(
+	chanForUnCEvent := make(
 		ChanForUnloadChunkEvent,
 		MaxNumForChannel,
 	)
+	chanForUpCEvent := make(
+		ChanForUpdateChunkEvent,
+		MaxNumForChannel,
+	)
+
+	dim, err := NewDimension(
+		space,
+		eid,
+		uid, username,
+		0,
+		chanForAPEvent,
+		chanForULEvent,
+		chanForRPEvent,
+		chanForSPEvent,
+		chanForDEEvent,
+		chanForSERPEvent,
+		chanForSELEvent,
+		chanForSEMEvent,
+		chanForLCEvent,
+		chanForUnCEvent,
+		chanForUpCEvent,
+		cnt,
+	)
+	if err != nil {
+		return nil, nil, nil, cancel, nil, err
+	}
+
 	go cnt.HandleCommonEvents(
-		chanForAddPlayerEvent,
-		chanForUpdateLatencyEvent,
-		chanForRemovePlayerEvent,
-		chanForSpawnPlayerEvent,
-		chanForDespawnEntityEvent,
-		chanForSetEntityRelativePosEvent,
-		chanForSetEntityLookEvent,
-		chanForSetEntityMetadataEvent,
-		chanForLoadChunkEvent,
-		chanForUnloadChunkEvent,
+		chanForAPEvent,
+		chanForULEvent,
+		chanForRPEvent,
+		chanForSPEvent,
+		chanForDEEvent,
+		chanForSERPEvent,
+		chanForSELEvent,
+		chanForSEMEvent,
+		chanForLCEvent,
+		chanForUnCEvent,
 		chanForError,
 		ctx,
 		wg,
 	)
 
-	chanForUpdateChunkEvent := make(
-		ChanForUpdateChunkEvent,
-		MaxNumForChannel,
-	)
 	go cnt.HandleUpdateChunkEvent(
-		chanForUpdateChunkEvent,
+		chanForUpCEvent,
 		dim,
 		chanForError,
 		ctx,
 		wg,
 	)
 
-	if err := dim.Init(
-		chanForAddPlayerEvent,
-		chanForUpdateLatencyEvent,
-		chanForRemovePlayerEvent,
-		chanForSpawnPlayerEvent,
-		chanForDespawnEntityEvent,
-		chanForSetEntityRelativePosEvent,
-		chanForSetEntityLookEvent,
-		chanForSetEntityMetadataEvent,
-		chanForLoadChunkEvent,
-		chanForUnloadChunkEvent,
-		chanForUpdateChunkEvent,
-		cnt,
-	); err != nil {
-		return nil, nil, nil, cancel, nil, err
-	}
-
-	chanForConfirmKeepAliveEvent := make(
+	chanForCKAEvent := make(
 		ChanForConfirmKeepAliveEvent,
 		MaxNumForChannel,
 	)
 	go cnt.HandleConfirmKeepAliveEvent(
-		chanForConfirmKeepAliveEvent,
+		chanForCKAEvent,
 		dim,
 		chanForError,
 		ctx,
@@ -217,7 +202,7 @@ func (s *Server) initClient(
 	)
 
 	return dim,
-		chanForConfirmKeepAliveEvent,
+		chanForCKAEvent,
 		chanForError,
 		cancel,
 		wg,
@@ -226,8 +211,8 @@ func (s *Server) initClient(
 
 func (s *Server) closeClient(
 	lg *Logger,
-	dim *Dim,
-	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
+	dim *Dimension,
+	chanForCKAEvent ChanForConfirmKeepAliveEvent,
 	chanForError ChanForError,
 	cancel context.CancelFunc,
 	wg *sync.WaitGroup,
@@ -240,41 +225,42 @@ func (s *Server) closeClient(
 		lg.Debug("it is finished to close Client")
 	}()
 
-	cancel()
-
-	close(chanForConfirmKeepAliveEvent)
-
-	chanForAddPlayerEvent,
-		chanForUpdateLatencyEvent,
-		chanForRemovePlayerEvent,
-		chanForSpawnPlayerEvent,
-		chanForDespawnEntityEvent,
-		chanForSetEntityLookEvent,
-		chanForSetEntityRelativePosEvent,
-		chanForSetEntityMetadataEvent,
-		chanForLoadChunkEvent,
-		chanForUnloadChunkEvent,
-		chanForUpdateChunkEvent :=
+	chanForAPEvent,
+		chanForULEvent,
+		chanForRPEvent,
+		chanForSPEvent,
+		chanForDEEvent,
+		chanForSERPEvent,
+		chanForSELEvent,
+		chanForSEMEvent,
+		chanForLCEvent,
+		chanForUnCEvent,
+		chanForUpCEvent :=
 		dim.Close()
-	close(chanForAddPlayerEvent)
-	close(chanForUpdateLatencyEvent)
-	close(chanForRemovePlayerEvent)
-	close(chanForSpawnPlayerEvent)
-	close(chanForDespawnEntityEvent)
-	close(chanForSetEntityRelativePosEvent)
-	close(chanForSetEntityLookEvent)
-	close(chanForSetEntityMetadataEvent)
-	close(chanForLoadChunkEvent)
-	close(chanForUnloadChunkEvent)
-	close(chanForUpdateChunkEvent)
+	close(chanForAPEvent)
+	close(chanForULEvent)
+	close(chanForRPEvent)
+	close(chanForSPEvent)
+	close(chanForDEEvent)
+	close(chanForSERPEvent)
+	close(chanForSELEvent)
+	close(chanForSEMEvent)
+	close(chanForLCEvent)
+	close(chanForUnCEvent)
+	close(chanForUpCEvent)
 
+	close(chanForCKAEvent)
+
+	cancel()
 	wg.Wait()
 
 	close(chanForError)
 }
 
 func (s *Server) handleClient(
-	lobby *Lobby,
+	headCmdMgr *HeadCmdMgr,
+	worldCmdMgr *WorldCmdMgr,
+	space *Space,
 	cnt *Client,
 ) {
 
@@ -329,14 +315,14 @@ func (s *Server) handleClient(
 	)
 
 	dim,
-		chanForConfirmKeepAliveEvent,
+		chanForCKAEvent,
 		chanForError,
 		cancel,
 		wg,
 		err :=
 		s.initClient(
 			lg,
-			lobby,
+			space,
 			uid, username,
 			cnt,
 		)
@@ -347,7 +333,7 @@ func (s *Server) handleClient(
 	defer s.closeClient(
 		lg,
 		dim,
-		chanForConfirmKeepAliveEvent,
+		chanForCKAEvent,
 		chanForError,
 		cancel,
 		wg,
@@ -360,8 +346,10 @@ func (s *Server) handleClient(
 		case <-time.After(LoopDelayForPlayState):
 			if err := cnt.LoopForPlayState(
 				lg,
+				headCmdMgr,
+				worldCmdMgr,
 				dim,
-				chanForConfirmKeepAliveEvent,
+				chanForCKAEvent,
 			); err != nil {
 				panic(err)
 			}
@@ -375,7 +363,9 @@ func (s *Server) handleClient(
 }
 
 func (s *Server) Render(
-	lobby *Lobby,
+	headCmdMgr *HeadCmdMgr,
+	worldCmdMgr *WorldCmdMgr,
+	space *Space,
 ) {
 	addr := s.addr
 	network := Network
@@ -419,7 +409,9 @@ func (s *Server) Render(
 			conn,
 		)
 		go s.handleClient(
-			lobby,
+			headCmdMgr,
+			worldCmdMgr,
+			space,
 			cnt,
 		)
 	}

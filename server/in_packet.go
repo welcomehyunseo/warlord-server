@@ -2,23 +2,32 @@ package server
 
 import "fmt"
 
-const HandshakePacketID = 0x00
+const InPacketIDToHandshake = 0x00
 
-const RequestPacketID = 0x00
-const PingPacketID = 0x01
+const InPacketIDToRequest = 0x00
+const InPacketIDToPing = 0x01
 
-const StartLoginPacketID = 0x00
+const InPacketIDToStartLogin = 0x00
 
-const FinishTeleportPacketID = 0x00
-const EnterChatMessagePacketID = 0x02
-const ClickButtonPacketID = 0x03
-const ChangeSettingsPacketID = 0x04
-const InteractWithEntityPacketID = 0x0A
-const ConfirmKeepAlivePacketID = 0x0B
-const ChangePosPacketID = 0x0D
-const ChangePosAndLookPacketID = 0x0E
-const ChangeLookPacketID = 0x0F
-const TakeActionPacketID = 0x15
+const InPacketIDToConfirmTeleport = 0x00
+const InPacketIDToEnterChatText = 0x02
+const InPacketIDToClickButton = 0x03
+const InPacketIDToChangeSettings = 0x04
+const InPacketIDToInteractWithEntity = 0x0A
+const InPacketIDToConfirmKeepAlive = 0x0B
+const InPacketIDToChangePos = 0x0D
+const InPacketIDToChangePosAndLook = 0x0E
+const InPacketIDToChangeLook = 0x0F
+const InPacketIDToDoActions = 0x15
+const InPacketIDToStartSneaking = 0x15
+const InPacketIDToStopSneaking = 0x15
+const InPacketIDToLeaveBed = 0x15
+const InPacketIDToStartSprinting = 0x15
+const InPacketIDToStopSprinting = 0x15
+const InPacketIDToStartJumpWithHorse = 0x15
+const InPacketIDToStopJumpWithHorse = 0x15
+const InPacketIDToOpenHorseInventory = 0x15
+const InPacketIDToStartFlyingWithElytra = 0x15
 
 type InPacket interface {
 	Packet
@@ -28,7 +37,7 @@ type InPacket interface {
 	) error
 }
 
-type HandshakePacket struct {
+type InPacketToHandshake struct {
 	*packet
 	version int32
 	addr    string
@@ -36,17 +45,17 @@ type HandshakePacket struct {
 	next    int32
 }
 
-func NewHandshakePacket() *HandshakePacket {
-	return &HandshakePacket{
+func NewInPacketToHandshake() *InPacketToHandshake {
+	return &InPacketToHandshake{
 		packet: newPacket(
 			Inbound,
 			HandshakingState,
-			HandshakePacketID,
+			InPacketIDToHandshake,
 		),
 	}
 }
 
-func (p *HandshakePacket) Unpack(
+func (p *InPacketToHandshake) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -69,23 +78,23 @@ func (p *HandshakePacket) Unpack(
 	return err
 }
 
-func (p *HandshakePacket) GetVersion() int32 {
+func (p *InPacketToHandshake) GetVersion() int32 {
 	return p.version
 }
 
-func (p *HandshakePacket) GetAddr() string {
+func (p *InPacketToHandshake) GetAddr() string {
 	return p.addr
 }
 
-func (p *HandshakePacket) GetPort() uint16 {
+func (p *InPacketToHandshake) GetPort() uint16 {
 	return p.port
 }
 
-func (p *HandshakePacket) GetNext() int32 {
+func (p *InPacketToHandshake) GetNext() int32 {
 	return p.next
 }
 
-func (p *HandshakePacket) String() string {
+func (p *InPacketToHandshake) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"packet: %+v, "+
@@ -98,50 +107,50 @@ func (p *HandshakePacket) String() string {
 	)
 }
 
-type RequestPacket struct {
+type InPacketToRequest struct {
 	*packet
 }
 
-func NewRequestPacket() *RequestPacket {
-	return &RequestPacket{
+func NewInPacketToRequest() *InPacketToRequest {
+	return &InPacketToRequest{
 		packet: newPacket(
 			Inbound,
 			StatusState,
-			RequestPacketID,
+			InPacketIDToRequest,
 		),
 	}
 }
 
-func (p *RequestPacket) Unpack(
+func (p *InPacketToRequest) Unpack(
 	data *Data,
 ) error {
 	var err error
 	return err
 }
 
-func (p *RequestPacket) String() string {
+func (p *InPacketToRequest) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v }",
 		p.packet,
 	)
 }
 
-type PingPacket struct {
+type InPacketToPing struct {
 	*packet
 	payload int64
 }
 
-func NewPingPacket() *PingPacket {
-	return &PingPacket{
+func NewInPacketToPing() *InPacketToPing {
+	return &InPacketToPing{
 		packet: newPacket(
 			Inbound,
 			StatusState,
-			PingPacketID,
+			InPacketIDToPing,
 		),
 	}
 }
 
-func (p *PingPacket) Unpack(
+func (p *InPacketToPing) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -152,33 +161,33 @@ func (p *PingPacket) Unpack(
 	return err
 }
 
-func (p *PingPacket) GetPayload() int64 {
+func (p *InPacketToPing) GetPayload() int64 {
 	return p.payload
 }
 
-func (p *PingPacket) String() string {
+func (p *InPacketToPing) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, payload: %d }",
 		p.packet, p.payload,
 	)
 }
 
-type StartLoginPacket struct {
+type InPacketToStartLogin struct {
 	*packet
 	username string
 }
 
-func NewStartLoginPacket() *StartLoginPacket {
-	return &StartLoginPacket{
+func NewInPacketToStartLogin() *InPacketToStartLogin {
+	return &InPacketToStartLogin{
 		packet: newPacket(
 			Inbound,
 			LoginState,
-			StartLoginPacketID,
+			InPacketIDToStartLogin,
 		),
 	}
 }
 
-func (p *StartLoginPacket) Unpack(
+func (p *InPacketToStartLogin) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -189,33 +198,33 @@ func (p *StartLoginPacket) Unpack(
 	return err
 }
 
-func (p *StartLoginPacket) GetUsername() string {
+func (p *InPacketToStartLogin) GetUsername() string {
 	return p.username
 }
 
-func (p *StartLoginPacket) String() string {
+func (p *InPacketToStartLogin) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, username: %s }",
 		p.packet, p.username,
 	)
 }
 
-type EnterChatMessagePacket struct {
+type InPacketToEnterChatText struct {
 	*packet
 	text string
 }
 
-func NewEnterChatMessagePacket() *EnterChatMessagePacket {
-	return &EnterChatMessagePacket{
+func NewInPacketToEnterChatText() *InPacketToEnterChatText {
+	return &InPacketToEnterChatText{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			EnterChatMessagePacketID,
+			InPacketIDToEnterChatText,
 		),
 	}
 }
 
-func (p *EnterChatMessagePacket) Unpack(
+func (p *InPacketToEnterChatText) Unpack(
 	data *Data,
 ) error {
 	text, err := data.ReadString()
@@ -227,33 +236,33 @@ func (p *EnterChatMessagePacket) Unpack(
 	return nil
 }
 
-func (p *EnterChatMessagePacket) GetText() string {
+func (p *InPacketToEnterChatText) GetText() string {
 	return p.text
 }
 
-func (p *EnterChatMessagePacket) String() string {
+func (p *InPacketToEnterChatText) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, text: %s }",
 		p.packet, p.text,
 	)
 }
 
-type FinishTeleportPacket struct {
+type InPacketToConfirmTeleport struct {
 	*packet
 	payload int32
 }
 
-func NewFinishTeleportPacket() *FinishTeleportPacket {
-	return &FinishTeleportPacket{
+func NewInPacketToConfirmTeleport() *InPacketToConfirmTeleport {
+	return &InPacketToConfirmTeleport{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			FinishTeleportPacketID,
+			InPacketIDToConfirmTeleport,
 		),
 	}
 }
 
-func (p *FinishTeleportPacket) Unpack(
+func (p *InPacketToConfirmTeleport) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -264,35 +273,35 @@ func (p *FinishTeleportPacket) Unpack(
 	return err
 }
 
-func (p *FinishTeleportPacket) GetPayload() int32 {
+func (p *InPacketToConfirmTeleport) GetPayload() int32 {
 	return p.payload
 }
 
-func (p *FinishTeleportPacket) String() string {
+func (p *InPacketToConfirmTeleport) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, payload: %d }",
 		p.packet, p.payload,
 	)
 }
 
-type ClickButtonPacket struct {
+type InPacketToClickButton struct {
 	*packet
 
 	respawn bool // when the Client is ready to complete login and respawn after death
 	stats   bool // when the Client opens the statistics menu
 }
 
-func NewClickButtonPacket() *ClickButtonPacket {
-	return &ClickButtonPacket{
+func NewInPacketToClickButton() *InPacketToClickButton {
+	return &InPacketToClickButton{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			ClickButtonPacketID,
+			InPacketIDToClickButton,
 		),
 	}
 }
 
-func (p *ClickButtonPacket) Unpack(
+func (p *InPacketToClickButton) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -310,22 +319,22 @@ func (p *ClickButtonPacket) Unpack(
 	return err
 }
 
-func (p *ClickButtonPacket) IsRespawnStarted() bool {
+func (p *InPacketToClickButton) IsRespawnStarted() bool {
 	return p.respawn
 }
 
-func (p *ClickButtonPacket) IsStatsMenuOpened() bool {
+func (p *InPacketToClickButton) IsStatsMenuOpened() bool {
 	return p.stats
 }
 
-func (p *ClickButtonPacket) String() string {
+func (p *InPacketToClickButton) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, respawn: %v, stats: %v }",
 		p.packet, p.respawn, p.stats,
 	)
 }
 
-type ChangeSettingsPacket struct {
+type InPacketToChangeSettings struct {
 	*packet
 	local       string
 	rndDist     int8
@@ -341,17 +350,17 @@ type ChangeSettingsPacket struct {
 	mainHand    int32
 }
 
-func NewChangeSettingsPacket() *ChangeSettingsPacket {
-	return &ChangeSettingsPacket{
+func NewInPacketToChangeSettings() *InPacketToChangeSettings {
+	return &InPacketToChangeSettings{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			ChangeSettingsPacketID,
+			InPacketIDToChangeSettings,
 		),
 	}
 }
 
-func (p *ChangeSettingsPacket) Unpack(
+func (p *InPacketToChangeSettings) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -417,55 +426,55 @@ func (p *ChangeSettingsPacket) Unpack(
 	return err
 }
 
-func (p *ChangeSettingsPacket) GetLocal() string {
+func (p *InPacketToChangeSettings) GetLocal() string {
 	return p.local
 }
 
-func (p *ChangeSettingsPacket) GetRndDist() int8 {
+func (p *InPacketToChangeSettings) GetRndDist() int8 {
 	return p.rndDist
 }
 
-func (p *ChangeSettingsPacket) GetChatMode() int32 {
+func (p *InPacketToChangeSettings) GetChatMode() int32 {
 	return p.chatMode
 }
 
-func (p *ChangeSettingsPacket) GetChatColors() bool {
+func (p *InPacketToChangeSettings) GetChatColors() bool {
 	return p.chatColors
 }
 
-func (p *ChangeSettingsPacket) GetCape() bool {
+func (p *InPacketToChangeSettings) GetCape() bool {
 	return p.cape
 }
 
-func (p *ChangeSettingsPacket) GetJacket() bool {
+func (p *InPacketToChangeSettings) GetJacket() bool {
 	return p.jacket
 }
 
-func (p *ChangeSettingsPacket) GetLeftSleeve() bool {
+func (p *InPacketToChangeSettings) GetLeftSleeve() bool {
 	return p.leftSleeve
 }
 
-func (p *ChangeSettingsPacket) GetRightSleeve() bool {
+func (p *InPacketToChangeSettings) GetRightSleeve() bool {
 	return p.rightSleeve
 }
 
-func (p *ChangeSettingsPacket) GetLeftPants() bool {
+func (p *InPacketToChangeSettings) GetLeftPants() bool {
 	return p.leftPants
 }
 
-func (p *ChangeSettingsPacket) GetRightPants() bool {
+func (p *InPacketToChangeSettings) GetRightPants() bool {
 	return p.rightPants
 }
 
-func (p *ChangeSettingsPacket) GetHat() bool {
+func (p *InPacketToChangeSettings) GetHat() bool {
 	return p.hat
 }
 
-func (p *ChangeSettingsPacket) GetMainHand() int32 {
+func (p *InPacketToChangeSettings) GetMainHand() int32 {
 	return p.mainHand
 }
 
-func (p *ChangeSettingsPacket) String() string {
+func (p *InPacketToChangeSettings) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"packet: %+v, "+
@@ -492,7 +501,7 @@ func (p *ChangeSettingsPacket) String() string {
 	)
 }
 
-type InteractWithEntityPacket struct {
+type InPacketToInteractWithEntity struct {
 	*packet
 	target                    EID
 	num                       int32
@@ -500,17 +509,17 @@ type InteractWithEntityPacket struct {
 	hand                      int32
 }
 
-func NewInteractWithEntityPacket() *InteractWithEntityPacket {
-	return &InteractWithEntityPacket{
+func NewInPacketToInteractWithEntity() *InPacketToInteractWithEntity {
+	return &InPacketToInteractWithEntity{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			InteractWithEntityPacketID,
+			InPacketIDToInteractWithEntity,
 		),
 	}
 }
 
-func (p *InteractWithEntityPacket) Unpack(
+func (p *InPacketToInteractWithEntity) Unpack(
 	data *Data,
 ) error {
 	target, err := data.ReadVarInt()
@@ -550,7 +559,7 @@ func (p *InteractWithEntityPacket) Unpack(
 	return nil
 }
 
-func (p *InteractWithEntityPacket) String() string {
+func (p *InPacketToInteractWithEntity) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, "+
 			"target: %d, "+
@@ -566,22 +575,22 @@ func (p *InteractWithEntityPacket) String() string {
 	)
 }
 
-type ConfirmKeepAlivePacket struct {
+type InPacketToConfirmKeepAlive struct {
 	*packet
 	payload int64
 }
 
-func NewConfirmKeepAlivePacket() *ConfirmKeepAlivePacket {
-	return &ConfirmKeepAlivePacket{
+func NewInPacketToConfirmKeepAlive() *InPacketToConfirmKeepAlive {
+	return &InPacketToConfirmKeepAlive{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			ConfirmKeepAlivePacketID,
+			InPacketIDToConfirmKeepAlive,
 		),
 	}
 }
 
-func (p *ConfirmKeepAlivePacket) Unpack(
+func (p *InPacketToConfirmKeepAlive) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -592,18 +601,18 @@ func (p *ConfirmKeepAlivePacket) Unpack(
 	return err
 }
 
-func (p *ConfirmKeepAlivePacket) GetPayload() int64 {
+func (p *InPacketToConfirmKeepAlive) GetPayload() int64 {
 	return p.payload
 }
 
-func (p *ConfirmKeepAlivePacket) String() string {
+func (p *InPacketToConfirmKeepAlive) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, payload: %d }",
 		p.packet, p.payload,
 	)
 }
 
-type ChangePosPacket struct {
+type InPacketToChangePos struct {
 	*packet
 	x      float64
 	y      float64
@@ -611,17 +620,17 @@ type ChangePosPacket struct {
 	ground bool
 }
 
-func NewChangePosPacket() *ChangePosPacket {
-	return &ChangePosPacket{
+func NewInPacketToChangePos() *InPacketToChangePos {
+	return &InPacketToChangePos{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			ChangePosPacketID,
+			InPacketIDToChangePos,
 		),
 	}
 }
 
-func (p *ChangePosPacket) Unpack(
+func (p *InPacketToChangePos) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -644,30 +653,30 @@ func (p *ChangePosPacket) Unpack(
 	return err
 }
 
-func (p *ChangePosPacket) GetX() float64 {
+func (p *InPacketToChangePos) GetX() float64 {
 	return p.x
 }
 
-func (p *ChangePosPacket) GetY() float64 {
+func (p *InPacketToChangePos) GetY() float64 {
 	return p.y
 }
 
-func (p *ChangePosPacket) GetZ() float64 {
+func (p *InPacketToChangePos) GetZ() float64 {
 	return p.z
 }
 
-func (p *ChangePosPacket) GetGround() bool {
+func (p *InPacketToChangePos) GetGround() bool {
 	return p.ground
 }
 
-func (p *ChangePosPacket) String() string {
+func (p *InPacketToChangePos) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, x: %f, y: %f, z: %f, ground: %v }",
 		p.packet, p.x, p.y, p.z, p.ground,
 	)
 }
 
-type ChangePosAndLookPacket struct {
+type InPacketToChangePosAndLook struct {
 	*packet
 	x      float64
 	y      float64
@@ -677,17 +686,17 @@ type ChangePosAndLookPacket struct {
 	ground bool
 }
 
-func NewChangePosAndLookPacket() *ChangePosAndLookPacket {
-	return &ChangePosAndLookPacket{
+func NewInPacketToChangePosAndLook() *InPacketToChangePosAndLook {
+	return &InPacketToChangePosAndLook{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			ChangePosAndLookPacketID,
+			InPacketIDToChangePosAndLook,
 		),
 	}
 }
 
-func (p *ChangePosAndLookPacket) Unpack(
+func (p *InPacketToChangePosAndLook) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -718,31 +727,31 @@ func (p *ChangePosAndLookPacket) Unpack(
 	return err
 }
 
-func (p *ChangePosAndLookPacket) GetX() float64 {
+func (p *InPacketToChangePosAndLook) GetX() float64 {
 	return p.x
 }
 
-func (p *ChangePosAndLookPacket) GetY() float64 {
+func (p *InPacketToChangePosAndLook) GetY() float64 {
 	return p.y
 }
 
-func (p *ChangePosAndLookPacket) GetZ() float64 {
+func (p *InPacketToChangePosAndLook) GetZ() float64 {
 	return p.z
 }
 
-func (p *ChangePosAndLookPacket) GetYaw() float32 {
+func (p *InPacketToChangePosAndLook) GetYaw() float32 {
 	return p.yaw
 }
 
-func (p *ChangePosAndLookPacket) GetPitch() float32 {
+func (p *InPacketToChangePosAndLook) GetPitch() float32 {
 	return p.pitch
 }
 
-func (p *ChangePosAndLookPacket) GetGround() bool {
+func (p *InPacketToChangePosAndLook) GetGround() bool {
 	return p.ground
 }
 
-func (p *ChangePosAndLookPacket) String() string {
+func (p *InPacketToChangePosAndLook) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"packet: %+v, "+
@@ -757,24 +766,24 @@ func (p *ChangePosAndLookPacket) String() string {
 	)
 }
 
-type ChangeLookPacket struct {
+type InPacketToChangeLook struct {
 	*packet
 	yaw    float32
 	pitch  float32
 	ground bool
 }
 
-func NewChangeLookPacket() *ChangeLookPacket {
-	return &ChangeLookPacket{
+func NewInPacketToChangeLook() *InPacketToChangeLook {
+	return &InPacketToChangeLook{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			ChangeLookPacketID,
+			InPacketIDToChangeLook,
 		),
 	}
 }
 
-func (p *ChangeLookPacket) Unpack(
+func (p *InPacketToChangeLook) Unpack(
 	data *Data,
 ) error {
 	var err error
@@ -793,19 +802,19 @@ func (p *ChangeLookPacket) Unpack(
 	return err
 }
 
-func (p *ChangeLookPacket) GetYaw() float32 {
+func (p *InPacketToChangeLook) GetYaw() float32 {
 	return p.yaw
 }
 
-func (p *ChangeLookPacket) GetPitch() float32 {
+func (p *InPacketToChangeLook) GetPitch() float32 {
 	return p.pitch
 }
 
-func (p *ChangeLookPacket) GetGround() bool {
+func (p *InPacketToChangeLook) GetGround() bool {
 	return p.ground
 }
 
-func (p *ChangeLookPacket) String() string {
+func (p *InPacketToChangeLook) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"packet: %+v, "+
@@ -818,150 +827,82 @@ func (p *ChangeLookPacket) String() string {
 	)
 }
 
-type TakeActionPacket struct {
+type InPacketToStartSneaking struct {
 	*packet
-	eid                int32
-	startSneaking      bool
-	stopSneaking       bool
-	leaveBed           bool
-	startSprinting     bool
-	stopSprinting      bool
-	startHorseJump     bool
-	stopHorseJump      bool
-	horseJumpBoost     int32
-	openHorseInventory bool
-	startElytraFlying  bool
 }
 
-func NewTakeActionPacket() *TakeActionPacket {
-	return &TakeActionPacket{
+func NewInPacketToStartSneaking() *InPacketToStartSneaking {
+	return &InPacketToStartSneaking{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			TakeActionPacketID,
+			InPacketIDToStartSneaking,
 		),
 	}
 }
 
-func (p *TakeActionPacket) Unpack(
+func (p *InPacketToStartSneaking) Unpack(
 	data *Data,
 ) error {
-	var err error
-	p.eid, err = data.ReadVarInt()
-	if err != nil {
-		return err
+	return nil
+}
+
+type InPacketToStopSneaking struct {
+	*packet
+}
+
+func NewInPacketToStopSneaking() *InPacketToStopSneaking {
+	return &InPacketToStopSneaking{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			InPacketIDToStopSneaking,
+		),
 	}
-	id, err := data.ReadVarInt()
-	if err != nil {
-		return err
+}
+
+func (p *InPacketToStopSneaking) Unpack(
+	data *Data,
+) error {
+	return nil
+}
+
+type InPacketToStartSprinting struct {
+	*packet
+}
+
+func NewInPacketToStartSprinting() *InPacketToStartSprinting {
+	return &InPacketToStartSprinting{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			InPacketIDToStartSprinting,
+		),
 	}
-	switch id {
-	case 0:
-		p.startSneaking = true
-		break
-	case 1:
-		p.stopSneaking = true
-		break
-	case 2:
-		p.leaveBed = true
-		break
-	case 3:
-		p.startSprinting = true
-		break
-	case 4:
-		p.stopSprinting = true
-		break
-	case 5:
-		p.startHorseJump = true
-		p.horseJumpBoost, err = data.ReadVarInt()
-		if err != nil {
-			return err
-		}
-		break
-	case 6:
-		p.stopHorseJump = true
-		break
-	case 7:
-		p.openHorseInventory = true
-		break
-	case 8:
-		p.startElytraFlying = true
-		break
+}
+
+func (p *InPacketToStartSprinting) Unpack(
+	data *Data,
+) error {
+	return nil
+}
+
+type InPacketToStopSprinting struct {
+	*packet
+}
+
+func NewInPacketToStopSprinting() *InPacketToStopSprinting {
+	return &InPacketToStopSprinting{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			InPacketIDToStopSprinting,
+		),
 	}
-	return err
 }
 
-func (p *TakeActionPacket) GetEid() int32 {
-	return p.eid
-}
-
-func (p *TakeActionPacket) IsSneakingStarted() bool {
-	return p.startSneaking
-}
-
-func (p *TakeActionPacket) IsSneakingStopped() bool {
-	return p.stopSneaking
-}
-
-func (p *TakeActionPacket) IsLeavingBed() bool {
-	return p.leaveBed
-}
-
-func (p *TakeActionPacket) IsSprintingStared() bool {
-	return p.startSprinting
-}
-
-func (p *TakeActionPacket) IsSprintingStopped() bool {
-	return p.stopSprinting
-}
-
-func (p *TakeActionPacket) IsHorseJumpStarted() bool {
-	return p.startHorseJump
-}
-
-func (p *TakeActionPacket) IsHorseJumpStopped() bool {
-	return p.stopHorseJump
-}
-
-func (p *TakeActionPacket) GetHorseJumpBoost() int32 {
-	return p.horseJumpBoost
-}
-
-func (p *TakeActionPacket) IsHorseInventoryOpened() bool {
-	return p.openHorseInventory
-}
-
-func (p *TakeActionPacket) IsElytraFlyingStarted() bool {
-	return p.startElytraFlying
-}
-
-func (p *TakeActionPacket) String() string {
-	return fmt.Sprintf(
-		"{ "+
-			"packet: %+v, "+
-			"eid: %d, "+
-			"startSneaking: %v, "+
-			"stopSneaking: %v, "+
-			"leaveBed: %v, "+
-			"startSprinting: %v, "+
-			"stopSprinting: %v, "+
-			"startHorseJump: %v, "+
-			"stopHorseJump: %v, "+
-			"horseJumpBoost: %d "+
-			"openHorseInventory: %v, "+
-			"startElytraFlying: %v, "+
-			"}",
-		p.packet,
-		p.eid,
-		p.startSneaking,
-		p.stopSneaking,
-		p.leaveBed,
-		p.startSprinting,
-		p.stopSprinting,
-		p.startHorseJump,
-		p.stopHorseJump,
-		p.horseJumpBoost,
-		p.openHorseInventory,
-		p.startElytraFlying,
-	)
+func (p *InPacketToStopSprinting) Unpack(
+	data *Data,
+) error {
+	return nil
 }

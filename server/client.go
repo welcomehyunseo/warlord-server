@@ -140,56 +140,77 @@ func distribute(
 	switch state {
 	case PlayState:
 		switch pid {
-		case FinishTeleportPacketID:
-			inPacket = NewFinishTeleportPacket()
+		case InPacketIDToConfirmTeleport:
+			inPacket = NewInPacketToConfirmTeleport()
 			break
-		case EnterChatMessagePacketID:
-			inPacket = NewEnterChatMessagePacket()
+		case InPacketIDToEnterChatText:
+			inPacket = NewInPacketToEnterChatText()
 			break
-		case ChangeSettingsPacketID:
-			inPacket = NewChangeSettingsPacket()
+		case InPacketIDToChangeSettings:
+			inPacket = NewInPacketToChangeSettings()
 			break
-		case InteractWithEntityPacketID:
-			inPacket = NewInteractWithEntityPacket()
+		case InPacketIDToInteractWithEntity:
+			inPacket = NewInPacketToInteractWithEntity()
 			break
-		case ConfirmKeepAlivePacketID:
-			inPacket = NewConfirmKeepAlivePacket()
+		case InPacketIDToConfirmKeepAlive:
+			inPacket = NewInPacketToConfirmKeepAlive()
 			break
-		case ChangePosPacketID:
-			inPacket = NewChangePosPacket()
+		case InPacketIDToChangePos:
+			inPacket = NewInPacketToChangePos()
 			break
-		case ChangeLookPacketID:
-			inPacket = NewChangeLookPacket()
+		case InPacketIDToChangeLook:
+			inPacket = NewInPacketToChangeLook()
 			break
-		case ChangePosAndLookPacketID:
-			inPacket = NewChangePosAndLookPacket()
+		case InPacketIDToChangePosAndLook:
+			inPacket = NewInPacketToChangePosAndLook()
 			break
-		case TakeActionPacketID:
-			inPacket = NewTakeActionPacket()
+		case InPacketIDToDoActions:
+			_, err := data.ReadVarInt() // TODO: what is exactly?
+			if err != nil {
+				return nil, err
+			}
+			actionID, err := data.ReadVarInt()
+			if err != nil {
+				return nil, err
+			}
+			switch actionID {
+			case 0:
+				inPacket = NewInPacketToStartSneaking()
+				break
+			case 1:
+				inPacket = NewInPacketToStopSneaking()
+				break
+			case 3:
+				inPacket = NewInPacketToStartSprinting()
+				break
+			case 4:
+				inPacket = NewInPacketToStopSprinting()
+				break
+			}
 			break
 		}
 		break
 	case StatusState:
 		switch pid {
-		case RequestPacketID:
-			inPacket = NewRequestPacket()
+		case InPacketIDToRequest:
+			inPacket = NewInPacketToRequest()
 			break
-		case PingPacketID:
-			inPacket = NewPingPacket()
+		case InPacketIDToPing:
+			inPacket = NewInPacketToPing()
 			break
 		}
 		break
 	case LoginState:
 		switch pid {
-		case StartLoginPacketID:
-			inPacket = NewStartLoginPacket()
+		case InPacketIDToStartLogin:
+			inPacket = NewInPacketToStartLogin()
 			break
 		}
 		break
 	case HandshakingState:
 		switch pid {
-		case HandshakePacketID:
-			inPacket = NewHandshakePacket()
+		case InPacketIDToHandshake:
+			inPacket = NewInPacketToHandshake()
 			break
 		}
 		break
@@ -441,20 +462,20 @@ func (cnt *Client) HandleNonLoginState(
 		var outPacket OutPacket
 
 		switch inPacket.(type) {
-		case *HandshakePacket:
-			handshakePacket := inPacket.(*HandshakePacket)
+		case *InPacketToHandshake:
+			handshakePacket := inPacket.(*InPacketToHandshake)
 			state = handshakePacket.GetNext()
 			break
-		case *RequestPacket:
-			responsePacket := NewResponsePacket(
+		case *InPacketToRequest:
+			responsePacket := NewOutPacketToResponse(
 				max, online, text, favicon,
 			)
 			outPacket = responsePacket
 			break
-		case *PingPacket:
-			pingPacket := inPacket.(*PingPacket)
+		case *InPacketToPing:
+			pingPacket := inPacket.(*InPacketToPing)
 			payload := pingPacket.GetPayload()
-			pongPacket := NewPongPacket(payload)
+			pongPacket := NewOutPacketToPong(payload)
 			outPacket = pongPacket
 			break
 		}
@@ -475,7 +496,7 @@ func (cnt *Client) HandleNonLoginState(
 			NewLgElement("OutPacket", outPacket),
 		)
 
-		if _, ok := outPacket.(*PongPacket); ok == true {
+		if _, ok := outPacket.(*OutPacketToPong); ok == true {
 			return true, nil
 		}
 	}
@@ -499,7 +520,7 @@ func (cnt *Client) HandleLoginState(
 		return NilUID, "", err
 	}
 
-	startLoginPacket, ok := inPacket.(*StartLoginPacket)
+	startLoginPacket, ok := inPacket.(*InPacketToStartLogin)
 	if ok == false {
 		return NilUID, "", errors.New("it is invalid inbound packet to handle login state")
 	}
@@ -509,12 +530,12 @@ func (cnt *Client) HandleLoginState(
 		return NilUID, "", err
 	}
 
-	enableCompPacket := NewEnableCompPacket(CompThold)
+	enableCompPacket := NewOutPacketToEnableComp(CompThold)
 	if err := cnt.write(enableCompPacket); err != nil {
 		return NilUID, "", err
 	}
 
-	completeLoginPacket := NewCompleteLoginPacket(
+	completeLoginPacket := NewOutPacketToCompleteLogin(
 		uid,
 		username,
 	)
@@ -547,7 +568,7 @@ func (cnt *Client) JoinGame(
 	}()
 
 	state := PlayState
-	joinGamePacket := NewJoinGamePacket(
+	joinGamePacket := NewOutPacketToJoinGame(
 		eid,
 		0,
 		0,
@@ -561,21 +582,21 @@ func (cnt *Client) JoinGame(
 		return err
 	}
 
-	// ChangeSettingsPacket
+	// InPacketToChangeSettings
 	if _, err := cnt.readWithComp(
 		state,
 	); err != nil {
 		return err
 	}
 
-	// Plugin message
+	// Plugin msg
 	if _, err := cnt.readWithComp(
 		state,
 	); err != nil {
 		return err
 	}
 
-	setAbilitiesPacket := NewSetAbilitiesPacket(
+	setAbilitiesPacket := NewOutPacketToSetAbilities(
 		false,
 		false,
 		false,
@@ -601,8 +622,10 @@ func (cnt *Client) JoinGame(
 
 func (cnt *Client) LoopForPlayState(
 	lg *Logger,
-	dim *Dim,
-	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
+	headCmdMgr *HeadCmdMgr,
+	worldCmdMgr *WorldCmdMgr,
+	dim *Dimension,
+	chanForCKAEvent ChanForConfirmKeepAliveEvent,
 ) error {
 	lg.Debug("it is started to loop for play state in Client")
 	defer func() {
@@ -625,37 +648,50 @@ func (cnt *Client) LoopForPlayState(
 	var outPackets []OutPacket
 
 	switch inPacket.(type) {
-	case *InteractWithEntityPacket:
+	case *InPacketToInteractWithEntity:
 		interactWithEntityPacket :=
-			inPacket.(*InteractWithEntityPacket)
+			inPacket.(*InPacketToInteractWithEntity)
 		fmt.Println(interactWithEntityPacket)
 
 		break
-	case *ConfirmKeepAlivePacket: // 0x0B
+	case *InPacketToConfirmKeepAlive: // 0x0B
 		confirmKeepAlivePacket :=
-			inPacket.(*ConfirmKeepAlivePacket)
+			inPacket.(*InPacketToConfirmKeepAlive)
 		payload :=
 			confirmKeepAlivePacket.GetPayload()
 		confirmKeepAliveEvent :=
 			NewConfirmKeepAliveEvent(
 				payload,
 			)
-		chanForConfirmKeepAliveEvent <- confirmKeepAliveEvent
+		chanForCKAEvent <- confirmKeepAliveEvent
 
 		break
-	case *EnterChatMessagePacket:
+	case *InPacketToEnterChatText:
 		enterChatMessagePacket :=
-			inPacket.(*EnterChatMessagePacket)
+			inPacket.(*InPacketToEnterChatText)
 		text := enterChatMessagePacket.GetText()
-		if err := dim.EnterChatMessage(
+		if err := dim.EnterChatText(
+			headCmdMgr,
+			worldCmdMgr,
 			text,
+			cnt,
 		); err != nil {
-			return err
+			msg := &Chat{
+				Text: fmt.Sprintf(
+					"[error] %s", err,
+				),
+				Color: "dark_red",
+			}
+			if err := cnt.SendChatMessage(
+				msg,
+			); err != nil {
+				return err
+			}
 		}
 
 		break
-	case *ChangePosPacket:
-		changePosPacket := inPacket.(*ChangePosPacket)
+	case *InPacketToChangePos:
+		changePosPacket := inPacket.(*InPacketToChangePos)
 		x, y, z :=
 			changePosPacket.GetX(),
 			changePosPacket.GetY(),
@@ -669,8 +705,8 @@ func (cnt *Client) LoopForPlayState(
 		}
 
 		break
-	case *ChangeLookPacket:
-		changeLookPacket := inPacket.(*ChangeLookPacket)
+	case *InPacketToChangeLook:
+		changeLookPacket := inPacket.(*InPacketToChangeLook)
 		yaw, pitch :=
 			changeLookPacket.GetYaw(),
 			changeLookPacket.GetPitch()
@@ -683,9 +719,9 @@ func (cnt *Client) LoopForPlayState(
 		}
 
 		break
-	case *ChangePosAndLookPacket:
+	case *InPacketToChangePosAndLook:
 
-		changePosAndLookPacket := inPacket.(*ChangePosAndLookPacket)
+		changePosAndLookPacket := inPacket.(*InPacketToChangePosAndLook)
 		x, y, z :=
 			changePosAndLookPacket.GetX(),
 			changePosAndLookPacket.GetY(),
@@ -709,42 +745,37 @@ func (cnt *Client) LoopForPlayState(
 		}
 
 		break
-	case *TakeActionPacket:
-		takeActionPacket := inPacket.(*TakeActionPacket)
-		startSneaking :=
-			takeActionPacket.IsSneakingStarted()
-		stopSneaking :=
-			takeActionPacket.IsSneakingStopped()
-		startSprinting :=
-			takeActionPacket.IsSprintingStared()
-		stopSprinting :=
-			takeActionPacket.IsSprintingStopped()
-		if startSneaking == true {
-			if err := dim.UpdatePlayerSneaking(
-				true,
-			); err != nil {
-				return err
-			}
-		} else if stopSneaking == true {
-			if err := dim.UpdatePlayerSneaking(
-				false,
-			); err != nil {
-				return err
-			}
-		} else if startSprinting == true {
-			if err := dim.UpdatePlayerSprinting(
-				true,
-			); err != nil {
-				return err
-			}
-		} else if stopSprinting == true {
-			if err := dim.UpdatePlayerSprinting(
-				false,
-			); err != nil {
-				return err
-			}
+	case *InPacketToStartSneaking:
+		//packet := inPacket.(*InPacketToStartSneaking)
+		if err := dim.UpdatePlayerSneaking(
+			true,
+		); err != nil {
+			return err
 		}
-
+		break
+	case *InPacketToStopSneaking:
+		//packet := inPacket.(*InPacketToStopSneaking)
+		if err := dim.UpdatePlayerSneaking(
+			false,
+		); err != nil {
+			return err
+		}
+		break
+	case *InPacketToStartSprinting:
+		//packet := inPacket.(*InPacketToStartSprinting)
+		if err := dim.UpdatePlayerSprinting(
+			true,
+		); err != nil {
+			return err
+		}
+		break
+	case *InPacketToStopSprinting:
+		//packet := inPacket.(*InPacketToStopSprinting)
+		if err := dim.UpdatePlayerSprinting(
+			false,
+		); err != nil {
+			return err
+		}
 		break
 	}
 
@@ -761,145 +792,17 @@ func (cnt *Client) LoopForPlayState(
 	return nil
 }
 
-func (cnt *Client) HandleChangeDimEvent(
-	chanForChangeDimEvent ChanForChangeDimEvent,
-	dim *Dim,
-	chanForError ChanForError,
-	ctx context.Context,
-	wg *sync.WaitGroup,
-) {
-	wg.Add(1)
-	defer wg.Done()
-
-	lg := NewLogger(
-		"change-dim-event-handler",
-		NewLgElement("Client", cnt),
-	)
-	defer lg.Close()
-
-	lg.Debug("it is started to handle events")
-	defer lg.Debug("it is finished to handle events")
-
-	defer func() {
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
-		}
-	}()
-
-	stop := false
-	for {
-		select {
-		case event := <-chanForChangeDimEvent:
-			world, player :=
-				event.GetWorld(),
-				event.GetPlayer()
-			if err := dim.Change(
-				world,
-				player,
-				cnt,
-			); err != nil {
-				panic(err)
-			}
-
-			break
-		case <-ctx.Done():
-			stop = true
-			break
-		}
-
-		if stop == true {
-			break
-		}
-	}
-}
-
-func (cnt *Client) HandleConfirmKeepAliveEvent(
-	chanForConfirmKeepAliveEvent ChanForConfirmKeepAliveEvent,
-	dim *Dim,
-	chanForError ChanForError,
-	ctx context.Context,
-	wg *sync.WaitGroup,
-) {
-	wg.Add(1)
-	defer wg.Done()
-
-	lg := NewLogger(
-		"confirm-keep-alive-event-handler",
-		NewLgElement("Client", cnt),
-	)
-	defer lg.Close()
-
-	lg.Debug("it is started to handle events")
-	defer lg.Debug("it is finished to handle events")
-
-	defer func() {
-		if err := recover(); err != nil {
-			lg.Error(err)
-			chanForError <- err
-		}
-	}()
-
-	start := time.Time{}
-	var payload0 int64
-
-	stop := false
-	for {
-		select {
-		case <-time.After(DelayForCheckKeepAlive):
-			if start.IsZero() == false {
-				break
-			}
-
-			payload0 = rand.Int63()
-			if err := cnt.CheckKeepAlive(
-				payload0,
-			); err != nil {
-				panic(err)
-			}
-
-			start = time.Now()
-
-			break
-		case event := <-chanForConfirmKeepAliveEvent:
-			payload1 := event.GetPayload()
-			if payload1 != payload0 {
-				err := errors.New("payload for keep-alive must be same as given")
-				panic(err)
-			}
-
-			end := time.Now()
-			latency := int32(end.Sub(start).Milliseconds())
-			if err := dim.UpdatePlayerLatency(
-				latency,
-			); err != nil {
-				panic(err)
-			}
-			start = time.Time{}
-
-			break
-		case <-ctx.Done():
-			stop = true
-			break
-		}
-
-		if stop == true {
-			break
-		}
-	}
-}
-
 func (cnt *Client) HandleCommonEvents(
-	chanForAddPlayerEvent ChanForAddPlayerEvent,
-	chanForUpdateLatencyEvent ChanForUpdateLatencyEvent,
-	chanForRemovePlayerEvent ChanForRemovePlayerEvent,
-	chanForSpawnPlayerEvent ChanForSpawnPlayerEvent,
-	chanForDespawnEntityEvent ChanForDespawnEntityEvent,
-	chanForSetEntityRelativePosEvent ChanForSetEntityRelativePosEvent,
-	chanForSetEntityLookEvent ChanForSetEntityLookEvent,
-	chanForSetEntityMetadataEvent ChanForSetEntityMetadataEvent,
-	chanForLoadChunkEvent ChanForLoadChunkEvent,
-	chanForUnloadChunkEvent ChanForUnloadChunkEvent,
+	chanForAPEvent ChanForAddPlayerEvent,
+	chanForULEvent ChanForUpdateLatencyEvent,
+	chanForRPEvent ChanForRemovePlayerEvent,
+	chanForSPEvent ChanForSpawnPlayerEvent,
+	chanForDEEvent ChanForDespawnEntityEvent,
+	chanForSERPEvent ChanForSetEntityRelativePosEvent,
+	chanForSELEvent ChanForSetEntityLookEvent,
+	chanForSEMEvent ChanForSetEntityMetadataEvent,
+	chanForLCEvent ChanForLoadChunkEvent,
+	chanForUnCEvent ChanForUnloadChunkEvent,
 	chanForError ChanForError,
 	ctx context.Context,
 	wg *sync.WaitGroup,
@@ -926,9 +829,10 @@ func (cnt *Client) HandleCommonEvents(
 	stop := false
 	for {
 		select {
-		case event := <-chanForAddPlayerEvent:
+		case event := <-chanForAPEvent:
 			uid, username :=
-				event.GetUUID(), event.GetUsername()
+				event.GetUUID(),
+				event.GetUsername()
 			if err := cnt.AddPlayer(
 				uid, username,
 			); err != nil {
@@ -937,15 +841,17 @@ func (cnt *Client) HandleCommonEvents(
 			}
 			event.Done()
 			break
-		case event := <-chanForUpdateLatencyEvent:
-			uid, latency := event.GetUUID(), event.GetLatency()
+		case event := <-chanForULEvent:
+			uid, latency :=
+				event.GetUUID(),
+				event.GetLatency()
 			if err := cnt.UpdateLatency(
 				uid, latency,
 			); err != nil {
 				panic(err)
 			}
 			break
-		case event := <-chanForRemovePlayerEvent:
+		case event := <-chanForRPEvent:
 			uid := event.GetUUID()
 			if err := cnt.RemovePlayer(
 				uid,
@@ -955,15 +861,20 @@ func (cnt *Client) HandleCommonEvents(
 			}
 			event.Done()
 			break
-		case event := <-chanForSpawnPlayerEvent:
+		case event := <-chanForSPEvent:
 			eid, uid :=
-				event.GetEID(), event.GetUUID()
+				event.GetEID(),
+				event.GetUUID()
 			x, y, z :=
-				event.GetX(), event.GetY(), event.GetZ()
+				event.GetX(),
+				event.GetY(),
+				event.GetZ()
 			yaw, pitch :=
-				event.GetYaw(), event.GetPitch()
+				event.GetYaw(),
+				event.GetPitch()
 			sneaking, sprinting :=
-				event.IsSneaking(), event.IsSprinting()
+				event.IsSneaking(),
+				event.IsSprinting()
 			if err := cnt.SpawnPlayer(
 				eid, uid,
 				x, y, z,
@@ -973,7 +884,7 @@ func (cnt *Client) HandleCommonEvents(
 				panic(err)
 			}
 			break
-		case event := <-chanForDespawnEntityEvent:
+		case event := <-chanForDEEvent:
 			eid := event.GetEID()
 			if err := cnt.DespawnEntity(
 				eid,
@@ -981,7 +892,7 @@ func (cnt *Client) HandleCommonEvents(
 				panic(err)
 			}
 			break
-		case event := <-chanForSetEntityRelativePosEvent:
+		case event := <-chanForSERPEvent:
 			eid := event.GetEID()
 			deltaX, deltaY, deltaZ :=
 				event.GetDeltaX(),
@@ -996,10 +907,11 @@ func (cnt *Client) HandleCommonEvents(
 				panic(err)
 			}
 			break
-		case event := <-chanForSetEntityLookEvent:
+		case event := <-chanForSELEvent:
 			eid := event.GetEID()
 			yaw, pitch :=
-				event.GetYaw(), event.GetPitch()
+				event.GetYaw(),
+				event.GetPitch()
 			ground := event.GetGround()
 			if err := cnt.SetEntityLook(
 				eid,
@@ -1009,7 +921,7 @@ func (cnt *Client) HandleCommonEvents(
 				panic(err)
 			}
 			break
-		case event := <-chanForSetEntityMetadataEvent:
+		case event := <-chanForSEMEvent:
 			eid := event.GetEID()
 			metadata := event.GetMetadata()
 			if err := cnt.SetEntityMetadata(
@@ -1019,11 +931,13 @@ func (cnt *Client) HandleCommonEvents(
 				panic(err)
 			}
 			break
-		case event := <-chanForLoadChunkEvent:
+		case event := <-chanForLCEvent:
 			overworld, init :=
-				event.GetOverworld(), event.GetInit()
+				event.GetOverworld(),
+				event.GetInit()
 			cx, cz :=
-				event.GetCx(), event.GetCz()
+				event.GetCx(),
+				event.GetCz()
 			chunk :=
 				event.GetChunk()
 			if err := cnt.LoadChunk(
@@ -1034,9 +948,10 @@ func (cnt *Client) HandleCommonEvents(
 				panic(err)
 			}
 			break
-		case event := <-chanForUnloadChunkEvent:
+		case event := <-chanForUnCEvent:
 			cx, cz :=
-				event.GetCx(), event.GetCz()
+				event.GetCx(),
+				event.GetCz()
 			if err := cnt.UnloadChunk(
 				cx, cz,
 			); err != nil {
@@ -1056,7 +971,7 @@ func (cnt *Client) HandleCommonEvents(
 
 func (cnt *Client) HandleUpdateChunkEvent(
 	chanForEvent ChanForUpdateChunkEvent,
-	dim *Dim,
+	dim *Dimension,
 	chanForError ChanForError,
 	ctx context.Context,
 	wg *sync.WaitGroup,
@@ -1108,6 +1023,81 @@ func (cnt *Client) HandleUpdateChunkEvent(
 	}
 }
 
+func (cnt *Client) HandleConfirmKeepAliveEvent(
+	chanForCKAEvent ChanForConfirmKeepAliveEvent,
+	dim *Dimension,
+	chanForError ChanForError,
+	ctx context.Context,
+	wg *sync.WaitGroup,
+) {
+	wg.Add(1)
+	defer wg.Done()
+
+	lg := NewLogger(
+		"confirm-keep-alive-event-handler",
+		NewLgElement("Client", cnt),
+	)
+	defer lg.Close()
+
+	lg.Debug("it is started to handle events")
+	defer lg.Debug("it is finished to handle events")
+
+	defer func() {
+		if err := recover(); err != nil {
+			lg.Error(err)
+			chanForError <- err
+		}
+	}()
+
+	start := time.Time{}
+	var payload0 int64
+
+	stop := false
+	for {
+		select {
+		case <-time.After(DelayForCheckKeepAlive):
+			if start.IsZero() == false {
+				break
+			}
+
+			payload0 = rand.Int63()
+			if err := cnt.CheckKeepAlive(
+				payload0,
+			); err != nil {
+				panic(err)
+			}
+
+			start = time.Now()
+
+			break
+		case event := <-chanForCKAEvent:
+			payload1 := event.GetPayload()
+			if payload1 != payload0 {
+				err := errors.New("payload for keep-alive must be same as given")
+				panic(err)
+			}
+
+			end := time.Now()
+			latency := int32(end.Sub(start).Milliseconds())
+			if err := dim.UpdateLatency(
+				latency,
+			); err != nil {
+				panic(err)
+			}
+			start = time.Time{}
+
+			break
+		case <-ctx.Done():
+			stop = true
+			break
+		}
+
+		if stop == true {
+			break
+		}
+	}
+}
+
 func (cnt *Client) Close(
 	lg *Logger,
 ) {
@@ -1118,12 +1108,27 @@ func (cnt *Client) Close(
 	_ = cnt.conn.Close()
 }
 
+func (cnt *Client) SendChatMessage(
+	msg *Chat,
+) error {
+	SCMPacket := NewOutPacketToSendChatMessage(
+		msg,
+	)
+	if err := cnt.writeWithComp(
+		SCMPacket,
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (cnt *Client) Teleport(
 	x, y, z float64,
 	yaw, pitch float32,
 ) error {
 	payload := rand.Int31()
-	teleportPacket := NewTeleportPacket(
+	teleportPacket := NewOutPacketToTeleport(
 		x, y, z,
 		yaw, pitch,
 		payload,
@@ -1141,13 +1146,13 @@ func (cnt *Client) Teleport(
 	//	return err
 	//}
 	//finishTeleportPacket, ok :=
-	//	inPacket.(*FinishTeleportPacket)
+	//	inPacket.(*InPacketToConfirmTeleport)
 	//if ok == false {
 	//	return errors.New("it is invalid packet to init play state")
 	//}
 	//payload1 := finishTeleportPacket.GetPayload()
 	//if payload != payload1 {
-	//	return errors.New("it is invalid payload of FinishTeleportPacket to init play state")
+	//	return errors.New("it is invalid payload of InPacketToConfirmTeleport to init play state")
 	//}
 
 	return nil
@@ -1160,7 +1165,7 @@ func (cnt *Client) Respawn(
 	level string,
 ) error {
 
-	respawnPacket := NewRespawnPacket(
+	respawnPacket := NewOutPacketToRespawn(
 		dimension,
 		difficulty,
 		gamemode,
@@ -1189,7 +1194,7 @@ func (cnt *Client) AddPlayer(
 		Text: username,
 		Bold: true,
 	}
-	packet := NewAddPlayerPacket(
+	packet := NewOutPacketToAddPlayer(
 		uid,
 		username,
 		textureString,
@@ -1210,7 +1215,7 @@ func (cnt *Client) UpdateLatency(
 	latency int32,
 ) error {
 
-	packet := NewUpdateLatencyPacket(
+	packet := NewOutPacketToUpdateLatency(
 		uid,
 		latency,
 	)
@@ -1224,7 +1229,7 @@ func (cnt *Client) UpdateLatency(
 func (cnt *Client) RemovePlayer(
 	uid UID,
 ) error {
-	packet := NewRemovePlayerPacket(
+	packet := NewOutPacketToRemovePlayer(
 		uid,
 	)
 	if err := cnt.writeWithComp(packet); err != nil {
@@ -1238,7 +1243,7 @@ func (cnt *Client) CheckKeepAlive(
 	payload int64,
 ) error {
 
-	packet := NewCheckKeepAlivePacket(payload)
+	packet := NewOutPacketToCheckKeepAlive(payload)
 	if err := cnt.writeWithComp(packet); err != nil {
 		return err
 	}
@@ -1258,7 +1263,7 @@ func (cnt *Client) SpawnPlayer(
 	); err != nil {
 		return err
 	}
-	packet := NewSpawnPlayerPacket(
+	packet := NewOutPacketToSpawnPlayer(
 		eid, uid,
 		x, y, z,
 		yaw, pitch,
@@ -1275,7 +1280,7 @@ func (cnt *Client) DespawnEntity(
 	eid EID,
 ) error {
 
-	packet := NewDespawnEntityPacket(
+	packet := NewOutPacketToDespawnEntity(
 		eid,
 	)
 	if err := cnt.writeWithComp(packet); err != nil {
@@ -1291,7 +1296,7 @@ func (cnt *Client) SetEntityLook(
 	ground bool,
 ) error {
 
-	packet0 := NewSetEntityLookPacket(
+	packet0 := NewOutPacketToSetEntityLook(
 		eid,
 		yaw, pitch,
 		ground,
@@ -1300,7 +1305,7 @@ func (cnt *Client) SetEntityLook(
 		return err
 	}
 
-	packet1 := NewSetEntityHeadLookPacket(
+	packet1 := NewOutPacketToSetEntityHeadLook(
 		eid,
 		yaw,
 	)
@@ -1317,7 +1322,7 @@ func (cnt *Client) SetEntityRelativePos(
 	ground bool,
 ) error {
 
-	packet1 := NewSetEntityRelativePosPacket(
+	packet1 := NewOutPacketToSetEntityRltvPos(
 		eid,
 		deltaX, deltaY, deltaZ,
 		ground,
@@ -1334,7 +1339,7 @@ func (cnt *Client) SetEntityMetadata(
 	metadata *EntityMetadata,
 ) error {
 
-	packet1 := NewSetEntityMetadataPacket(
+	packet1 := NewOutPacketToSetEntityMd(
 		eid,
 		metadata,
 	)
@@ -1352,7 +1357,7 @@ func (cnt *Client) LoadChunk(
 ) error {
 
 	bitmask, data := chunk.GenerateData(init, overworld)
-	packet := NewSendChunkDataPacket(
+	packet := NewOutPacketToSendChunkData(
 		cx, cz,
 		init,
 		bitmask, data,
@@ -1368,7 +1373,7 @@ func (cnt *Client) UnloadChunk(
 	cx, cz int32,
 ) error {
 
-	packet := NewUnloadChunkPacket(
+	packet := NewOutPacketToUnloadChunk(
 		cx, cz,
 	)
 	if err := cnt.writeWithComp(packet); err != nil {

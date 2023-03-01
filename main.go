@@ -24,21 +24,34 @@ func main() {
 		desc,
 	)
 
+	headCmdMgr := server.NewHeadCmdMgr()
+	worldCmdMgr := server.NewWorldCmdMgr()
+
 	rndDist := int32(5)
 	spawnX, spawnY, spawnZ :=
 		float64(0), float64(70), float64(0)
 	spawnYaw, spawnPitch :=
 		float32(0), float32(0)
-	lobby := server.NewLobby(
+	waitingRoom := server.NewWaitingRoom(
 		rndDist,
 		spawnX, spawnY, spawnZ,
 		spawnYaw, spawnPitch,
 	)
-	lobby.MakeFlat(
+	waitingRoom.MakeFlat(
 		server.StoneBlock,
 	)
+
+	space := server.NewSpace()
+	if err := space.AddWorld(
+		waitingRoom,
+	); err != nil {
+		panic(err)
+	}
+
 	s.Render(
-		lobby,
+		headCmdMgr,
+		worldCmdMgr,
+		space,
 	)
 
 }

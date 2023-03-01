@@ -206,33 +206,32 @@ func (l *living) String() string {
 	)
 }
 
-type Player interface {
-	Living
-
-	GetUsername() string
-}
-
-type player struct {
+type Player struct {
 	*living
+
+	//armorSlots   [4]*Item
+	//storageSlots [27]*Item
+	//hotbarSlots  [9]*Item
+	//offhandSlot  Item
 
 	username string
 }
 
-func newPlayer(
+func NewPlayer(
 	eid EID,
 	uid UID,
 	username string,
-) *player {
-	return &player{
-		living: newLiving(
+) *Player {
+	return &Player{
+		newLiving(
 			eid,
 			uid,
 		),
-		username: username,
+		username,
 	}
 }
 
-func (p *player) UpdatePos(
+func (p Player) UpdatePos(
 	x, y, z float64,
 	ground bool,
 ) error {
@@ -246,7 +245,7 @@ func (p *player) UpdatePos(
 	return nil
 }
 
-func (p *player) UpdateLook(
+func (p Player) UpdateLook(
 	yaw, pitch float32,
 	ground bool,
 ) error {
@@ -260,7 +259,7 @@ func (p *player) UpdateLook(
 	return nil
 }
 
-func (p *player) UpdateSneaking(
+func (p Player) UpdateSneaking(
 	sneaking bool,
 ) error {
 	if err := p.living.UpdateSneaking(
@@ -272,7 +271,7 @@ func (p *player) UpdateSneaking(
 	return nil
 }
 
-func (p *player) UpdateSprinting(
+func (p Player) UpdateSprinting(
 	sprinting bool,
 ) error {
 	if err := p.living.UpdateSprinting(
@@ -284,63 +283,13 @@ func (p *player) UpdateSprinting(
 	return nil
 }
 
-func (p *player) GetUsername() string {
+func (p Player) GetUsername() string {
 	return p.username
 }
 
-func (p *player) String() string {
+func (p Player) String() string {
 	return fmt.Sprintf(
 		"{ living: %+v, username: %s }",
 		p.living, p.username,
-	)
-}
-
-type Guest struct {
-	*player
-}
-
-func NewGuest(
-	eid EID,
-	uid UID,
-	username string,
-) *Guest {
-	return &Guest{
-		player: newPlayer(
-			eid,
-			uid,
-			username,
-		),
-	}
-}
-
-func (p *Guest) String() string {
-	return fmt.Sprintf(
-		"{ player: %+v }",
-		p.player,
-	)
-}
-
-type Warlord struct {
-	*player
-}
-
-func NewWarlord(
-	eid EID,
-	uid UID,
-	username string,
-) *Warlord {
-	return &Warlord{
-		player: newPlayer(
-			eid,
-			uid,
-			username,
-		),
-	}
-}
-
-func (p *Warlord) String() string {
-	return fmt.Sprintf(
-		"{ player: %+v }",
-		p.player,
 	)
 }

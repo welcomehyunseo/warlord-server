@@ -4,6 +4,9 @@ import (
 	"fmt"
 )
 
+type ChanForChangeWorldEvent chan *ChangeWorldEvent
+type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
+
 type ChanForAddPlayerEvent chan *AddPlayerEvent
 type ChanForUpdateLatencyEvent chan *UpdateLatencyEvent
 type ChanForRemovePlayerEvent chan *RemovePlayerEvent
@@ -16,9 +19,6 @@ type ChanForLoadChunkEvent chan *LoadChunkEvent
 type ChanForUnloadChunkEvent chan *UnloadChunkEvent
 
 type ChanForUpdateChunkEvent chan *UpdateChunkEvent
-
-type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
-type ChanForChangeDimEvent chan *ChangeDimEvent
 
 type AddPlayerEvent struct {
 	uid      UID
@@ -156,26 +156,18 @@ func (e *ConfirmKeepAliveEvent) String() string {
 }
 
 type UpdateChunkEvent struct {
-	currCx, currCz int32
 	prevCx, prevCz int32
+	currCx, currCz int32
 }
 
 func NewUpdateChunkEvent(
-	currCx, currCz int32,
 	prevCx, prevCz int32,
+	currCx, currCz int32,
 ) *UpdateChunkEvent {
 	return &UpdateChunkEvent{
-		currCx, currCz,
 		prevCx, prevCz,
+		currCx, currCz,
 	}
-}
-
-func (e *UpdateChunkEvent) GetCurrCx() int32 {
-	return e.currCx
-}
-
-func (e *UpdateChunkEvent) GetCurrCz() int32 {
-	return e.currCz
 }
 
 func (e *UpdateChunkEvent) GetPrevCx() int32 {
@@ -184,6 +176,14 @@ func (e *UpdateChunkEvent) GetPrevCx() int32 {
 
 func (e *UpdateChunkEvent) GetPrevCz() int32 {
 	return e.prevCz
+}
+
+func (e *UpdateChunkEvent) GetCurrCx() int32 {
+	return e.currCx
+}
+
+func (e *UpdateChunkEvent) GetCurrCz() int32 {
+	return e.currCz
 }
 
 type SpawnPlayerEvent struct {
@@ -410,7 +410,7 @@ func (e *SetEntityMetadataEvent) GetMetadata() *EntityMetadata {
 
 func (e *SetEntityMetadataEvent) String() string {
 	return fmt.Sprintf(
-		"{ eid: %d, metadata: %s }",
+		"{ eid: %d, md: %s }",
 		e.eid, e.metadata,
 	)
 }
@@ -499,25 +499,18 @@ func (e *UnloadChunkEvent) String() string {
 	)
 }
 
-type ChangeDimEvent struct {
-	world  Overworld
-	player Player
+type ChangeWorldEvent struct {
+	index int
 }
 
-func NewChangeDimEvent(
-	world Overworld,
-	player Player,
-) *ChangeDimEvent {
-	return &ChangeDimEvent{
-		world,
-		player,
+func NewChangeWorldEvent(
+	index int,
+) *ChangeWorldEvent {
+	return &ChangeWorldEvent{
+		index,
 	}
 }
 
-func (e *ChangeDimEvent) GetWorld() Overworld {
-	return e.world
-}
-
-func (e *ChangeDimEvent) GetPlayer() Player {
-	return e.player
+func (e *ChangeWorldEvent) GetIndex() int {
+	return e.index
 }

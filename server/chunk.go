@@ -102,6 +102,12 @@ const (
 	DefaultSkyLightLevel = LightLevelF
 )
 
+var (
+	AirBlock   = newBlock(0, 0, LightLevel0, LightLevel0)
+	StoneBlock = newBlock(1, 0, LightLevel0, LightLevelF)
+	GrassBlock = newBlock(2, 0, LightLevel0, LightLevelF)
+)
+
 type Block struct {
 	id          uint8
 	metadata    uint8
@@ -149,7 +155,7 @@ func (b *Block) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"id: %d, "+
-			"metadata: %d, "+
+			"md: %d, "+
 			"emitLight: %d, "+
 			"filterLight: %d, "+
 			"globalID: %d "+
@@ -157,12 +163,6 @@ func (b *Block) String() string {
 		b.id, b.metadata, b.emitLight, b.filterLight, b.globalID,
 	)
 }
-
-var (
-	AirBlock   = newBlock(0, 0, LightLevel0, LightLevel0)
-	StoneBlock = newBlock(1, 0, LightLevel0, LightLevelF)
-	GrassBlock = newBlock(2, 0, LightLevel0, LightLevelF)
-)
 
 type ChunkPart struct {
 	*sync.RWMutex
