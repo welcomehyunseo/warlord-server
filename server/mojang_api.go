@@ -8,10 +8,10 @@ import (
 	"strings"
 )
 
-func UsernameToUUID(
+func UsernameToUID(
 	username string,
 ) (
-	UID,
+	uuid.UUID,
 	error,
 ) {
 	url := fmt.Sprintf(
@@ -20,7 +20,7 @@ func UsernameToUUID(
 	)
 	resp, err := http.Get(url)
 	if err != nil {
-		return NilUID, err
+		return uuid.Nil, err
 	}
 	defer resp.Body.Close()
 
@@ -32,20 +32,20 @@ func UsernameToUUID(
 	jsonForm := &JsonForm{}
 
 	if err := json.NewDecoder(resp.Body).Decode(jsonForm); err != nil {
-		return NilUID, err
+		return uuid.Nil, err
 	}
 
-	return UID(uuid.MustParse(jsonForm.Id)), nil
+	return uuid.MustParse(jsonForm.Id), nil
 }
 
-func UUIDToTextureString(
-	uid UID,
+func UIDToTextureString(
+	uid uuid.UUID,
 ) (
 	string,
 	string,
 	error,
 ) {
-	uidString := uuid.UUID(uid).String()
+	uidString := uid.String()
 	uidStringWithoutHyphens := strings.Replace(uidString, "-", "", -1)
 	url := fmt.Sprintf(
 		"https://sessionserver.mojang.com/session/minecraft/profile/%s?unsigned=false",

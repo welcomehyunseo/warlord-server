@@ -2,25 +2,21 @@ package server
 
 import "fmt"
 
-type BoundType = int
-type State = int32
-type PacketID = int32
-
 const (
-	NilState         = State(-1)
-	PlayState        = State(0)
-	StatusState      = State(1)
-	LoginState       = State(2)
-	HandshakingState = State(3)
+	Inbound  = int(0)
+	Outbound = int(1)
 
-	Inbound  = BoundType(0)
-	Outbound = BoundType(1)
+	NilState         = int32(-1)
+	PlayState        = int32(0)
+	StatusState      = int32(1)
+	LoginState       = int32(2)
+	HandshakingState = int32(3)
 )
 
 type Packet interface {
-	GetBoundTo() BoundType
-	GetState() State
-	GetID() PacketID
+	GetBoundTo() int
+	GetState() int32
+	GetID() int32
 }
 
 type packet struct {
@@ -41,15 +37,15 @@ func newPacket(
 	}
 }
 
-func (p *packet) GetBoundTo() BoundType {
+func (p *packet) GetBoundTo() int {
 	return p.bound
 }
 
-func (p *packet) GetState() State {
+func (p *packet) GetState() int32 {
 	return p.state
 }
 
-func (p *packet) GetID() PacketID {
+func (p *packet) GetID() int32 {
 	return p.id
 }
 
@@ -64,7 +60,7 @@ type InPacket interface {
 	Packet
 
 	Unpack(
-		*Data,
+		[]byte,
 	) error
 }
 
@@ -72,7 +68,7 @@ type OutPacket interface {
 	Packet
 
 	Pack() (
-		*Data,
+		[]byte,
 		error,
 	)
 }

@@ -3,180 +3,215 @@ package server
 import (
 	"fmt"
 	"github.com/google/uuid"
+	"sync"
 )
 
-type EID int32
-type UID uuid.UUID
-
-var NilUID = UID(uuid.Nil)
-
 type Entity interface {
-	GetEID() EID
-	GetUID() UID
+	GetEID() int32
+
+	GetUID() uuid.UUID
 
 	GetX() float64
+
 	GetY() float64
+
 	GetZ() float64
 
-	GetPrevX() float64
-	GetPrevY() float64
-	GetPrevZ() float64
+	GetXYZ() (
+		float64, float64, float64,
+	)
+
+	GetYaw() float32
+
+	GetPitch() float32
+
+	GetYawPitch() (
+		float32, float32,
+	)
+
+	GetGround() bool
+
 	UpdatePos(
 		x, y, z float64,
 		ground bool,
-	) error
+	)
 
-	GetYaw() float32
-	GetPitch() float32
 	UpdateLook(
 		yaw, pitch float32,
 		ground bool,
-	) error
-
-	IsGround() bool
-
-	IsSneaking() bool
-	UpdateSneaking(
-		sneaking bool,
-	) error
-
-	IsSprinting() bool
-	UpdateSprinting(
-		sprinting bool,
-	) error
+	)
 }
 
 type entity struct {
-	eid                 EID
-	uid                 UID
-	x, y, z             float64
-	prevX, prevY, prevZ float64
-	yaw, pitch          float32
-	ground              bool
-	sneaking, sprinting bool
+	*sync.RWMutex
+
+	eid        int32
+	uid        uuid.UUID
+	x, y, z    float64
+	yaw, pitch float32
+	ground     bool
 }
 
 func newEntity(
-	eid EID,
-	uid UID,
+	eid int32,
+	uid uuid.UUID,
+	x, y, z float64,
+	yaw, pitch float32,
 ) *entity {
 	return &entity{
-		eid: eid,
-		uid: uid,
+		new(sync.RWMutex),
+		eid,
+		uid,
+		x, y, z,
+		yaw, pitch,
+		false,
 	}
 }
 
-func (e *entity) GetEID() EID {
+func (e *entity) GetEID() int32 {
+	e.RLock()
+	defer e.RUnlock()
+
 	return e.eid
 }
 
-func (e *entity) GetUID() UID {
+func (e *entity) GetUID() uuid.UUID {
+	e.RLock()
+	defer e.RUnlock()
+
 	return e.uid
 }
 
 func (e *entity) GetX() float64 {
+	e.RLock()
+	defer e.RUnlock()
+
 	return e.x
 }
 
 func (e *entity) GetY() float64 {
+	e.RLock()
+	defer e.RUnlock()
+
 	return e.y
 }
 
 func (e *entity) GetZ() float64 {
+	e.RLock()
+	defer e.RUnlock()
+
 	return e.z
 }
 
-func (e *entity) GetPrevX() float64 {
-	return e.prevX
+func (e *entity) GetXYZ() (
+	float64, float64, float64,
+) {
+	e.RLock()
+	defer e.RUnlock()
+
+	return e.x, e.y, e.z
 }
 
-func (e *entity) GetPrevY() float64 {
-	return e.prevY
+func (e *entity) GetYaw() float32 {
+	e.RLock()
+	defer e.RUnlock()
+
+	return e.yaw
 }
 
-func (e *entity) GetPrevZ() float64 {
-	return e.prevZ
+func (e *entity) GetPitch() float32 {
+	e.RLock()
+	defer e.RUnlock()
+
+	return e.pitch
+}
+
+func (e *entity) GetYawPitch() (
+	float32, float32,
+) {
+	e.RLock()
+	defer e.RUnlock()
+
+	return e.yaw, e.pitch
+}
+
+func (e *entity) GetGround() bool {
+	e.RLock()
+	defer e.RUnlock()
+
+	return e.ground
 }
 
 func (e *entity) UpdatePos(
 	x, y, z float64,
 	ground bool,
-) error {
-	e.prevX = e.x
-	e.prevY = e.y
-	e.prevZ = e.z
-	e.x = x
-	e.y = y
-	e.z = z
+) {
+	e.Lock()
+	defer e.Unlock()
+
+	e.x, e.y, e.z = x, y, z
 	e.ground = ground
-
-	return nil
-}
-
-func (e *entity) GetYaw() float32 {
-	return e.yaw
-}
-
-func (e *entity) GetPitch() float32 {
-	return e.pitch
 }
 
 func (e *entity) UpdateLook(
 	yaw, pitch float32,
 	ground bool,
-) error {
-	e.yaw = yaw
-	e.pitch = pitch
+) {
+	e.Lock()
+	defer e.Unlock()
+
+	e.yaw, e.pitch = yaw, pitch
 	e.ground = ground
-
-	return nil
-}
-
-func (e *entity) IsGround() bool {
-	return e.ground
-}
-
-func (e *entity) IsSneaking() bool {
-	return e.sneaking
-}
-
-func (e *entity) UpdateSneaking(
-	sneaking bool,
-) error {
-	e.sneaking = sneaking
-
-	return nil
-}
-
-func (e *entity) IsSprinting() bool {
-	return e.sprinting
-}
-
-func (e *entity) UpdateSprinting(
-	sprinting bool,
-) error {
-	e.sprinting = sprinting
-
-	return nil
 }
 
 func (e *entity) String() string {
+	e.RLock()
+	defer e.RUnlock()
+
 	return fmt.Sprintf(
 		"{ "+
 			"eid: %d, "+
 			"uid: %s, "+
 			"x: %f, y: %f, z: %f, "+
 			"yaw: %f, pitch: %f, "+
-			"prevX: %f, prevY: %f, prevZ: %f, "+
-			"sneaking: %v, sprinting: %v "+
 			"}",
 		e.eid,
-		uuid.UUID(e.uid).String(),
+		e.uid.String(),
 		e.x, e.y, e.z,
 		e.yaw, e.pitch,
-		e.prevX, e.prevY, e.prevZ,
-		e.sneaking, e.sprinting,
 	)
+}
+
+type ItemEntity struct {
+	*entity
+
+	*sync.RWMutex
+
+	item Item
+}
+
+func NewItemEntity(
+	eid int32,
+	uid uuid.UUID,
+	x, y, z float64,
+	yaw, pitch float32,
+	item Item,
+) *ItemEntity {
+	return &ItemEntity{
+		newEntity(
+			eid,
+			uid,
+			x, y, z,
+			yaw, pitch,
+		),
+		new(sync.RWMutex),
+
+		item,
+	}
+}
+
+func (e *ItemEntity) GetItem() Item {
+	return e.item
 }
 
 type Living interface {
@@ -185,111 +220,69 @@ type Living interface {
 
 type living struct {
 	*entity
+
+	*sync.RWMutex
 }
 
 func newLiving(
-	eid EID,
-	uid UID,
+	eid int32,
+	uid uuid.UUID,
+	x, y, z float64,
+	yaw, pitch float32,
 ) *living {
 	return &living{
-		entity: newEntity(
+		newEntity(
 			eid,
 			uid,
+			x, y, z,
+			yaw, pitch,
 		),
+		new(sync.RWMutex),
 	}
 }
 
-func (l *living) String() string {
+func (c *living) String() string {
+	c.RLock()
+	defer c.RUnlock()
+
 	return fmt.Sprintf(
-		"{ entity: %+v }",
-		l.entity,
+		"{ entity: %s }",
+		c.entity,
 	)
 }
 
 type Player struct {
 	*living
 
-	//armorSlots   [4]*Item
-	//storageSlots [27]*Item
-	//hotbarSlots  [9]*Item
-	//offhandSlot  Item
-
-	username string
+	*sync.RWMutex
 }
 
 func NewPlayer(
-	eid EID,
-	uid UID,
-	username string,
+	eid int32,
+	uid uuid.UUID,
+	x, y, z float64,
+	yaw, pitch float32,
 ) *Player {
 	return &Player{
 		newLiving(
 			eid,
 			uid,
+			x, y, z,
+			yaw, pitch,
 		),
-		username,
+
+		new(sync.RWMutex),
 	}
 }
 
-func (p Player) UpdatePos(
-	x, y, z float64,
-	ground bool,
-) error {
-	if err := p.living.UpdatePos(
-		x, y, z,
-		ground,
-	); err != nil {
-		return err
-	}
+func (e *Player) String() string {
+	e.RLock()
+	defer e.RUnlock()
 
-	return nil
-}
-
-func (p Player) UpdateLook(
-	yaw, pitch float32,
-	ground bool,
-) error {
-	if err := p.living.UpdateLook(
-		yaw, pitch,
-		ground,
-	); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (p Player) UpdateSneaking(
-	sneaking bool,
-) error {
-	if err := p.living.UpdateSneaking(
-		sneaking,
-	); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (p Player) UpdateSprinting(
-	sprinting bool,
-) error {
-	if err := p.living.UpdateSprinting(
-		sprinting,
-	); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (p Player) GetUsername() string {
-	return p.username
-}
-
-func (p Player) String() string {
 	return fmt.Sprintf(
-		"{ living: %+v, username: %s }",
-		p.living, p.username,
+		"{ "+
+			"living: %s, "+
+			"}",
+		e.living,
 	)
 }

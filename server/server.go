@@ -22,13 +22,12 @@ const MaxNumForChannel = 16
 type ChanForError chan any
 
 type Server struct {
-	sync.RWMutex
+	*sync.RWMutex
 
 	addr string // address
 
 	max    int // maximum number of players
 	online int // number of online players
-	last   EID // last entity ID
 
 	favicon string // base64 png image string
 	text    string // description of server
@@ -42,26 +41,22 @@ func NewServer(
 ) *Server {
 
 	return &Server{
-		addr:   addr,
-		max:    max,
-		online: 0,
-		last:   0,
+		new(sync.RWMutex),
 
-		favicon: favicon,
-		text:    text,
+		addr,
+		max,
+		0,
+
+		favicon,
+		text,
 	}
-}
-
-func (s *Server) countEID() EID {
-	a := s.last
-	s.last++
-	return a
 }
 
 func (s *Server) initClient(
 	lg *Logger,
-	space *Space,
-	uid UID, username string,
+	pl *PlayerList,
+	world Overworld,
+	uid uuid.UUID, username string,
 	cnt *Client,
 ) (
 	*Dimension,
@@ -79,9 +74,9 @@ func (s *Server) initClient(
 		lg.Debug("it is finished to init Client")
 	}()
 
-	eid := s.countEID()
+	eid := GetEIDCounter().count()
 
-	chanForError := make(
+	CHForError := make(
 		ChanForError,
 		MaxNumForChannel,
 	)
@@ -98,67 +93,73 @@ func (s *Server) initClient(
 		return nil, nil, nil, cancel, nil, err
 	}
 
-	chanForAPEvent := make(
+	CHForAPEvent := make(
 		ChanForAddPlayerEvent,
 		MaxNumForChannel,
 	)
-	chanForULEvent := make(
+	CHForULEvent := make(
 		ChanForUpdateLatencyEvent,
 		MaxNumForChannel,
 	)
-	chanForRPEvent := make(
+	CHForRPEvent := make(
 		ChanForRemovePlayerEvent,
 		MaxNumForChannel,
 	)
-	chanForSPEvent := make(
+	CHForSPEvent := make(
 		ChanForSpawnPlayerEvent,
 		MaxNumForChannel,
 	)
-	chanForDEEvent := make(
-		ChanForDespawnEntityEvent,
+	CHForSERPEvent := make(
+		ChanForSetEntityRelativeMoveEvent,
 		MaxNumForChannel,
 	)
-	chanForSERPEvent := make(
-		ChanForSetEntityRelativePosEvent,
-		MaxNumForChannel,
-	)
-	chanForSELEvent := make(
+	CHForSELEvent := make(
 		ChanForSetEntityLookEvent,
 		MaxNumForChannel,
 	)
-	chanForSEMEvent := make(
-		ChanForSetEntityMetadataEvent,
+	CHForSEAEvent := make(
+		ChanForSetEntityActionsEvent,
 		MaxNumForChannel,
 	)
-	chanForLCEvent := make(
+	CHForDEEvent := make(
+		ChanForDespawnEntityEvent,
+		MaxNumForChannel,
+	)
+	CHForLCEvent := make(
 		ChanForLoadChunkEvent,
 		MaxNumForChannel,
 	)
-	chanForUnCEvent := make(
+	CHForUnCEvent := make(
 		ChanForUnloadChunkEvent,
 		MaxNumForChannel,
 	)
-	chanForUpCEvent := make(
+	CHForUpCEvent := make(
 		ChanForUpdateChunkEvent,
 		MaxNumForChannel,
 	)
 
+	CHForCWEvent := make(
+		ChanForClickWindowEvent,
+		MaxNumForChannel,
+	)
+
 	dim, err := NewDimension(
-		space,
+		pl,
+		world,
 		eid,
 		uid, username,
-		0,
-		chanForAPEvent,
-		chanForULEvent,
-		chanForRPEvent,
-		chanForSPEvent,
-		chanForDEEvent,
-		chanForSERPEvent,
-		chanForSELEvent,
-		chanForSEMEvent,
-		chanForLCEvent,
-		chanForUnCEvent,
-		chanForUpCEvent,
+		CHForAPEvent,
+		CHForULEvent,
+		CHForRPEvent,
+		CHForSPEvent,
+		CHForSERPEvent,
+		CHForSELEvent,
+		CHForSEAEvent,
+		CHForDEEvent,
+		CHForLCEvent,
+		CHForUnCEvent,
+		CHForUpCEvent,
+		CHForCWEvent,
 		cnt,
 	)
 	if err != nil {
@@ -166,44 +167,44 @@ func (s *Server) initClient(
 	}
 
 	go cnt.HandleCommonEvents(
-		chanForAPEvent,
-		chanForULEvent,
-		chanForRPEvent,
-		chanForSPEvent,
-		chanForDEEvent,
-		chanForSERPEvent,
-		chanForSELEvent,
-		chanForSEMEvent,
-		chanForLCEvent,
-		chanForUnCEvent,
-		chanForError,
+		CHForAPEvent,
+		CHForULEvent,
+		CHForRPEvent,
+		CHForSPEvent,
+		CHForSERPEvent,
+		CHForSELEvent,
+		CHForSEAEvent,
+		CHForDEEvent,
+		CHForLCEvent,
+		CHForUnCEvent,
+		CHForError,
 		ctx,
 		wg,
 	)
 
 	go cnt.HandleUpdateChunkEvent(
-		chanForUpCEvent,
+		CHForUpCEvent,
 		dim,
-		chanForError,
+		CHForError,
 		ctx,
 		wg,
 	)
 
-	chanForCKAEvent := make(
+	CHForCKAEvent := make(
 		ChanForConfirmKeepAliveEvent,
 		MaxNumForChannel,
 	)
 	go cnt.HandleConfirmKeepAliveEvent(
-		chanForCKAEvent,
+		CHForCKAEvent,
 		dim,
-		chanForError,
+		CHForError,
 		ctx,
 		wg,
 	)
 
 	return dim,
-		chanForCKAEvent,
-		chanForError,
+		CHForCKAEvent,
+		CHForError,
 		cancel,
 		wg,
 		nil
@@ -212,8 +213,8 @@ func (s *Server) initClient(
 func (s *Server) closeClient(
 	lg *Logger,
 	dim *Dimension,
-	chanForCKAEvent ChanForConfirmKeepAliveEvent,
-	chanForError ChanForError,
+	CHForCKAEvent ChanForConfirmKeepAliveEvent,
+	CHForError ChanForError,
 	cancel context.CancelFunc,
 	wg *sync.WaitGroup,
 ) {
@@ -225,42 +226,44 @@ func (s *Server) closeClient(
 		lg.Debug("it is finished to close Client")
 	}()
 
-	chanForAPEvent,
-		chanForULEvent,
-		chanForRPEvent,
-		chanForSPEvent,
-		chanForDEEvent,
-		chanForSERPEvent,
-		chanForSELEvent,
-		chanForSEMEvent,
-		chanForLCEvent,
-		chanForUnCEvent,
-		chanForUpCEvent :=
-		dim.Close()
-	close(chanForAPEvent)
-	close(chanForULEvent)
-	close(chanForRPEvent)
-	close(chanForSPEvent)
-	close(chanForDEEvent)
-	close(chanForSERPEvent)
-	close(chanForSELEvent)
-	close(chanForSEMEvent)
-	close(chanForLCEvent)
-	close(chanForUnCEvent)
-	close(chanForUpCEvent)
-
-	close(chanForCKAEvent)
-
 	cancel()
 	wg.Wait()
 
-	close(chanForError)
+	CHForAPEvent,
+		CHForULEvent,
+		CHForRPEvent,
+		CHForSPEvent,
+		CHForDEEvent,
+		CHForSERPEvent,
+		CHForSELEvent,
+		CHForSEMEvent,
+		CHForLCEvent,
+		CHForUnCEvent,
+		CHForUpCEvent,
+		CHForCWEvent :=
+		dim.Close()
+	close(CHForAPEvent)
+	close(CHForULEvent)
+	close(CHForRPEvent)
+	close(CHForSPEvent)
+	close(CHForDEEvent)
+	close(CHForSERPEvent)
+	close(CHForSELEvent)
+	close(CHForSEMEvent)
+	close(CHForLCEvent)
+	close(CHForUnCEvent)
+	close(CHForUpCEvent)
+
+	close(CHForCWEvent)
+
+	close(CHForCKAEvent)
+
+	close(CHForError)
 }
 
 func (s *Server) handleClient(
-	headCmdMgr *HeadCmdMgr,
-	worldCmdMgr *WorldCmdMgr,
-	space *Space,
+	pl *PlayerList,
+	world Overworld,
 	cnt *Client,
 ) {
 
@@ -315,14 +318,15 @@ func (s *Server) handleClient(
 	)
 
 	dim,
-		chanForCKAEvent,
-		chanForError,
+		CHForCKAEvent,
+		CHForError,
 		cancel,
 		wg,
 		err :=
 		s.initClient(
 			lg,
-			space,
+			pl,
+			world,
 			uid, username,
 			cnt,
 		)
@@ -333,29 +337,40 @@ func (s *Server) handleClient(
 	defer s.closeClient(
 		lg,
 		dim,
-		chanForCKAEvent,
-		chanForError,
+		CHForCKAEvent,
+		CHForError,
 		cancel,
 		wg,
 	)
 
-	//eid := player.GetEID()
+	item := NewStickItem(
+		10,
+		&ItemNbt{
+			Display: &DisplayOfItemNbt{
+				Name: "text",
+			},
+		},
+	)
+	SSIWPacket := NewOutPacketToSetSlotInWindow(
+		0,
+		38,
+		item,
+	)
+	cnt.writeWithComp(SSIWPacket)
 
 	for {
 		select {
 		case <-time.After(LoopDelayForPlayState):
-			if err := cnt.LoopForPlayState(
+			if err := cnt.LoopToPlaying(
 				lg,
-				headCmdMgr,
-				worldCmdMgr,
 				dim,
-				chanForCKAEvent,
+				CHForCKAEvent,
 			); err != nil {
 				panic(err)
 			}
 
 			break
-		case err := <-chanForError:
+		case err := <-CHForError:
 			panic(err)
 		}
 
@@ -363,9 +378,8 @@ func (s *Server) handleClient(
 }
 
 func (s *Server) Render(
-	headCmdMgr *HeadCmdMgr,
-	worldCmdMgr *WorldCmdMgr,
-	space *Space,
+	pl *PlayerList,
+	world Overworld,
 ) {
 	addr := s.addr
 	network := Network
@@ -400,18 +414,12 @@ func (s *Server) Render(
 			NewLgElement("addr", conn.RemoteAddr()),
 		)
 
-		cid, err := uuid.NewRandom()
-		if err != nil {
-			panic(err)
-		}
 		cnt := NewClient(
-			cid,
 			conn,
 		)
 		go s.handleClient(
-			headCmdMgr,
-			worldCmdMgr,
-			space,
+			pl,
+			world,
 			cnt,
 		)
 	}

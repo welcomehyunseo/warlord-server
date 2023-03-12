@@ -46,16 +46,16 @@ package server
 //}
 //
 //func (g *Game) Join(
-//	player Player,
+//	playerConnection playerConnection,
 //	chanForChangeDimEvent ChanForChangeDimEvent,
 //) error {
 //	g.Lock()
 //	defer g.Unlock()
 //
-//	eid := player.GetEID()
+//	eid := playerConnection.GetEID()
 //	uid, username :=
-//		player.GetUID(),
-//		player.GetUsername()
+//		playerConnection.GetUID(),
+//		playerConnection.GetUsername()
 //	warlord := NewWarlord(
 //		eid, uid, username,
 //	)
@@ -75,15 +75,15 @@ package server
 //
 //func (g *Game) Leave(
 //	lobby *Lobby,
-//	player Player,
+//	playerConnection playerConnection,
 //) {
 //	g.Lock()
 //	defer g.Unlock()
 //
-//	eid := player.GetEID()
+//	eid := playerConnection.GetEID()
 //	uid, username :=
-//		player.GetUID(),
-//		player.GetUsername()
+//		playerConnection.GetUID(),
+//		playerConnection.GetUsername()
 //	delete(g.warlords, eid)
 //	guest := NewGuest(
 //		eid, uid, username,
@@ -139,16 +139,16 @@ package server
 //}
 //
 //func (mgr *GameMgr) Join(
-//	player Player,
+//	playerConnection playerConnection,
 //	index int,
 //) error {
 //	mgr.Lock()
 //	defer mgr.Unlock()
 //
-//	eid := player.GetEID()
+//	eid := playerConnection.GetEID()
 //
 //	if _, has := mgr.indices[eid]; has == true {
-//		return errors.New("player is already joined to room")
+//		return errors.New("playerConnection is already joined to room")
 //	}
 //
 //	length := len(mgr.games)
@@ -162,7 +162,7 @@ package server
 //
 //	chanForChangeDimEvent := mgr.chansForChangeDimEvent[eid]
 //	if err := game.Join(
-//		player,
+//		playerConnection,
 //		chanForChangeDimEvent,
 //	); err != nil {
 //		return err
@@ -172,12 +172,12 @@ package server
 //}
 //
 //func (mgr *GameMgr) Leave(
-//	player Player,
+//	playerConnection playerConnection,
 //) error {
 //	mgr.Lock()
 //	defer mgr.Unlock()
 //
-//	eid := player.GetEID()
+//	eid := playerConnection.GetEID()
 //
 //	index, has := mgr.indices[eid]
 //	if has == false {
@@ -190,19 +190,19 @@ package server
 //	game := mgr.games[index]
 //	game.Leave(
 //		lobby,
-//		player,
+//		playerConnection,
 //	)
 //
 //	return nil
 //}
 //
 //func (mgr *GameMgr) Close(
-//	player Player,
+//	playerConnection playerConnection,
 //) ChanForChangeDimEvent {
 //	mgr.Lock()
 //	defer mgr.Unlock()
 //
-//	eid := player.GetEID()
+//	eid := playerConnection.GetEID()
 //
 //	chanForChangeDimEvent :=
 //		mgr.chansForChangeDimEvent[eid]
@@ -216,7 +216,7 @@ package server
 //		game := mgr.games[index]
 //		game.Leave(
 //			lobby,
-//			player,
+//			playerConnection,
 //		)
 //	}
 //

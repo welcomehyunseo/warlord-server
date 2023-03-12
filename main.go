@@ -23,8 +23,7 @@ func main() {
 		favicon, desc,
 	)
 
-	headCmdMgr := server.NewHeadCmdMgr()
-	worldCmdMgr := server.NewWorldCmdMgr()
+	pl := server.NewPlayerList()
 
 	rndDist := int32(5)
 	spawnX, spawnY, spawnZ :=
@@ -40,17 +39,9 @@ func main() {
 		server.StoneBlock,
 	)
 
-	space := server.NewSpace()
-	if err := space.AddWorld(
-		waitingRoom,
-	); err != nil {
-		panic(err)
-	}
-
 	s.Render(
-		headCmdMgr,
-		worldCmdMgr,
-		space,
+		pl,
+		waitingRoom,
 	)
 
 }

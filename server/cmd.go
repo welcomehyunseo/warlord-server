@@ -3,13 +3,13 @@ package server
 type Cmd struct {
 	use         string
 	usage, desc string
-	name        CmdName
+	name        string
 }
 
 func NewCmd(
 	use string,
 	usage, desc string,
-	name CmdName,
+	name string,
 ) *Cmd {
 	return &Cmd{
 		use,
@@ -30,6 +30,6 @@ func (c *Cmd) GetDesc() string {
 	return c.desc
 }
 
-func (c *Cmd) GetName() CmdName {
+func (c *Cmd) GetName() string {
 	return c.name
 }

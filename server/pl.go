@@ -1,14 +1,17 @@
 package server
 
-import "sync"
+import (
+	"github.com/google/uuid"
+	"sync"
+)
 
 type PlayerListItem struct {
-	uid      UID
+	uid      uuid.UUID
 	username string
 }
 
 func NewPlayerListItem(
-	uid UID,
+	uid uuid.UUID,
 	username string,
 ) *PlayerListItem {
 	return &PlayerListItem{
@@ -17,7 +20,7 @@ func NewPlayerListItem(
 	}
 }
 
-func (pli *PlayerListItem) GetUID() UID {
+func (pli *PlayerListItem) GetUID() uuid.UUID {
 	return pli.uid
 }
 
@@ -28,31 +31,31 @@ func (pli *PlayerListItem) GetUsername() string {
 type PlayerList struct {
 	*sync.RWMutex
 
-	items map[EID]*PlayerListItem
+	items map[int32]*PlayerListItem
 
-	chansForAPEvent map[EID]ChanForAddPlayerEvent
-	chansForULEvent map[EID]ChanForUpdateLatencyEvent
-	chansForRPEvent map[EID]ChanForRemovePlayerEvent
+	CHsForAPEvent map[int32]ChanForAddPlayerEvent
+	CHsForULEvent map[int32]ChanForUpdateLatencyEvent
+	CHsForRPEvent map[int32]ChanForRemovePlayerEvent
 }
 
 func NewPlayerList() *PlayerList {
 	return &PlayerList{
 		new(sync.RWMutex),
 
-		make(map[EID]*PlayerListItem),
+		make(map[int32]*PlayerListItem),
 
-		make(map[EID]ChanForAddPlayerEvent),
-		make(map[EID]ChanForUpdateLatencyEvent),
-		make(map[EID]ChanForRemovePlayerEvent),
+		make(map[int32]ChanForAddPlayerEvent),
+		make(map[int32]ChanForUpdateLatencyEvent),
+		make(map[int32]ChanForRemovePlayerEvent),
 	}
 }
 
 func (pl *PlayerList) Init(
-	eid EID,
-	uid UID, username string,
-	chanForAPEvent ChanForAddPlayerEvent,
-	chanForULEvent ChanForUpdateLatencyEvent,
-	chanForRPEvent ChanForRemovePlayerEvent,
+	eid int32,
+	uid uuid.UUID, username string,
+	CHForAPEvent ChanForAddPlayerEvent,
+	CHForULEvent ChanForUpdateLatencyEvent,
+	CHForRPEvent ChanForRemovePlayerEvent,
 	cnt *Client,
 ) error {
 	pl.Lock()
@@ -75,7 +78,7 @@ func (pl *PlayerList) Init(
 		APEvent := NewAddPlayerEvent(
 			uid, username,
 		)
-		pl.chansForAPEvent[eid1] <- APEvent
+		pl.CHsForAPEvent[eid1] <- APEvent
 		APEvent.Wait()
 	}
 	if err := cnt.AddPlayer(
@@ -85,34 +88,70 @@ func (pl *PlayerList) Init(
 	}
 
 	pl.items[eid] = item
-	pl.chansForAPEvent[eid] = chanForAPEvent
-	pl.chansForULEvent[eid] = chanForULEvent
-	pl.chansForRPEvent[eid] = chanForRPEvent
+	pl.CHsForAPEvent[eid] = CHForAPEvent
+	pl.CHsForULEvent[eid] = CHForULEvent
+	pl.CHsForRPEvent[eid] = CHForRPEvent
 
 	return nil
 }
 
 func (pl *PlayerList) UpdateLatency(
-	eid EID,
-	latency int32,
+	id int32,
+	ms int32,
 ) error {
 	pl.RLock()
 	defer pl.RUnlock()
 
-	item := pl.items[eid]
+	item := pl.items[id]
+
 	uid := item.GetUID()
 	ULEvent := NewUpdateLatencyEvent(
-		uid, latency,
+		uid, ms,
 	)
-	for eid, _ := range pl.items {
-		pl.chansForULEvent[eid] <- ULEvent
+	for id, _ := range pl.items {
+		pl.CHsForULEvent[id] <- ULEvent
 	}
 
 	return nil
 }
 
+func (pl *PlayerList) close(
+	eid int32,
+) (
+	ChanForAddPlayerEvent,
+	ChanForUpdateLatencyEvent,
+	ChanForRemovePlayerEvent,
+) {
+	item := pl.items[eid]
+
+	CHForAPEvent := pl.CHsForAPEvent[eid]
+	CHForULEvent := pl.CHsForULEvent[eid]
+	CHForRPEvent := pl.CHsForRPEvent[eid]
+
+	uid := item.GetUID()
+	for eid1, _ := range pl.items {
+		if eid1 == eid {
+			continue
+		}
+		RPEvent := NewRemovePlayerEvent(
+			uid,
+		)
+		pl.CHsForRPEvent[eid1] <- RPEvent
+		RPEvent.Wait()
+	}
+
+	delete(pl.items, eid)
+	delete(pl.CHsForAPEvent, eid)
+	delete(pl.CHsForULEvent, eid)
+	delete(pl.CHsForRPEvent, eid)
+
+	return CHForAPEvent,
+		CHForULEvent,
+		CHForRPEvent
+}
+
 func (pl *PlayerList) Finish(
-	eid EID,
+	eid int32,
 	cnt *Client,
 ) (
 	ChanForAddPlayerEvent,
@@ -123,72 +162,35 @@ func (pl *PlayerList) Finish(
 	pl.Lock()
 	defer pl.Unlock()
 
-	item := pl.items[eid]
-	chanForAPEvent := pl.chansForAPEvent[eid]
-	chanForULEvent := pl.chansForULEvent[eid]
-	chanForRPEvent := pl.chansForRPEvent[eid]
-
-	uid := item.GetUID()
-	for eid1, item1 := range pl.items {
+	for _, item1 := range pl.items {
 		uid1 := item1.GetUID()
-		RPEvent1 :=
-			NewRemovePlayerEvent(
-				uid1,
-			)
-		chanForRPEvent <- RPEvent1
-		RPEvent1.Wait()
-
-		RPEvent :=
-			NewRemovePlayerEvent(
-				uid,
-			)
-
-		pl.chansForRPEvent[eid1] <- RPEvent
-		RPEvent.Wait()
-	}
-	if err := cnt.RemovePlayer(
-		uid,
-	); err != nil {
-		return nil, nil, nil, err
+		if err := cnt.RemovePlayer(
+			uid1,
+		); err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
-	delete(pl.items, eid)
-	delete(pl.chansForAPEvent, eid)
-	delete(pl.chansForULEvent, eid)
-	delete(pl.chansForRPEvent, eid)
+	CHForAPEvent,
+		CHForULEvent,
+		CHForRPEvent :=
+		pl.close(eid)
 
-	return chanForAPEvent,
-		chanForULEvent,
-		chanForRPEvent,
+	return CHForAPEvent,
+		CHForULEvent,
+		CHForRPEvent,
 		nil
 }
 
 func (pl *PlayerList) Close(
-	eid EID,
+	eid int32,
 ) (
 	ChanForAddPlayerEvent,
 	ChanForUpdateLatencyEvent,
 	ChanForRemovePlayerEvent,
 ) {
-	item := pl.items[eid]
-	chanForAPEvent := pl.chansForAPEvent[eid]
-	chanForULEvent := pl.chansForULEvent[eid]
-	chanForRPEvent := pl.chansForRPEvent[eid]
+	pl.Lock()
+	defer pl.Unlock()
 
-	uid := item.GetUID()
-	for eid1, _ := range pl.items {
-		RPEvent := NewRemovePlayerEvent(
-			uid,
-		)
-		pl.chansForRPEvent[eid1] <- RPEvent
-	}
-
-	delete(pl.items, eid)
-	delete(pl.chansForAPEvent, eid)
-	delete(pl.chansForULEvent, eid)
-	delete(pl.chansForRPEvent, eid)
-
-	return chanForAPEvent,
-		chanForULEvent,
-		chanForRPEvent
+	return pl.close(eid)
 }

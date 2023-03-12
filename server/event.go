@@ -2,60 +2,73 @@ package server
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 )
 
-type ChanForChangeWorldEvent chan *ChangeWorldEvent
 type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
 
 type ChanForAddPlayerEvent chan *AddPlayerEvent
 type ChanForUpdateLatencyEvent chan *UpdateLatencyEvent
 type ChanForRemovePlayerEvent chan *RemovePlayerEvent
+
 type ChanForSpawnPlayerEvent chan *SpawnPlayerEvent
-type ChanForDespawnEntityEvent chan *DespawnEntityEvent
-type ChanForSetEntityRelativePosEvent chan *SetEntityRelativePosEvent
+type ChanForSetEntityRelativeMoveEvent chan *SetEntityRelativeMoveEvent
 type ChanForSetEntityLookEvent chan *SetEntityLookEvent
-type ChanForSetEntityMetadataEvent chan *SetEntityMetadataEvent
+type ChanForSetEntityActionsEvent chan *SetEntityActionsEvent
+type ChanForSetEntityVelocityEvent chan *SetEntityVelocityEvent
+type ChanForDespawnEntityEvent chan *DespawnEntityEvent
 type ChanForLoadChunkEvent chan *LoadChunkEvent
 type ChanForUnloadChunkEvent chan *UnloadChunkEvent
-
 type ChanForUpdateChunkEvent chan *UpdateChunkEvent
 
-type AddPlayerEvent struct {
-	uid      UID
-	username string
-	ctx      chan bool
+type ChanForClickWindowEvent chan *ClickWindowEvent
+
+type waitable struct {
+	ctx chan bool
 }
 
-func NewAddPlayerEvent(
-	uid UID,
-	username string,
-) *AddPlayerEvent {
-	return &AddPlayerEvent{
-		uid:      uid,
-		username: username,
-		ctx:      make(chan bool, 1),
+func newWaitable() *waitable {
+	return &waitable{
+		make(chan bool, 1),
 	}
 }
 
-func (e *AddPlayerEvent) GetUUID() UID {
+func (w *waitable) Done() {
+	w.ctx <- true
+}
+
+func (w *waitable) Fail() {
+	w.ctx <- false
+}
+
+func (w *waitable) Wait() {
+	<-w.ctx
+	close(w.ctx)
+}
+
+type AddPlayerEvent struct {
+	*waitable
+	uid      uuid.UUID
+	username string
+}
+
+func NewAddPlayerEvent(
+	uid uuid.UUID,
+	username string,
+) *AddPlayerEvent {
+	return &AddPlayerEvent{
+		newWaitable(),
+		uid,
+		username,
+	}
+}
+
+func (e *AddPlayerEvent) GetUID() uuid.UUID {
 	return e.uid
 }
 
 func (e *AddPlayerEvent) GetUsername() string {
 	return e.username
-}
-
-func (e *AddPlayerEvent) Done() {
-	e.ctx <- true
-}
-
-func (e *AddPlayerEvent) Fail() {
-	e.ctx <- false
-}
-
-func (e *AddPlayerEvent) Wait() {
-	<-e.ctx
-	close(e.ctx)
 }
 
 func (e *AddPlayerEvent) String() string {
@@ -66,64 +79,51 @@ func (e *AddPlayerEvent) String() string {
 }
 
 type UpdateLatencyEvent struct {
-	uid     UID
-	latency int32
+	uid uuid.UUID
+	ms  int32
 }
 
 func NewUpdateLatencyEvent(
-	uid UID,
-	latency int32,
+	uid uuid.UUID,
+	ms int32,
 ) *UpdateLatencyEvent {
 	return &UpdateLatencyEvent{
-		uid:     uid,
-		latency: latency,
+		uid,
+		ms,
 	}
 }
 
-func (e *UpdateLatencyEvent) GetUUID() UID {
+func (e *UpdateLatencyEvent) GetUID() uuid.UUID {
 	return e.uid
 }
 
-func (e *UpdateLatencyEvent) GetLatency() int32 {
-	return e.latency
+func (e *UpdateLatencyEvent) GetMilliseconds() int32 {
+	return e.ms
 }
 
 func (e *UpdateLatencyEvent) String() string {
 	return fmt.Sprintf(
-		"{ uid: %+v, latency: %d } ",
-		e.uid, e.latency,
+		"{ uid: %+v, ms: %d } ",
+		e.uid, e.ms,
 	)
 }
 
 type RemovePlayerEvent struct {
-	uid UID
-	ctx chan bool
+	*waitable
+	uid uuid.UUID
 }
 
 func NewRemovePlayerEvent(
-	uid UID,
+	uid uuid.UUID,
 ) *RemovePlayerEvent {
 	return &RemovePlayerEvent{
-		uid: uid,
-		ctx: make(chan bool, 1),
+		newWaitable(),
+		uid,
 	}
 }
 
-func (e *RemovePlayerEvent) GetUUID() UID {
+func (e *RemovePlayerEvent) GetUID() uuid.UUID {
 	return e.uid
-}
-
-func (e *RemovePlayerEvent) Done() {
-	e.ctx <- true
-}
-
-func (e *RemovePlayerEvent) Fail() {
-	e.ctx <- false
-}
-
-func (e *RemovePlayerEvent) Wait() {
-	<-e.ctx
-	close(e.ctx)
 }
 
 func (e *RemovePlayerEvent) String() string {
@@ -170,112 +170,123 @@ func NewUpdateChunkEvent(
 	}
 }
 
-func (e *UpdateChunkEvent) GetPrevCx() int32 {
+func (e *UpdateChunkEvent) GetPrevChunkPosition() (
+	int32, int32,
+) {
+	return e.prevCx, e.prevCz
+}
+
+func (e *UpdateChunkEvent) GetPrevChunkX() int32 {
 	return e.prevCx
 }
 
-func (e *UpdateChunkEvent) GetPrevCz() int32 {
+func (e *UpdateChunkEvent) GetPrevChunkZ() int32 {
 	return e.prevCz
 }
 
-func (e *UpdateChunkEvent) GetCurrCx() int32 {
+func (e *UpdateChunkEvent) GetCurrChunkPosition() (
+	int32, int32,
+) {
+	return e.currCx, e.currCz
+}
+
+func (e *UpdateChunkEvent) GetCurrChunkX() int32 {
 	return e.currCx
 }
 
-func (e *UpdateChunkEvent) GetCurrCz() int32 {
+func (e *UpdateChunkEvent) GetCurrChunkZ() int32 {
 	return e.currCz
 }
 
 type SpawnPlayerEvent struct {
-	eid                 EID
-	uid                 UID
-	x, y, z             float64
-	yaw, pitch          float32
-	sneaking, sprinting bool
+	eid        int32
+	uid        uuid.UUID
+	x, y, z    float64
+	yaw, pitch float32
 }
 
 func NewSpawnPlayerEvent(
-	eid EID,
-	uid UID,
+	eid int32,
+	uid uuid.UUID,
 	x, y, z float64,
 	yaw, pitch float32,
-	sneaking, sprinting bool,
 ) *SpawnPlayerEvent {
 	return &SpawnPlayerEvent{
 		eid,
 		uid,
 		x, y, z,
 		yaw, pitch,
-		sneaking, sprinting,
 	}
 }
 
-func (p *SpawnPlayerEvent) GetEID() EID {
-	return p.eid
+func (e *SpawnPlayerEvent) GetEID() int32 {
+	return e.eid
 }
 
-func (p *SpawnPlayerEvent) GetUUID() UID {
-	return p.uid
+func (e *SpawnPlayerEvent) GetUID() uuid.UUID {
+	return e.uid
 }
 
-func (p *SpawnPlayerEvent) GetX() float64 {
-	return p.x
+func (e *SpawnPlayerEvent) GetPosition() (
+	float64, float64, float64,
+) {
+	return e.x, e.y, e.z
 }
 
-func (p *SpawnPlayerEvent) GetY() float64 {
-	return p.y
+func (e *SpawnPlayerEvent) GetX() float64 {
+	return e.x
 }
 
-func (p *SpawnPlayerEvent) GetZ() float64 {
-	return p.z
+func (e *SpawnPlayerEvent) GetY() float64 {
+	return e.y
 }
 
-func (p *SpawnPlayerEvent) GetYaw() float32 {
-	return p.yaw
+func (e *SpawnPlayerEvent) GetZ() float64 {
+	return e.z
 }
 
-func (p *SpawnPlayerEvent) GetPitch() float32 {
-	return p.pitch
+func (e *SpawnPlayerEvent) GetLook() (
+	float32, float32,
+) {
+	return e.yaw, e.pitch
 }
 
-func (p *SpawnPlayerEvent) IsSneaking() bool {
-	return p.sneaking
+func (e *SpawnPlayerEvent) GetYaw() float32 {
+	return e.yaw
 }
 
-func (p *SpawnPlayerEvent) IsSprinting() bool {
-	return p.sprinting
+func (e *SpawnPlayerEvent) GetPitch() float32 {
+	return e.pitch
 }
 
-func (p *SpawnPlayerEvent) String() string {
+func (e *SpawnPlayerEvent) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"eid: %d, "+
 			"uid: %s, "+
 			"x: %f, y: %f, z: %f, "+
 			"yaw: %f, pitch: %f, "+
-			"sneaking: %v, sprinting: %v "+
 			"}",
-		p.eid,
-		p.uid,
-		p.x, p.y, p.z,
-		p.yaw, p.pitch,
-		p.sneaking, p.sprinting,
+		e.eid,
+		e.uid,
+		e.x, e.y, e.z,
+		e.yaw, e.pitch,
 	)
 }
 
 type DespawnEntityEvent struct {
-	eid EID
+	eid int32
 }
 
 func NewDespawnEntityEvent(
-	eid EID,
+	eid int32,
 ) *DespawnEntityEvent {
 	return &DespawnEntityEvent{
 		eid: eid,
 	}
 }
 
-func (e *DespawnEntityEvent) GetEID() EID {
+func (e *DespawnEntityEvent) GetEID() int32 {
 	return e.eid
 }
 
@@ -286,65 +297,71 @@ func (e *DespawnEntityEvent) String() string {
 	)
 }
 
-type SetEntityRelativePosEvent struct {
-	eid                    EID
-	deltaX, deltaY, deltaZ int16
-	ground                 bool
+type SetEntityRelativeMoveEvent struct {
+	eid        int32
+	dx, dy, dz int16
+	ground     bool
 }
 
-func NewSetEntityRelativePosEvent(
-	eid EID,
-	deltaX, deltaY, deltaZ int16,
+func NewSetEntityRelativeMoveEvent(
+	eid int32,
+	dx, dy, dz int16,
 	ground bool,
-) *SetEntityRelativePosEvent {
-	return &SetEntityRelativePosEvent{
+) *SetEntityRelativeMoveEvent {
+	return &SetEntityRelativeMoveEvent{
 		eid,
-		deltaX, deltaY, deltaZ,
+		dx, dy, dz,
 		ground,
 	}
 }
 
-func (e *SetEntityRelativePosEvent) GetEID() EID {
+func (e *SetEntityRelativeMoveEvent) GetEID() int32 {
 	return e.eid
 }
 
-func (e *SetEntityRelativePosEvent) GetDeltaX() int16 {
-	return e.deltaX
+func (e *SetEntityRelativeMoveEvent) GetDifferences() (
+	int16, int16, int16,
+) {
+	return e.dx, e.dy, e.dz
 }
 
-func (e *SetEntityRelativePosEvent) GetDeltaY() int16 {
-	return e.deltaY
+func (e *SetEntityRelativeMoveEvent) GetDeltaX() int16 {
+	return e.dx
 }
 
-func (e *SetEntityRelativePosEvent) GetDeltaZ() int16 {
-	return e.deltaZ
+func (e *SetEntityRelativeMoveEvent) GetDeltaY() int16 {
+	return e.dy
 }
 
-func (e *SetEntityRelativePosEvent) GetGround() bool {
+func (e *SetEntityRelativeMoveEvent) GetDeltaZ() int16 {
+	return e.dz
+}
+
+func (e *SetEntityRelativeMoveEvent) IsGround() bool {
 	return e.ground
 }
 
-func (e *SetEntityRelativePosEvent) String() string {
+func (e *SetEntityRelativeMoveEvent) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"eid: %d, "+
-			"deltaX: %d, deltaY: %d, deltaZ: %d, "+
+			"dx: %d, dy: %d, dz: %d, "+
 			"ground: %v "+
 			"}",
 		e.eid,
-		e.deltaX, e.deltaY, e.deltaZ,
+		e.dx, e.dy, e.dz,
 		e.ground,
 	)
 }
 
 type SetEntityLookEvent struct {
-	eid        EID
+	eid        int32
 	yaw, pitch float32
 	ground     bool
 }
 
 func NewSetEntityLookEvent(
-	eid EID,
+	eid int32,
 	yaw, pitch float32,
 	ground bool,
 ) *SetEntityLookEvent {
@@ -356,8 +373,14 @@ func NewSetEntityLookEvent(
 	}
 }
 
-func (e *SetEntityLookEvent) GetEID() EID {
+func (e *SetEntityLookEvent) GetEID() int32 {
 	return e.eid
+}
+
+func (e *SetEntityLookEvent) GetLook() (
+	float32, float32,
+) {
+	return e.yaw, e.pitch
 }
 
 func (e *SetEntityLookEvent) GetYaw() float32 {
@@ -368,7 +391,7 @@ func (e *SetEntityLookEvent) GetPitch() float32 {
 	return e.pitch
 }
 
-func (e *SetEntityLookEvent) GetGround() bool {
+func (e *SetEntityLookEvent) IsGround() bool {
 	return e.ground
 }
 
@@ -385,67 +408,114 @@ func (e *SetEntityLookEvent) String() string {
 	)
 }
 
-type SetEntityMetadataEvent struct {
-	eid      EID
-	metadata *EntityMetadata
+type SetEntityActionsEvent struct {
+	eid                 int32
+	sneaking, sprinting bool
 }
 
-func NewSetEntityMetadataEvent(
-	eid EID,
-	metadata *EntityMetadata,
-) *SetEntityMetadataEvent {
-	return &SetEntityMetadataEvent{
+func NewSetEntityActionsEvent(
+	eid int32,
+	sneaking, sprinting bool,
+) *SetEntityActionsEvent {
+	return &SetEntityActionsEvent{
 		eid,
-		metadata,
+		sneaking, sprinting,
 	}
 }
 
-func (e *SetEntityMetadataEvent) GetEID() EID {
+func (e *SetEntityActionsEvent) GetEID() int32 {
 	return e.eid
 }
 
-func (e *SetEntityMetadataEvent) GetMetadata() *EntityMetadata {
-	return e.metadata
+func (e *SetEntityActionsEvent) IsSneaking() bool {
+	return e.sneaking
 }
 
-func (e *SetEntityMetadataEvent) String() string {
+func (e *SetEntityActionsEvent) IsSprinting() bool {
+	return e.sprinting
+}
+
+func (e *SetEntityActionsEvent) String() string {
 	return fmt.Sprintf(
-		"{ eid: %d, md: %s }",
-		e.eid, e.metadata,
+		"{ eid: %d, sneaking: %v, sprinting: %v }",
+		e.eid, e.sneaking, e.sprinting,
 	)
 }
 
+type SetEntityVelocityEvent struct {
+	eid     int32
+	x, y, z int16
+}
+
+func NewSetEntityVelocityEvent(
+	eid int32,
+	x, y, z int16,
+) *SetEntityVelocityEvent {
+	return &SetEntityVelocityEvent{
+		eid,
+		x, y, z,
+	}
+}
+
+func (e *SetEntityVelocityEvent) GetEID() int32 {
+	return e.eid
+}
+
+func (e *SetEntityVelocityEvent) GetVector() (
+	int16, int16, int16,
+) {
+	return e.x, e.y, e.z
+}
+
+func (e *SetEntityVelocityEvent) GetX() int16 {
+	return e.x
+}
+
+func (e *SetEntityVelocityEvent) GetY() int16 {
+	return e.y
+}
+
+func (e *SetEntityVelocityEvent) GetZ() int16 {
+	return e.z
+}
+
 type LoadChunkEvent struct {
-	overworld, init bool
-	cx, cz          int32
-	chunk           *Chunk
+	ow, init bool
+	cx, cz   int32
+	chunk    *Chunk
 }
 
 func NewLoadChunkEvent(
-	overworld, init bool,
+	ow, init bool,
 	cx, cz int32,
 	chunk *Chunk,
 ) *LoadChunkEvent {
 	return &LoadChunkEvent{
-		overworld, init,
+		ow, init,
 		cx, cz,
 		chunk,
 	}
 }
 
-func (e *LoadChunkEvent) GetOverworld() bool {
-	return e.overworld
+func (e *LoadChunkEvent) IsOverworld() bool {
+	return e.ow
 }
 
-func (e *LoadChunkEvent) GetInit() bool {
+func (e *LoadChunkEvent) IsInit() bool {
 	return e.init
 }
 
-func (e *LoadChunkEvent) GetCx() int32 {
+func (e *LoadChunkEvent) GetChunkPosition() (
+	int32, int32,
+) {
+	return e.cx, e.cz
+}
+
+func (e *LoadChunkEvent) GetChunkX() int32 {
 	return e.cx
 }
 
-func (e *LoadChunkEvent) GetCz() int32 {
+func (e *LoadChunkEvent) GetChunkZ() int32 {
 	return e.cz
 }
 
@@ -456,12 +526,12 @@ func (e *LoadChunkEvent) GetChunk() *Chunk {
 func (e *LoadChunkEvent) String() string {
 	return fmt.Sprintf(
 		"{ "+
-			"overworld: %v, "+
+			"ow: %v, "+
 			"init: %v, "+
 			"cx: %d, cz: %d, "+
 			"chunk: %s "+
 			"}",
-		e.overworld,
+		e.ow,
 		e.init,
 		e.cx, e.cz,
 		e.chunk,
@@ -480,11 +550,17 @@ func NewUnloadChunkEvent(
 	}
 }
 
-func (e *UnloadChunkEvent) GetCx() int32 {
+func (e *UnloadChunkEvent) GetChunkPosition() (
+	int32, int32,
+) {
+	return e.cx, e.cz
+}
+
+func (e *UnloadChunkEvent) GetChunkX() int32 {
 	return e.cx
 }
 
-func (e *UnloadChunkEvent) GetCz() int32 {
+func (e *UnloadChunkEvent) GetChunkZ() int32 {
 	return e.cz
 }
 
@@ -499,18 +575,64 @@ func (e *UnloadChunkEvent) String() string {
 	)
 }
 
-type ChangeWorldEvent struct {
-	index int
+type ClickWindowEvent struct {
+	winID int8
+	slot  int16
+	btn   int8
+	act   int16
+	mode  int32
 }
 
-func NewChangeWorldEvent(
-	index int,
-) *ChangeWorldEvent {
-	return &ChangeWorldEvent{
-		index,
+func NewClickWindowEvent(
+	winID int8,
+	slot int16,
+	btn int8,
+	act int16,
+	mode int32,
+) *ClickWindowEvent {
+	return &ClickWindowEvent{
+		winID,
+		slot,
+		btn,
+		act,
+		mode,
 	}
 }
+func (e *ClickWindowEvent) GetWindowID() int8 {
+	return e.winID
+}
 
-func (e *ChangeWorldEvent) GetIndex() int {
-	return e.index
+func (e *ClickWindowEvent) GetSlotEnum() int16 {
+	return e.slot
+}
+
+func (e *ClickWindowEvent) GetButtonEnum() int8 {
+	return e.btn
+}
+
+func (e *ClickWindowEvent) GetActionNumber() int16 {
+	return e.act
+}
+
+func (e *ClickWindowEvent) GetModeEnum() int32 {
+	return e.mode
+}
+
+func (e *ClickWindowEvent) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"winId: %d, "+
+			"slot: %d, "+
+			"btn: %d, "+
+			"act: %d "+
+			"mode: %d "+
+			//"item: %s "+
+			"}",
+		e.winID,
+		e.slot,
+		e.btn,
+		e.act,
+		e.mode,
+		//p.item,
+	)
 }

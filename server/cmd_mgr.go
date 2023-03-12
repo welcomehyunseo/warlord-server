@@ -31,6 +31,7 @@ type cmdMgr struct {
 
 func newCmdMgr(
 	cmds []*Cmd,
+
 ) *cmdMgr {
 	indices := makeIndices(cmds)
 	return &cmdMgr{

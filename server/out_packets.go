@@ -14,11 +14,16 @@ const OutPacketIDToEnableComp = 0x03
 
 const OutPacketIDToSpawnPlayer = 0x05
 const OutPacketIDToSendChatMessage = 0x0F
+const OutPacketIDToAcceptTransactionOfWindow = 0x11
+const OutPacketIDToRejectTransactionOfWindow = 0x11
+const OutPacketIDToCloseWindow = 0x12
+const OutPacketIDToSetSlotsInWindow = 0x14
+const OutPacketIDToSetSlotInWindow = 0x16
 const OutPacketIDToUnloadChunk = 0x1D
 const OutPacketIDToCheckKeepAlive = 0x1F
 const OutPacketIDToSendChunkData = 0x20
 const OutPacketIDToJoinGame = 0x23
-const OutPacketIDToSetEntityRltvPos = 0x26
+const OutPacketIDToSetEntityRelativeMove = 0x26
 const OutPacketIDToSetEntityLook = 0x28
 const OutPacketIDToSetAbilities = 0x2C
 const OutPacketIDToAddPlayer = 0x2E
@@ -28,8 +33,9 @@ const OutPacketIDToTeleport = 0x2F
 const OutPacketIDToDespawnEntity = 0x32
 const OutPacketIDToRespawn = 0x35
 const OutPacketIDToSetEntityHeadLook = 0x36
-const OutPacketIDToSetEntityMd = 0x3C
-const OutPacketIDToSetSpawnPos = 0x46
+const OutPacketIDToSetEntityMetadata = 0x3C
+const OutPacketIDToSetEntityVelocity = 0x3E
+const OutPacketIDToSetSpawnPosition = 0x46
 
 type OutPacketToResponse struct {
 	*packet
@@ -55,7 +61,7 @@ func NewOutPacketToResponse(
 }
 
 func (p *OutPacketToResponse) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -77,7 +83,7 @@ func (p *OutPacketToResponse) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
 func (p *OutPacketToResponse) GetMax() int {
@@ -122,7 +128,7 @@ func NewOutPacketToPong(
 }
 
 func (p *OutPacketToPong) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -130,7 +136,7 @@ func (p *OutPacketToPong) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
 func (p *OutPacketToPong) GetPayload() int64 {
@@ -146,12 +152,12 @@ func (p *OutPacketToPong) String() string {
 
 type OutPacketToCompleteLogin struct {
 	*packet
-	uid      UID
+	uid      uuid.UUID
 	username string
 }
 
 func NewOutPacketToCompleteLogin(
-	uid UID,
+	uid uuid.UUID,
 	username string,
 ) *OutPacketToCompleteLogin {
 	return &OutPacketToCompleteLogin{
@@ -166,21 +172,21 @@ func NewOutPacketToCompleteLogin(
 }
 
 func (p *OutPacketToCompleteLogin) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteString(uuid.UUID(p.uid).String()); err != nil {
+	if err := data.WriteString(p.uid.String()); err != nil {
 		return nil, err
 	}
 	if err := data.WriteString(p.username); err != nil {
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToCompleteLogin) GetUUID() UID {
+func (p *OutPacketToCompleteLogin) GetUID() uuid.UUID {
 	return p.uid
 }
 
@@ -214,7 +220,7 @@ func NewOutPacketToEnableComp(
 }
 
 func (p *OutPacketToEnableComp) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -222,7 +228,7 @@ func (p *OutPacketToEnableComp) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
 func (p *OutPacketToEnableComp) GetThreshold() int32 {
@@ -238,16 +244,16 @@ func (p *OutPacketToEnableComp) String() string {
 
 type OutPacketToSpawnPlayer struct {
 	*packet
-	eid        EID
-	uid        UID
+	eid        int32
+	uid        uuid.UUID
 	x, y, z    float64
 	yaw, pitch float32
 	metadata   Metadata
 }
 
 func NewOutPacketToSpawnPlayer(
-	eid EID,
-	uid UID,
+	eid int32,
+	uid uuid.UUID,
 	x, y, z float64,
 	yaw, pitch float32,
 	metadata Metadata,
@@ -267,14 +273,14 @@ func NewOutPacketToSpawnPlayer(
 }
 
 func (p *OutPacketToSpawnPlayer) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(int32(p.eid)); err != nil {
+	if err := data.WriteVarInt(p.eid); err != nil {
 		return nil, err
 	}
-	if err := data.WriteUUID(uuid.UUID(p.uid)); err != nil {
+	if err := data.WriteUUID(p.uid); err != nil {
 		return nil, err
 	}
 	if err := data.WriteFloat64(p.x); err != nil {
@@ -296,15 +302,21 @@ func (p *OutPacketToSpawnPlayer) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToSpawnPlayer) GetEID() EID {
+func (p *OutPacketToSpawnPlayer) GetEID() int32 {
 	return p.eid
 }
 
-func (p *OutPacketToSpawnPlayer) GetUUID() UID {
+func (p *OutPacketToSpawnPlayer) GetUID() uuid.UUID {
 	return p.uid
+}
+
+func (p *OutPacketToSpawnPlayer) GetPosition() (
+	float64, float64, float64,
+) {
+	return p.x, p.y, p.z
 }
 
 func (p *OutPacketToSpawnPlayer) GetX() float64 {
@@ -317,6 +329,12 @@ func (p *OutPacketToSpawnPlayer) GetY() float64 {
 
 func (p *OutPacketToSpawnPlayer) GetZ() float64 {
 	return p.z
+}
+
+func (p *OutPacketToSpawnPlayer) GetLook() (
+	float32, float32,
+) {
+	return p.yaw, p.pitch
 }
 
 func (p *OutPacketToSpawnPlayer) GetYaw() float32 {
@@ -363,7 +381,7 @@ func NewOutPacketToSendChatMessage(
 }
 
 func (p *OutPacketToSendChatMessage) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -374,7 +392,7 @@ func (p *OutPacketToSendChatMessage) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
 func (p *OutPacketToSendChatMessage) GetMessage() *Chat {
@@ -386,6 +404,212 @@ func (p *OutPacketToSendChatMessage) String() string {
 		"{ packet: %+v, msg: %s }",
 		p.packet, p.msg,
 	)
+}
+
+type OutPacketToAcceptTransactionOfWindow struct {
+	*packet
+
+	windowID int8
+	actNum   int16
+}
+
+func NewOutPacketToAcceptTransactionOfWindow(
+	windowID int8,
+	actNum int16,
+) *OutPacketToAcceptTransactionOfWindow {
+	return &OutPacketToAcceptTransactionOfWindow{
+		newPacket(
+			Outbound,
+			PlayState,
+			OutPacketIDToAcceptTransactionOfWindow,
+		),
+		windowID,
+		actNum,
+	}
+}
+
+func (p *OutPacketToAcceptTransactionOfWindow) Pack() (
+	[]byte,
+	error,
+) {
+	data := NewData()
+	if err := data.WriteInt8(
+		p.windowID,
+	); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt16(
+		p.actNum,
+	); err != nil {
+		return nil, err
+	}
+	if err := data.WriteBool(
+		true,
+	); err != nil {
+		return nil, err
+	}
+
+	return data.GetBytes(), nil
+}
+
+func (p *OutPacketToAcceptTransactionOfWindow) GetWindowID() int8 {
+	return p.windowID
+}
+
+func (p *OutPacketToAcceptTransactionOfWindow) GetActionNumber() int16 {
+	return p.actNum
+}
+
+type OutPacketToRejectTransactionOfWindow struct {
+	*packet
+
+	winID  int8
+	actNum int16
+}
+
+func NewOutPacketToRejectTransactionOfWindow(
+	winID int8,
+	actNum int16,
+) *OutPacketToRejectTransactionOfWindow {
+	return &OutPacketToRejectTransactionOfWindow{
+		newPacket(
+			Outbound,
+			PlayState,
+			OutPacketIDToRejectTransactionOfWindow,
+		),
+		winID,
+		actNum,
+	}
+}
+
+func (p *OutPacketToRejectTransactionOfWindow) Pack() (
+	[]byte,
+	error,
+) {
+	data := NewData()
+	if err := data.WriteInt8(
+		p.winID,
+	); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt16(
+		p.actNum,
+	); err != nil {
+		return nil, err
+	}
+	if err := data.WriteBool(
+		false,
+	); err != nil {
+		return nil, err
+	}
+
+	return data.GetBytes(), nil
+}
+
+func (p *OutPacketToRejectTransactionOfWindow) GetWindowID() int8 {
+	return p.winID
+}
+
+func (p *OutPacketToRejectTransactionOfWindow) GetActionNumber() int16 {
+	return p.actNum
+}
+
+type OutPacketToCloseWindow struct {
+	*packet
+	winID int8
+}
+
+func NewOutPacketToCloseWindow(
+	winID int8,
+) *OutPacketToCloseWindow {
+	return &OutPacketToCloseWindow{
+		newPacket(
+			Outbound,
+			PlayState,
+			OutPacketIDToCloseWindow,
+		),
+		winID,
+	}
+}
+
+func (p *OutPacketToCloseWindow) Pack() (
+	[]byte,
+	error,
+) {
+	data := NewData()
+	if err := data.WriteInt8(
+		p.winID,
+	); err != nil {
+		return nil, err
+	}
+
+	return data.GetBytes(), nil
+}
+
+func (p *OutPacketToCloseWindow) GetWindowID() int8 {
+	return p.winID
+}
+
+type OutPacketToSetSlotInWindow struct {
+	*packet
+
+	winID   int8
+	slotNum int16
+	item    Item
+}
+
+func NewOutPacketToSetSlotInWindow(
+	winID int8,
+	slotNum int16,
+	item Item,
+) *OutPacketToSetSlotInWindow {
+	return &OutPacketToSetSlotInWindow{
+		newPacket(
+			Outbound,
+			PlayState,
+			OutPacketIDToSetSlotInWindow,
+		),
+		winID,
+		slotNum,
+		item,
+	}
+}
+
+func (p *OutPacketToSetSlotInWindow) Pack() (
+	[]byte,
+	error,
+) {
+	data := NewData()
+
+	if err := data.WriteInt8(
+		p.winID,
+	); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt16(
+		p.slotNum,
+	); err != nil {
+		return nil, err
+	}
+	if err := p.item.Write(
+		data,
+	); err != nil {
+		return nil, err
+	}
+
+	return data.GetBytes(), nil
+}
+
+func (p *OutPacketToSetSlotInWindow) GetWindowID() int8 {
+	return p.winID
+}
+
+func (p *OutPacketToSetSlotInWindow) GetSlotNumber() int16 {
+	return p.slotNum
+}
+
+func (p *OutPacketToSetSlotInWindow) GetItem() Item {
+	return p.item
 }
 
 type OutPacketToUnloadChunk struct {
@@ -407,25 +631,35 @@ func NewOutPacketToUnloadChunk(
 }
 
 func (p *OutPacketToUnloadChunk) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteInt32(p.cx); err != nil {
+	if err := data.WriteInt32(
+		p.cx,
+	); err != nil {
 		return nil, err
 	}
-	if err := data.WriteInt32(p.cz); err != nil {
+	if err := data.WriteInt32(
+		p.cz,
+	); err != nil {
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToUnloadChunk) GetCx() int32 {
+func (p *OutPacketToUnloadChunk) GetChunkPosition() (
+	int32, int32,
+) {
+	return p.cx, p.cz
+}
+
+func (p *OutPacketToUnloadChunk) GetChunkX() int32 {
 	return p.cx
 }
 
-func (p *OutPacketToUnloadChunk) GetCz() int32 {
+func (p *OutPacketToUnloadChunk) GetChunkZ() int32 {
 	return p.cz
 }
 
@@ -455,7 +689,7 @@ func NewOutPacketToCheckKeepAlive(
 }
 
 func (p *OutPacketToCheckKeepAlive) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -463,7 +697,7 @@ func (p *OutPacketToCheckKeepAlive) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
 func (p *OutPacketToCheckKeepAlive) GetPayload() int64 {
@@ -505,7 +739,7 @@ func NewOutPacketToSendChunkData(
 }
 
 func (p *OutPacketToSendChunkData) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -533,14 +767,20 @@ func (p *OutPacketToSendChunkData) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToSendChunkData) GetCx() int32 {
+func (p *OutPacketToSendChunkData) GetChunkPosition() (
+	int32, int32,
+) {
+	return p.cx, p.cz
+}
+
+func (p *OutPacketToSendChunkData) GetChunkX() int32 {
 	return p.cx
 }
 
-func (p *OutPacketToSendChunkData) GetCz() int32 {
+func (p *OutPacketToSendChunkData) GetChunkZ() int32 {
 	return p.cz
 }
 
@@ -565,7 +805,7 @@ func (p *OutPacketToSendChunkData) String() string {
 
 type OutPacketToJoinGame struct {
 	*packet
-	eid        EID
+	eid        int32
 	gamemode   uint8
 	dimension  int32
 	difficulty uint8
@@ -574,7 +814,7 @@ type OutPacketToJoinGame struct {
 }
 
 func NewOutPacketToJoinGame(
-	eid EID,
+	eid int32,
 	gamemode uint8,
 	dimension int32,
 	difficulty uint8,
@@ -597,11 +837,11 @@ func NewOutPacketToJoinGame(
 }
 
 func (p *OutPacketToJoinGame) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteInt32(int32(p.eid)); err != nil {
+	if err := data.WriteInt32(p.eid); err != nil {
 		return nil, err
 	}
 	if err := data.WriteUint8(p.gamemode); err != nil {
@@ -623,10 +863,10 @@ func (p *OutPacketToJoinGame) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToJoinGame) GetEid() EID {
+func (p *OutPacketToJoinGame) GetEID() int32 {
 	return p.eid
 }
 
@@ -665,98 +905,104 @@ func (p *OutPacketToJoinGame) String() string {
 	)
 }
 
-type OutPacketToSetEntityRltvPos struct {
+type OutPacketToSetEntityRelativeMove struct {
 	*packet
-	eid                    EID
-	deltaX, deltaY, deltaZ int16
-	ground                 bool
+	eid        int32
+	dx, dy, dz int16
+	ground     bool
 }
 
-func NewOutPacketToSetEntityRltvPos(
-	eid EID,
-	deltaX, deltaY, deltaZ int16,
+func NewOutPacketToSetEntityRelativeMove(
+	eid int32,
+	dx, dy, dz int16,
 	ground bool,
-) *OutPacketToSetEntityRltvPos {
-	return &OutPacketToSetEntityRltvPos{
+) *OutPacketToSetEntityRelativeMove {
+	return &OutPacketToSetEntityRelativeMove{
 		newPacket(
 			Outbound,
 			PlayState,
-			OutPacketIDToSetEntityRltvPos,
+			OutPacketIDToSetEntityRelativeMove,
 		),
 		eid,
-		deltaX, deltaY, deltaZ,
+		dx, dy, dz,
 		ground,
 	}
 }
 
-func (p *OutPacketToSetEntityRltvPos) Pack() (
-	*Data,
+func (p *OutPacketToSetEntityRelativeMove) Pack() (
+	[]byte,
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(int32(p.eid)); err != nil {
+	if err := data.WriteVarInt(p.eid); err != nil {
 		return nil, err
 	}
-	if err := data.WriteInt16(p.deltaX); err != nil {
+	if err := data.WriteInt16(p.dx); err != nil {
 		return nil, err
 	}
-	if err := data.WriteInt16(p.deltaY); err != nil {
+	if err := data.WriteInt16(p.dy); err != nil {
 		return nil, err
 	}
-	if err := data.WriteInt16(p.deltaZ); err != nil {
+	if err := data.WriteInt16(p.dz); err != nil {
 		return nil, err
 	}
 	if err := data.WriteBool(p.ground); err != nil {
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToSetEntityRltvPos) GetEID() EID {
+func (p *OutPacketToSetEntityRelativeMove) GetEID() int32 {
 	return p.eid
 }
 
-func (p *OutPacketToSetEntityRltvPos) GetDeltaX() int16 {
-	return p.deltaX
+func (p *OutPacketToSetEntityRelativeMove) GetDifferences() (
+	int16, int16, int16,
+) {
+	return p.dx, p.dy, p.dz
 }
 
-func (p *OutPacketToSetEntityRltvPos) GetDeltaY() int16 {
-	return p.deltaY
+func (p *OutPacketToSetEntityRelativeMove) GetDeltaX() int16 {
+	return p.dx
 }
 
-func (p *OutPacketToSetEntityRltvPos) GetDeltaZ() int16 {
-	return p.deltaZ
+func (p *OutPacketToSetEntityRelativeMove) GetDeltaY() int16 {
+	return p.dy
 }
 
-func (p *OutPacketToSetEntityRltvPos) GetGround() bool {
+func (p *OutPacketToSetEntityRelativeMove) GetDeltaZ() int16 {
+	return p.dz
+}
+
+func (p *OutPacketToSetEntityRelativeMove) IsGround() bool {
 	return p.ground
 }
 
-func (p *OutPacketToSetEntityRltvPos) String() string {
+func (p *OutPacketToSetEntityRelativeMove) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"packet: %+v, "+
 			"eid: %d, "+
-			"deltaX: %d, deltaY: %d, deltaZ: %d, "+
+			"dx: %d, dy: %d, dz: %d, "+
 			"ground: %v "+
 			"}",
 		p.packet,
 		p.eid,
-		p.deltaX, p.deltaY, p.deltaZ,
+		p.dx, p.dy, p.dz,
 		p.ground,
 	)
 }
 
 type OutPacketToSetEntityLook struct {
 	*packet
-	eid        EID
+	eid        int32
 	yaw, pitch float32
 	ground     bool
 }
 
 func NewOutPacketToSetEntityLook(
-	eid EID,
+	eid int32,
 	yaw, pitch float32,
 	ground bool,
 ) *OutPacketToSetEntityLook {
@@ -773,11 +1019,11 @@ func NewOutPacketToSetEntityLook(
 }
 
 func (p *OutPacketToSetEntityLook) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(int32(p.eid)); err != nil {
+	if err := data.WriteVarInt(p.eid); err != nil {
 		return nil, err
 	}
 	if err := data.WriteAngle(p.yaw); err != nil {
@@ -790,10 +1036,10 @@ func (p *OutPacketToSetEntityLook) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToSetEntityLook) GetEID() EID {
+func (p *OutPacketToSetEntityLook) GetEID() int32 {
 	return p.eid
 }
 
@@ -805,7 +1051,7 @@ func (p *OutPacketToSetEntityLook) GetPitch() float32 {
 	return p.pitch
 }
 
-func (p *OutPacketToSetEntityLook) GetGround() bool {
+func (p *OutPacketToSetEntityLook) IsGround() bool {
 	return p.ground
 }
 
@@ -849,7 +1095,7 @@ func NewOutPacketToSetAbilities(
 }
 
 func (p *OutPacketToSetAbilities) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -876,22 +1122,22 @@ func (p *OutPacketToSetAbilities) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToSetAbilities) GetInvulnerable() bool {
+func (p *OutPacketToSetAbilities) IsInvulnerable() bool {
 	return p.invulnerable
 }
 
-func (p *OutPacketToSetAbilities) GetFlying() bool {
+func (p *OutPacketToSetAbilities) IsFlying() bool {
 	return p.flying
 }
 
-func (p *OutPacketToSetAbilities) GetCanFly() bool {
+func (p *OutPacketToSetAbilities) IsCanFly() bool {
 	return p.canFly
 }
 
-func (p *OutPacketToSetAbilities) GetInstantBreak() bool {
+func (p *OutPacketToSetAbilities) IsInstantBreak() bool {
 	return p.instantBreak
 }
 
@@ -926,7 +1172,7 @@ func (p *OutPacketToSetAbilities) String() string {
 
 type OutPacketToAddPlayer struct {
 	*packet
-	uid                UID
+	uid                uuid.UUID
 	username           string
 	texture, signature string
 	gamemode           int32
@@ -935,7 +1181,7 @@ type OutPacketToAddPlayer struct {
 }
 
 func NewOutPacketToAddPlayer(
-	uid UID, username string,
+	uid uuid.UUID, username string,
 	texture, signature string,
 	gamemode int32,
 	latency int32,
@@ -956,7 +1202,7 @@ func NewOutPacketToAddPlayer(
 }
 
 func (p *OutPacketToAddPlayer) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -967,7 +1213,7 @@ func (p *OutPacketToAddPlayer) Pack() (
 		return nil, err
 	}
 
-	if err := data.WriteUUID(uuid.UUID(p.uid)); err != nil {
+	if err := data.WriteUUID(p.uid); err != nil {
 		return nil, err
 	}
 	if err := data.WriteString(p.username); err != nil {
@@ -1001,10 +1247,10 @@ func (p *OutPacketToAddPlayer) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToAddPlayer) GetUid() UID {
+func (p *OutPacketToAddPlayer) GetUID() uuid.UUID {
 	return p.uid
 }
 
@@ -1055,13 +1301,13 @@ func (p *OutPacketToAddPlayer) String() string {
 
 type OutPacketToUpdateLatency struct {
 	*packet
-	uid     UID
-	latency int32
+	uid uuid.UUID
+	ms  int32
 }
 
 func NewOutPacketToUpdateLatency(
-	uid UID,
-	latency int32,
+	uid uuid.UUID,
+	ms int32,
 ) *OutPacketToUpdateLatency {
 	return &OutPacketToUpdateLatency{
 		newPacket(
@@ -1070,12 +1316,12 @@ func NewOutPacketToUpdateLatency(
 			OutPacketIDToUpdateLatency,
 		),
 		uid,
-		latency,
+		ms,
 	}
 }
 
 func (p *OutPacketToUpdateLatency) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -1085,22 +1331,22 @@ func (p *OutPacketToUpdateLatency) Pack() (
 	if err := data.WriteVarInt(1); err != nil {
 		return nil, err
 	}
-	if err := data.WriteUUID(uuid.UUID(p.uid)); err != nil {
+	if err := data.WriteUUID(p.uid); err != nil {
 		return nil, err
 	}
-	if err := data.WriteVarInt(p.latency); err != nil {
+	if err := data.WriteVarInt(p.ms); err != nil {
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToUpdateLatency) GetUUID() UID {
+func (p *OutPacketToUpdateLatency) GetUID() uuid.UUID {
 	return p.uid
 }
 
-func (p *OutPacketToUpdateLatency) GetLatency() int32 {
-	return p.latency
+func (p *OutPacketToUpdateLatency) GetValue() int32 {
+	return p.ms
 }
 
 func (p *OutPacketToUpdateLatency) String() string {
@@ -1108,21 +1354,21 @@ func (p *OutPacketToUpdateLatency) String() string {
 		"{ "+
 			"packet: %+v, "+
 			"uid: %s, "+
-			"latency: %d "+
+			"ms: %d "+
 			"}",
 		p.packet,
 		p.uid,
-		p.latency,
+		p.ms,
 	)
 }
 
 type OutPacketToRemovePlayer struct {
 	*packet
-	uid UID
+	uid uuid.UUID
 }
 
 func NewOutPacketToRemovePlayer(
-	uid UID,
+	uid uuid.UUID,
 ) *OutPacketToRemovePlayer {
 	return &OutPacketToRemovePlayer{
 		newPacket(
@@ -1135,7 +1381,7 @@ func NewOutPacketToRemovePlayer(
 }
 
 func (p *OutPacketToRemovePlayer) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -1145,14 +1391,14 @@ func (p *OutPacketToRemovePlayer) Pack() (
 	if err := data.WriteVarInt(1); err != nil {
 		return nil, err
 	}
-	if err := data.WriteUUID(uuid.UUID(p.uid)); err != nil {
+	if err := data.WriteUUID(p.uid); err != nil {
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToRemovePlayer) GetUUID() UID {
+func (p *OutPacketToRemovePlayer) GetUID() uuid.UUID {
 	return p.uid
 }
 
@@ -1188,7 +1434,7 @@ func NewOutPacketToTeleport(
 }
 
 func (p *OutPacketToTeleport) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -1214,7 +1460,13 @@ func (p *OutPacketToTeleport) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
+}
+
+func (p *OutPacketToTeleport) GetPosition() (
+	float64, float64, float64,
+) {
+	return p.x, p.y, p.z
 }
 
 func (p *OutPacketToTeleport) GetX() float64 {
@@ -1227,6 +1479,12 @@ func (p *OutPacketToTeleport) GetY() float64 {
 
 func (p *OutPacketToTeleport) GetZ() float64 {
 	return p.z
+}
+
+func (p *OutPacketToTeleport) GetLook() (
+	float32, float32,
+) {
+	return p.yaw, p.pitch
 }
 
 func (p *OutPacketToTeleport) GetYaw() float32 {
@@ -1258,11 +1516,11 @@ func (p *OutPacketToTeleport) String() string {
 
 type OutPacketToDespawnEntity struct {
 	*packet
-	eid EID
+	eid int32
 }
 
 func NewOutPacketToDespawnEntity(
-	eid EID,
+	eid int32,
 ) *OutPacketToDespawnEntity {
 	return &OutPacketToDespawnEntity{
 		newPacket(
@@ -1275,21 +1533,21 @@ func NewOutPacketToDespawnEntity(
 }
 
 func (p *OutPacketToDespawnEntity) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
 	if err := data.WriteVarInt(1); err != nil {
 		return nil, err
 	}
-	if err := data.WriteVarInt(int32(p.eid)); err != nil {
+	if err := data.WriteVarInt(p.eid); err != nil {
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToDespawnEntity) GetEID() EID {
+func (p *OutPacketToDespawnEntity) GetEID() int32 {
 	return p.eid
 }
 
@@ -1332,7 +1590,7 @@ func NewOutPacketToRespawn(
 }
 
 func (p *OutPacketToRespawn) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -1349,7 +1607,7 @@ func (p *OutPacketToRespawn) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
 func (p *OutPacketToRespawn) GetDimension() int32 {
@@ -1387,12 +1645,12 @@ func (p *OutPacketToRespawn) String() string {
 
 type OutPacketToSetEntityHeadLook struct {
 	*packet
-	eid EID
+	eid int32
 	yaw float32
 }
 
 func NewOutPacketToSetEntityHeadLook(
-	eid EID,
+	eid int32,
 	yaw float32,
 ) *OutPacketToSetEntityHeadLook {
 	return &OutPacketToSetEntityHeadLook{
@@ -1406,21 +1664,21 @@ func NewOutPacketToSetEntityHeadLook(
 }
 
 func (p *OutPacketToSetEntityHeadLook) Pack() (
-	*Data,
+	[]byte,
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(int32(p.eid)); err != nil {
+	if err := data.WriteVarInt(p.eid); err != nil {
 		return nil, err
 	}
 	if err := data.WriteAngle(p.yaw); err != nil {
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToSetEntityHeadLook) GetEID() EID {
+func (p *OutPacketToSetEntityHeadLook) GetEID() int32 {
 	return p.eid
 }
 
@@ -1441,77 +1699,141 @@ func (p *OutPacketToSetEntityHeadLook) String() string {
 	)
 }
 
-type OutPacketToSetEntityMd struct {
+type OutPacketToSetEntityMetadata struct {
 	*packet
-	eid EID
+	eid int32
 	md  *EntityMetadata
 }
 
-func NewOutPacketToSetEntityMd(
-	eid EID,
+func NewOutPacketToSetEntityMetadata(
+	eid int32,
 	md *EntityMetadata,
-) *OutPacketToSetEntityMd {
-	return &OutPacketToSetEntityMd{
+) *OutPacketToSetEntityMetadata {
+	return &OutPacketToSetEntityMetadata{
 		newPacket(
 			Outbound,
 			PlayState,
-			OutPacketIDToSetEntityMd,
+			OutPacketIDToSetEntityMetadata,
 		),
 		eid,
 		md,
 	}
 }
 
-func (p *OutPacketToSetEntityMd) Pack() (
-	*Data,
+func (p *OutPacketToSetEntityMetadata) Pack() (
+	[]byte,
 	error,
 ) {
 	data := NewData()
-	if err := data.WriteVarInt(int32(p.eid)); err != nil {
+	if err := data.WriteVarInt(p.eid); err != nil {
 		return nil, err
 	}
 	if err := data.WriteMetadata(p.md); err != nil {
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToSetEntityMd) GetEID() EID {
+func (p *OutPacketToSetEntityMetadata) GetEID() int32 {
 	return p.eid
 }
 
-func (p *OutPacketToSetEntityMd) GetMetadata() *EntityMetadata {
+func (p *OutPacketToSetEntityMetadata) GetMetadata() *EntityMetadata {
 	return p.md
 }
 
-func (p *OutPacketToSetEntityMd) String() string {
+func (p *OutPacketToSetEntityMetadata) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, eid: %d, md: {...} }",
 		p.packet, p.eid,
 	)
 }
 
-type OutPacketToSetSpawnPos struct {
+type OutPacketToSetEntityVelocity struct {
+	*packet
+	eid     int32
+	x, y, z int16
+}
+
+func NewOutPacketToSetEntityVelocity(
+	eid int32,
+	x, y, z int16,
+) *OutPacketToSetEntityVelocity {
+	return &OutPacketToSetEntityVelocity{
+		newPacket(
+			Outbound,
+			PlayState,
+			OutPacketIDToSetEntityVelocity,
+		),
+		eid,
+		x, y, z,
+	}
+}
+
+func (p *OutPacketToSetEntityVelocity) Pack() (
+	[]byte,
+	error,
+) {
+	data := NewData()
+	if err := data.WriteVarInt(p.eid); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt16(p.x); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt16(p.y); err != nil {
+		return nil, err
+	}
+	if err := data.WriteInt16(p.z); err != nil {
+		return nil, err
+	}
+
+	return data.GetBytes(), nil
+}
+
+func (p *OutPacketToSetEntityVelocity) GetEID() int32 {
+	return p.eid
+}
+
+func (p *OutPacketToSetEntityVelocity) GetVector() (
+	int16, int16, int16,
+) {
+	return p.x, p.y, p.z
+}
+
+func (p *OutPacketToSetEntityVelocity) GetX() int16 {
+	return p.x
+}
+
+func (p *OutPacketToSetEntityVelocity) GetY() int16 {
+	return p.y
+}
+
+func (p *OutPacketToSetEntityVelocity) GetZ() int16 {
+	return p.z
+}
+
+type OutPacketToSetSpawnPosition struct {
 	*packet
 	x, y, z int
 }
 
-func NewOutPacketToSetSpawnPos(
+func NewOutPacketToSetSpawnPosition(
 	x, y, z int,
-) *OutPacketToSetSpawnPos {
-	return &OutPacketToSetSpawnPos{
+) *OutPacketToSetSpawnPosition {
+	return &OutPacketToSetSpawnPosition{
 		newPacket(
 			Outbound,
 			PlayState,
-			OutPacketIDToSetSpawnPos,
+			OutPacketIDToSetSpawnPosition,
 		),
 		x, y, z,
 	}
 }
 
-func (p *OutPacketToSetSpawnPos) Pack() (
-	*Data,
+func (p *OutPacketToSetSpawnPosition) Pack() (
+	[]byte,
 	error,
 ) {
 	data := NewData()
@@ -1519,22 +1841,28 @@ func (p *OutPacketToSetSpawnPos) Pack() (
 		return nil, err
 	}
 
-	return data, nil
+	return data.GetBytes(), nil
 }
 
-func (p *OutPacketToSetSpawnPos) GetX() int {
+func (p *OutPacketToSetSpawnPosition) GetPosition() (
+	int, int, int,
+) {
+	return p.x, p.y, p.z
+}
+
+func (p *OutPacketToSetSpawnPosition) GetX() int {
 	return p.x
 }
 
-func (p *OutPacketToSetSpawnPos) GetY() int {
+func (p *OutPacketToSetSpawnPosition) GetY() int {
 	return p.y
 }
 
-func (p *OutPacketToSetSpawnPos) GetZ() int {
+func (p *OutPacketToSetSpawnPosition) GetZ() int {
 	return p.z
 }
 
-func (p *OutPacketToSetSpawnPos) String() string {
+func (p *OutPacketToSetSpawnPosition) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"packet: %+v, "+

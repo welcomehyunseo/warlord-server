@@ -1,7 +1,5 @@
 package server
 
-type CmdName string
-
 var (
 	HeadCmdForWorld = NewCmd(
 		"world",
@@ -13,20 +11,13 @@ var (
 		HeadCmdForWorld,
 	}
 
-	WorldCmdToChange = NewCmd(
-		"change",
-		"change <index>", "", // TODO: complete description
-		"world-cmd/change",
-	)
-
-	WorldCmdToTeleport = NewCmd(
-		"teleport",
-		"teleport <x> <y> <z>", "", // TODO: complete description
-		"world-cmd/teleport",
+	WorldCmdToSummon = NewCmd(
+		"summon",
+		"summon", "", // TODO: complete description
+		"world-cmd/summon",
 	)
 
 	WorldCmds = []*Cmd{
-		WorldCmdToChange,
-		WorldCmdToTeleport,
+		WorldCmdToSummon,
 	}
 )

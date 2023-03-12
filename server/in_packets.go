@@ -13,10 +13,12 @@ const InPacketIDToConfirmTeleport = 0x00
 const InPacketIDToEnterChatText = 0x02
 const InPacketIDToClickButton = 0x03
 const InPacketIDToChangeSettings = 0x04
+const InPacketIDToConfirmTransactionOfWindow = 0x05
+const InPacketIDToClickWindow = 0x07
 const InPacketIDToInteractWithEntity = 0x0A
 const InPacketIDToConfirmKeepAlive = 0x0B
-const InPacketIDToChangePos = 0x0D
-const InPacketIDToChangePosAndLook = 0x0E
+const InPacketIDToChangePosition = 0x0D
+const InPacketIDToChangePositionAndLook = 0x0E
 const InPacketIDToChangeLook = 0x0F
 const InPacketIDToDoActions = 0x15
 const InPacketIDToStartSneaking = 0x15
@@ -31,10 +33,10 @@ const InPacketIDToStartFlyingWithElytra = 0x15
 
 type InPacketToHandshake struct {
 	*packet
-	version int32
-	addr    string
-	port    uint16
-	next    int32
+	ver  int32
+	addr string
+	port uint16
+	next int32
 }
 
 func NewInPacketToHandshake() *InPacketToHandshake {
@@ -48,10 +50,12 @@ func NewInPacketToHandshake() *InPacketToHandshake {
 }
 
 func (p *InPacketToHandshake) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+	data := NewDataWithBytes(arr)
+
 	var err error
-	p.version, err = data.ReadVarInt()
+	p.ver, err = data.ReadVarInt()
 	if err != nil {
 		return err
 	}
@@ -71,10 +75,10 @@ func (p *InPacketToHandshake) Unpack(
 }
 
 func (p *InPacketToHandshake) GetVersion() int32 {
-	return p.version
+	return p.ver
 }
 
-func (p *InPacketToHandshake) GetAddr() string {
+func (p *InPacketToHandshake) GetAddress() string {
 	return p.addr
 }
 
@@ -82,7 +86,7 @@ func (p *InPacketToHandshake) GetPort() uint16 {
 	return p.port
 }
 
-func (p *InPacketToHandshake) GetNext() int32 {
+func (p *InPacketToHandshake) GetNestState() int32 {
 	return p.next
 }
 
@@ -90,12 +94,16 @@ func (p *InPacketToHandshake) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"packet: %+v, "+
-			"version: %d, "+
+			"ver: %d, "+
 			"addr: %s, "+
 			"port: %d, "+
 			"next: %d "+
 			"} ",
-		p.packet, p.version, p.addr, p.port, p.next,
+		p.packet,
+		p.ver,
+		p.addr,
+		p.port,
+		p.next,
 	)
 }
 
@@ -114,10 +122,10 @@ func NewInPacketToRequest() *InPacketToRequest {
 }
 
 func (p *InPacketToRequest) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
-	var err error
-	return err
+
+	return nil
 }
 
 func (p *InPacketToRequest) String() string {
@@ -143,8 +151,10 @@ func NewInPacketToPing() *InPacketToPing {
 }
 
 func (p *InPacketToPing) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+	data := NewDataWithBytes(arr)
+
 	var err error
 	p.payload, err = data.ReadInt64()
 	if err != nil {
@@ -180,8 +190,10 @@ func NewInPacketToStartLogin() *InPacketToStartLogin {
 }
 
 func (p *InPacketToStartLogin) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+	data := NewDataWithBytes(arr)
+
 	var err error
 	p.username, err = data.ReadString()
 	if err != nil {
@@ -217,8 +229,10 @@ func NewInPacketToEnterChatText() *InPacketToEnterChatText {
 }
 
 func (p *InPacketToEnterChatText) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+	data := NewDataWithBytes(arr)
+
 	text, err := data.ReadString()
 	if err != nil {
 		return err
@@ -255,8 +269,10 @@ func NewInPacketToConfirmTeleport() *InPacketToConfirmTeleport {
 }
 
 func (p *InPacketToConfirmTeleport) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+	data := NewDataWithBytes(arr)
+
 	var err error
 	p.payload, err = data.ReadVarInt()
 	if err != nil {
@@ -294,8 +310,10 @@ func NewInPacketToClickButton() *InPacketToClickButton {
 }
 
 func (p *InPacketToClickButton) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+	data := NewDataWithBytes(arr)
+
 	var err error
 	action, err := data.ReadVarInt()
 	if err != nil {
@@ -311,11 +329,11 @@ func (p *InPacketToClickButton) Unpack(
 	return err
 }
 
-func (p *InPacketToClickButton) IsRespawnStarted() bool {
+func (p *InPacketToClickButton) IsRespawnAfterDeath() bool {
 	return p.respawn
 }
 
-func (p *InPacketToClickButton) IsStatsMenuOpened() bool {
+func (p *InPacketToClickButton) IsStatisticsMenuOpened() bool {
 	return p.stats
 }
 
@@ -328,18 +346,18 @@ func (p *InPacketToClickButton) String() string {
 
 type InPacketToChangeSettings struct {
 	*packet
-	local       string
-	rndDist     int8
-	chatMode    int32
-	chatColors  bool
-	cape        bool
-	jacket      bool
-	leftSleeve  bool
-	rightSleeve bool
-	leftPants   bool
-	rightPants  bool
-	hat         bool
-	mainHand    int32
+	local      string
+	rndDist    int8
+	chatMode   int32
+	chatColors bool
+	cape       bool
+	jacket     bool
+	lSleeve    bool
+	rSleeve    bool
+	lPants     bool
+	rPants     bool
+	hat        bool
+	mh         int32
 }
 
 func NewInPacketToChangeSettings() *InPacketToChangeSettings {
@@ -353,8 +371,10 @@ func NewInPacketToChangeSettings() *InPacketToChangeSettings {
 }
 
 func (p *InPacketToChangeSettings) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+	data := NewDataWithBytes(arr)
+
 	var err error
 	p.local, err = data.ReadString()
 	if err != nil {
@@ -387,31 +407,31 @@ func (p *InPacketToChangeSettings) Unpack(
 		p.jacket = false
 	}
 	if bitmask&uint8(4) == uint8(4) {
-		p.leftSleeve = true
+		p.lSleeve = true
 	} else {
-		p.leftSleeve = false
+		p.lSleeve = false
 	}
 	if bitmask&uint8(8) == uint8(8) {
-		p.rightSleeve = true
+		p.rSleeve = true
 	} else {
-		p.rightSleeve = false
+		p.rSleeve = false
 	}
 	if bitmask&uint8(16) == uint8(16) {
-		p.leftPants = true
+		p.lPants = true
 	} else {
-		p.leftPants = false
+		p.lPants = false
 	}
 	if bitmask&uint8(32) == uint8(32) {
-		p.rightPants = true
+		p.rPants = true
 	} else {
-		p.rightPants = false
+		p.rPants = false
 	}
 	if bitmask&uint8(64) == uint8(64) {
 		p.hat = true
 	} else {
 		p.hat = false
 	}
-	p.mainHand, err = data.ReadVarInt()
+	p.mh, err = data.ReadVarInt()
 	if err != nil {
 		return err
 	}
@@ -422,7 +442,7 @@ func (p *InPacketToChangeSettings) GetLocal() string {
 	return p.local
 }
 
-func (p *InPacketToChangeSettings) GetRndDist() int8 {
+func (p *InPacketToChangeSettings) GetRenderDistance() int8 {
 	return p.rndDist
 }
 
@@ -430,40 +450,50 @@ func (p *InPacketToChangeSettings) GetChatMode() int32 {
 	return p.chatMode
 }
 
-func (p *InPacketToChangeSettings) GetChatColors() bool {
+func (p *InPacketToChangeSettings) IsChatColors() bool {
 	return p.chatColors
 }
 
-func (p *InPacketToChangeSettings) GetCape() bool {
+func (p *InPacketToChangeSettings) GetSkins() (
+	bool, bool, bool, bool, bool, bool, bool,
+) {
+	return p.cape, p.jacket, p.lSleeve, p.rSleeve, p.lPants, p.rPants, p.hat
+}
+
+func (p *InPacketToChangeSettings) IsCapeOn() bool {
 	return p.cape
 }
 
-func (p *InPacketToChangeSettings) GetJacket() bool {
+func (p *InPacketToChangeSettings) IsJacketOn() bool {
 	return p.jacket
 }
 
-func (p *InPacketToChangeSettings) GetLeftSleeve() bool {
-	return p.leftSleeve
+func (p *InPacketToChangeSettings) IsLeftSleeveOn() bool {
+	return p.lSleeve
 }
 
-func (p *InPacketToChangeSettings) GetRightSleeve() bool {
-	return p.rightSleeve
+func (p *InPacketToChangeSettings) IsRightSleeveOn() bool {
+	return p.rSleeve
 }
 
-func (p *InPacketToChangeSettings) GetLeftPants() bool {
-	return p.leftPants
+func (p *InPacketToChangeSettings) IsLeftPantsOn() bool {
+	return p.lPants
 }
 
-func (p *InPacketToChangeSettings) GetRightPants() bool {
-	return p.rightPants
+func (p *InPacketToChangeSettings) IsRightPantsOn() bool {
+	return p.rPants
 }
 
-func (p *InPacketToChangeSettings) GetHat() bool {
+func (p *InPacketToChangeSettings) IsHatOn() bool {
 	return p.hat
 }
 
-func (p *InPacketToChangeSettings) GetMainHand() int32 {
-	return p.mainHand
+func (p *InPacketToChangeSettings) IsMainHandLeft() bool {
+	return p.mh == 0
+}
+
+func (p *InPacketToChangeSettings) IsMainHandRight() bool {
+	return p.mh == 1
 }
 
 func (p *InPacketToChangeSettings) String() string {
@@ -475,10 +505,10 @@ func (p *InPacketToChangeSettings) String() string {
 			"chatMode: %d, "+
 			"chatColors: %v, "+
 			"cape: %v, jacket: %v, "+
-			"leftSleeve: %v, rightSleeve: %v, "+
-			"leftPants: %v, rightPants: %v, "+
+			"lSleeve: %v, rSleeve: %v, "+
+			"lPants: %v, rPants: %v, "+
 			"hat: %v, "+
-			"mainHand: %d "+
+			"mh: %d "+
 			"}",
 		p.packet,
 		p.local,
@@ -486,19 +516,201 @@ func (p *InPacketToChangeSettings) String() string {
 		p.chatMode,
 		p.chatColors,
 		p.cape, p.jacket,
-		p.leftSleeve, p.rightSleeve,
-		p.leftPants, p.rightPants,
+		p.lSleeve, p.rSleeve,
+		p.lPants, p.rPants,
 		p.hat,
-		p.mainHand,
+		p.mh,
+	)
+}
+
+type InPacketToConfirmTransactionOfWindow struct {
+	*packet
+	winID  int8
+	actNum int16
+	accept bool
+}
+
+func NewInPacketToConfirmTransactionOfWindow() *InPacketToConfirmTransactionOfWindow {
+	return &InPacketToConfirmTransactionOfWindow{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			InPacketIDToConfirmTransactionOfWindow,
+		),
+	}
+}
+
+func (p *InPacketToConfirmTransactionOfWindow) Unpack(
+	arr []byte,
+) error {
+	data := NewDataWithBytes(arr)
+
+	winID, err := data.ReadInt8()
+	if err != nil {
+		return err
+	}
+	actNum, err := data.ReadInt16()
+	if err != nil {
+		return err
+	}
+	accept, err := data.ReadBool()
+	if err != nil {
+		return err
+	}
+
+	p.winID = winID
+	p.actNum = actNum
+	p.accept = accept
+
+	return nil
+}
+
+func (p *InPacketToConfirmTransactionOfWindow) GetWindowID() int8 {
+	return p.winID
+}
+
+func (p *InPacketToConfirmTransactionOfWindow) GetActionNumber() int16 {
+	return p.actNum
+}
+
+func (p *InPacketToConfirmTransactionOfWindow) IsAccepted() bool {
+	return p.accept
+}
+
+func (p *InPacketToConfirmTransactionOfWindow) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"winId: %d, "+
+			"act: %d "+
+			"accept: %v "+
+			"}",
+		p.packet,
+		p.winID,
+		p.actNum,
+		p.accept,
+	)
+}
+
+type InPacketToClickWindow struct {
+	*packet
+
+	winID int8
+	slot  int16
+	btn   int8
+	act   int16
+	mode  int32
+	//item    Item
+}
+
+func NewInPacketToClickWindow() *InPacketToClickWindow {
+	return &InPacketToClickWindow{
+		packet: newPacket(
+			Inbound,
+			PlayState,
+			InPacketIDToClickWindow,
+		),
+	}
+}
+
+func (p *InPacketToClickWindow) Unpack(
+	arr []byte,
+) error {
+	data := NewDataWithBytes(arr)
+
+	winID, err := data.ReadInt8()
+	if err != nil {
+		return err
+	}
+	p.winID = winID
+
+	slot, err := data.ReadInt16()
+	if err != nil {
+		return err
+	}
+	p.slot = slot
+
+	btn, err := data.ReadInt8()
+	if err != nil {
+		return err
+	}
+	p.btn = btn
+
+	act, err := data.ReadInt16()
+	if err != nil {
+		return err
+	}
+	p.act = act
+
+	mode, err := data.ReadVarInt()
+	if err != nil {
+		return err
+	}
+	p.mode = mode
+	//
+	//item, err := ReadItem(
+	//	data,
+	//)
+	//if err != nil {
+	//	return err
+	//}
+	//p.item = item
+
+	return nil
+}
+
+func (p *InPacketToClickWindow) GetWindowID() int8 {
+	return p.winID
+}
+
+func (p *InPacketToClickWindow) GetSlotEnum() int16 {
+	return p.slot
+}
+
+func (p *InPacketToClickWindow) GetButtonEnum() int8 {
+	return p.btn
+}
+
+func (p *InPacketToClickWindow) GetActionNumber() int16 {
+	return p.act
+}
+
+func (p *InPacketToClickWindow) GetModeEnum() int32 {
+	return p.mode
+}
+
+//
+//func (p *InPacketToClickWindow) GetItem() Item {
+//	return p.item
+//}
+
+func (p *InPacketToClickWindow) String() string {
+	return fmt.Sprintf(
+		"{ "+
+			"packet: %+v, "+
+			"winId: %d, "+
+			"slot: %d, "+
+			"btn: %d, "+
+			"act: %d "+
+			"mode: %d "+
+			//"item: %s "+
+			"}",
+		p.packet,
+		p.winID,
+		p.slot,
+		p.btn,
+		p.act,
+		p.mode,
+		//p.item,
 	)
 }
 
 type InPacketToInteractWithEntity struct {
 	*packet
-	target                    EID
-	num                       int32
-	targetX, targetY, targetZ float32
-	hand                      int32
+	eid        int32
+	num        int32
+	tx, ty, tz float32
+	hand       int32
 }
 
 func NewInPacketToInteractWithEntity() *InPacketToInteractWithEntity {
@@ -512,34 +724,36 @@ func NewInPacketToInteractWithEntity() *InPacketToInteractWithEntity {
 }
 
 func (p *InPacketToInteractWithEntity) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
-	target, err := data.ReadVarInt()
+	data := NewDataWithBytes(arr)
+
+	eid, err := data.ReadVarInt()
 	if err != nil {
 		return err
 	}
-	p.target = EID(target)
+	p.eid = eid
 	num, err := data.ReadVarInt()
 	if err != nil {
 		return err
 	}
 	p.num = num
 	if num == 2 {
-		targetX, err := data.ReadFloat32()
+		tx, err := data.ReadFloat32()
 		if err != nil {
 			return err
 		}
-		p.targetX = targetX
-		targetY, err := data.ReadFloat32()
+		p.tx = tx
+		ty, err := data.ReadFloat32()
 		if err != nil {
 			return err
 		}
-		p.targetY = targetY
-		targetZ, err := data.ReadFloat32()
+		p.ty = ty
+		tz, err := data.ReadFloat32()
 		if err != nil {
 			return err
 		}
-		p.targetZ = targetZ
+		p.tz = tz
 	}
 	if num == 0 || num == 2 {
 		hand, err := data.ReadVarInt()
@@ -551,18 +765,22 @@ func (p *InPacketToInteractWithEntity) Unpack(
 	return nil
 }
 
+// GetPosition
+// GetTargetX
+
 func (p *InPacketToInteractWithEntity) String() string {
 	return fmt.Sprintf(
-		"{ packet: %+v, "+
-			"target: %d, "+
-			"num: %d, "+
-			"targetX: %f, targetY: %f, targetZ: %f, "+
+		"{ "+
+			"packet: %+v, "+
+			"eid: %d, "+
+			"slot: %d, "+
+			"tx: %f, ty: %f, tz: %f, "+
 			"hand: %d "+
 			"}",
 		p.packet,
-		p.target,
+		p.eid,
 		p.num,
-		p.targetX, p.targetY, p.targetZ,
+		p.tx, p.ty, p.tz,
 		p.hand,
 	)
 }
@@ -583,8 +801,10 @@ func NewInPacketToConfirmKeepAlive() *InPacketToConfirmKeepAlive {
 }
 
 func (p *InPacketToConfirmKeepAlive) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+	data := NewDataWithBytes(arr)
+
 	var err error
 	p.payload, err = data.ReadInt64()
 	if err != nil {
@@ -604,27 +824,27 @@ func (p *InPacketToConfirmKeepAlive) String() string {
 	)
 }
 
-type InPacketToChangePos struct {
+type InPacketToChangePosition struct {
 	*packet
-	x      float64
-	y      float64
-	z      float64
-	ground bool
+	x, y, z float64
+	ground  bool
 }
 
-func NewInPacketToChangePos() *InPacketToChangePos {
-	return &InPacketToChangePos{
+func NewInPacketToChangePosition() *InPacketToChangePosition {
+	return &InPacketToChangePosition{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			InPacketIDToChangePos,
+			InPacketIDToChangePosition,
 		),
 	}
 }
 
-func (p *InPacketToChangePos) Unpack(
-	data *Data,
+func (p *InPacketToChangePosition) Unpack(
+	arr []byte,
 ) error {
+	data := NewDataWithBytes(arr)
+
 	var err error
 	p.x, err = data.ReadFloat64()
 	if err != nil {
@@ -645,52 +865,57 @@ func (p *InPacketToChangePos) Unpack(
 	return err
 }
 
-func (p *InPacketToChangePos) GetX() float64 {
+func (p *InPacketToChangePosition) GetPosition() (
+	float64, float64, float64,
+) {
+	return p.x, p.y, p.z
+}
+
+func (p *InPacketToChangePosition) GetX() float64 {
 	return p.x
 }
 
-func (p *InPacketToChangePos) GetY() float64 {
+func (p *InPacketToChangePosition) GetY() float64 {
 	return p.y
 }
 
-func (p *InPacketToChangePos) GetZ() float64 {
+func (p *InPacketToChangePosition) GetZ() float64 {
 	return p.z
 }
 
-func (p *InPacketToChangePos) GetGround() bool {
+func (p *InPacketToChangePosition) IsGround() bool {
 	return p.ground
 }
 
-func (p *InPacketToChangePos) String() string {
+func (p *InPacketToChangePosition) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, x: %f, y: %f, z: %f, ground: %v }",
 		p.packet, p.x, p.y, p.z, p.ground,
 	)
 }
 
-type InPacketToChangePosAndLook struct {
+type InPacketToChangePositionAndLook struct {
 	*packet
-	x      float64
-	y      float64
-	z      float64
-	yaw    float32
-	pitch  float32
-	ground bool
+	x, y, z    float64
+	yaw, pitch float32
+	ground     bool
 }
 
-func NewInPacketToChangePosAndLook() *InPacketToChangePosAndLook {
-	return &InPacketToChangePosAndLook{
+func NewInPacketToChangePositionAndLook() *InPacketToChangePositionAndLook {
+	return &InPacketToChangePositionAndLook{
 		packet: newPacket(
 			Inbound,
 			PlayState,
-			InPacketIDToChangePosAndLook,
+			InPacketIDToChangePositionAndLook,
 		),
 	}
 }
 
-func (p *InPacketToChangePosAndLook) Unpack(
-	data *Data,
+func (p *InPacketToChangePositionAndLook) Unpack(
+	arr []byte,
 ) error {
+	data := NewDataWithBytes(arr)
+
 	var err error
 	p.x, err = data.ReadFloat64()
 	if err != nil {
@@ -719,31 +944,43 @@ func (p *InPacketToChangePosAndLook) Unpack(
 	return err
 }
 
-func (p *InPacketToChangePosAndLook) GetX() float64 {
+func (p *InPacketToChangePositionAndLook) GetPosition() (
+	float64, float64, float64,
+) {
+	return p.x, p.y, p.z
+}
+
+func (p *InPacketToChangePositionAndLook) GetX() float64 {
 	return p.x
 }
 
-func (p *InPacketToChangePosAndLook) GetY() float64 {
+func (p *InPacketToChangePositionAndLook) GetY() float64 {
 	return p.y
 }
 
-func (p *InPacketToChangePosAndLook) GetZ() float64 {
+func (p *InPacketToChangePositionAndLook) GetZ() float64 {
 	return p.z
 }
 
-func (p *InPacketToChangePosAndLook) GetYaw() float32 {
+func (p *InPacketToChangePositionAndLook) GetLook() (
+	float32, float32,
+) {
+	return p.yaw, p.pitch
+}
+
+func (p *InPacketToChangePositionAndLook) GetYaw() float32 {
 	return p.yaw
 }
 
-func (p *InPacketToChangePosAndLook) GetPitch() float32 {
+func (p *InPacketToChangePositionAndLook) GetPitch() float32 {
 	return p.pitch
 }
 
-func (p *InPacketToChangePosAndLook) GetGround() bool {
+func (p *InPacketToChangePositionAndLook) IsGround() bool {
 	return p.ground
 }
 
-func (p *InPacketToChangePosAndLook) String() string {
+func (p *InPacketToChangePositionAndLook) String() string {
 	return fmt.Sprintf(
 		"{ "+
 			"packet: %+v, "+
@@ -760,9 +997,8 @@ func (p *InPacketToChangePosAndLook) String() string {
 
 type InPacketToChangeLook struct {
 	*packet
-	yaw    float32
-	pitch  float32
-	ground bool
+	yaw, pitch float32
+	ground     bool
 }
 
 func NewInPacketToChangeLook() *InPacketToChangeLook {
@@ -776,8 +1012,10 @@ func NewInPacketToChangeLook() *InPacketToChangeLook {
 }
 
 func (p *InPacketToChangeLook) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+	data := NewDataWithBytes(arr)
+
 	var err error
 	p.yaw, err = data.ReadFloat32()
 	if err != nil {
@@ -794,6 +1032,12 @@ func (p *InPacketToChangeLook) Unpack(
 	return err
 }
 
+func (p *InPacketToChangeLook) GetLook() (
+	float32, float32,
+) {
+	return p.yaw, p.pitch
+}
+
 func (p *InPacketToChangeLook) GetYaw() float32 {
 	return p.yaw
 }
@@ -802,7 +1046,7 @@ func (p *InPacketToChangeLook) GetPitch() float32 {
 	return p.pitch
 }
 
-func (p *InPacketToChangeLook) GetGround() bool {
+func (p *InPacketToChangeLook) IsGround() bool {
 	return p.ground
 }
 
@@ -834,8 +1078,9 @@ func NewInPacketToStartSneaking() *InPacketToStartSneaking {
 }
 
 func (p *InPacketToStartSneaking) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+
 	return nil
 }
 
@@ -854,8 +1099,9 @@ func NewInPacketToStopSneaking() *InPacketToStopSneaking {
 }
 
 func (p *InPacketToStopSneaking) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+
 	return nil
 }
 
@@ -874,8 +1120,9 @@ func NewInPacketToStartSprinting() *InPacketToStartSprinting {
 }
 
 func (p *InPacketToStartSprinting) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+
 	return nil
 }
 
@@ -894,7 +1141,8 @@ func NewInPacketToStopSprinting() *InPacketToStopSprinting {
 }
 
 func (p *InPacketToStopSprinting) Unpack(
-	data *Data,
+	arr []byte,
 ) error {
+
 	return nil
 }

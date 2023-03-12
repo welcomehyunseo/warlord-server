@@ -92,7 +92,7 @@ func (lc *LoggerConfigurator) SetLogger(
 	lc.mutex.Lock()
 	defer lc.mutex.Unlock()
 
-	//_, has := lc.loggers[id]
+	//_, has := lc.loggers[winId]
 	//if has == true {
 	//	panic(AlreadyLoggerExistError)
 	//}

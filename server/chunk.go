@@ -185,7 +185,7 @@ func NewChunkPart() *ChunkPart {
 
 func (p *ChunkPart) generateData(
 	overworld bool,
-) []uint8 {
+) []byte {
 	p.RLock()
 	defer p.RUnlock()
 
