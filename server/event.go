@@ -602,7 +602,7 @@ func (e *ClickWindowEvent) GetWindowID() int8 {
 	return e.winID
 }
 
-func (e *ClickWindowEvent) GetSlotEnum() int16 {
+func (e *ClickWindowEvent) GetSlotNumber() int16 {
 	return e.slot
 }
 
@@ -626,13 +626,13 @@ func (e *ClickWindowEvent) String() string {
 			"btn: %d, "+
 			"act: %d "+
 			"mode: %d "+
-			//"item: %s "+
+			//"it: %s "+
 			"}",
 		e.winID,
 		e.slot,
 		e.btn,
 		e.act,
 		e.mode,
-		//p.item,
+		//p.it,
 	)
 }

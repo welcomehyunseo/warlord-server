@@ -129,12 +129,8 @@ func (s *Server) initClient(
 		ChanForLoadChunkEvent,
 		MaxNumForChannel,
 	)
-	CHForUnCEvent := make(
+	CHForUCEvent := make(
 		ChanForUnloadChunkEvent,
-		MaxNumForChannel,
-	)
-	CHForUpCEvent := make(
-		ChanForUpdateChunkEvent,
 		MaxNumForChannel,
 	)
 
@@ -157,8 +153,7 @@ func (s *Server) initClient(
 		CHForSEAEvent,
 		CHForDEEvent,
 		CHForLCEvent,
-		CHForUnCEvent,
-		CHForUpCEvent,
+		CHForUCEvent,
 		CHForCWEvent,
 		cnt,
 	)
@@ -176,15 +171,7 @@ func (s *Server) initClient(
 		CHForSEAEvent,
 		CHForDEEvent,
 		CHForLCEvent,
-		CHForUnCEvent,
-		CHForError,
-		ctx,
-		wg,
-	)
-
-	go cnt.HandleUpdateChunkEvent(
-		CHForUpCEvent,
-		dim,
+		CHForUCEvent,
 		CHForError,
 		ctx,
 		wg,
@@ -238,8 +225,7 @@ func (s *Server) closeClient(
 		CHForSELEvent,
 		CHForSEMEvent,
 		CHForLCEvent,
-		CHForUnCEvent,
-		CHForUpCEvent,
+		CHForUCEvent,
 		CHForCWEvent :=
 		dim.Close()
 	close(CHForAPEvent)
@@ -251,8 +237,7 @@ func (s *Server) closeClient(
 	close(CHForSELEvent)
 	close(CHForSEMEvent)
 	close(CHForLCEvent)
-	close(CHForUnCEvent)
-	close(CHForUpCEvent)
+	close(CHForUCEvent)
 
 	close(CHForCWEvent)
 
@@ -343,20 +328,20 @@ func (s *Server) handleClient(
 		wg,
 	)
 
-	item := NewStickItem(
-		10,
-		&ItemNbt{
-			Display: &DisplayOfItemNbt{
-				Name: "text",
-			},
-		},
-	)
-	SSIWPacket := NewOutPacketToSetSlotInWindow(
-		0,
-		38,
-		item,
-	)
-	cnt.writeWithComp(SSIWPacket)
+	//item := item2.NewStickItem(
+	//	10,
+	//	&nbt.ItemNbt{
+	//		Display: &nbt.DisplayOfItemNbt{
+	//			Name: "text",
+	//		},
+	//	},
+	//)
+	//SSIWPacket := packet.NewOutPacketToSetSlotInWindow(
+	//	0,
+	//	38,
+	//	item,
+	//)
+	//cnt.writeWithComp(SSIWPacket)
 
 	for {
 		select {

@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	data2 "github.com/welcomehyunseo/warlord-server/server/data"
 	"sync"
 )
 
@@ -189,7 +190,7 @@ func (p *ChunkPart) generateData(
 	p.RLock()
 	defer p.RUnlock()
 
-	data := NewData()
+	data := data2.NewData()
 
 	bits := uint8(4)
 	l := len(p.palette)
@@ -401,7 +402,7 @@ func (c *Chunk) GenerateData(
 	c.RLock()
 	defer c.RUnlock()
 
-	data := NewData()
+	data := data2.NewData()
 
 	var bitmask uint16
 	for i := 0; i < MaxChunkPartsNum; i++ {

@@ -32,8 +32,7 @@ func NewDimension(
 	CHForSEAEvent ChanForSetEntityActionsEvent,
 	CHForDEEvent ChanForDespawnEntityEvent,
 	CHForLCEvent ChanForLoadChunkEvent,
-	CHForUnCEvent ChanForUnloadChunkEvent,
-	CHForUpCEvent ChanForUpdateChunkEvent,
+	CHForUCEvent ChanForUnloadChunkEvent,
 	CHForCWEvent ChanForClickWindowEvent,
 	cnt *Client,
 ) (
@@ -61,8 +60,7 @@ func NewDimension(
 		CHForSEAEvent,
 		CHForDEEvent,
 		CHForLCEvent,
-		CHForUnCEvent,
-		CHForUpCEvent,
+		CHForUCEvent,
 		CHForCWEvent,
 		cnt,
 	); err != nil {
@@ -129,12 +127,10 @@ func (dim *Dimension) ChangeWorld(
 	defer dim.RUnlock()
 
 	prevWld := dim.world
-	dim.world = world
 
 	eid := dim.eid
-	//uid, username :=
-	//	dim.uid, dim.username
-	uid := dim.uid
+	uid, username :=
+		dim.uid, dim.username
 
 	CHForCWEvent := dim.CHForCWEvent
 
@@ -144,8 +140,7 @@ func (dim *Dimension) ChangeWorld(
 		CHForSEAEvent,
 		CHForDEEvent,
 		CHForLCEvent,
-		CHForUnCEvent,
-		CHForUpCEvent,
+		CHForUCEvent,
 		err := prevWld.FinishPlayer(
 		eid,
 		cnt,
@@ -154,17 +149,18 @@ func (dim *Dimension) ChangeWorld(
 		return err
 	}
 
+	dim.world = world
+
 	if err := world.InitPlayer(
 		eid,
-		uid,
+		uid, username,
 		CHForSPEvent,
 		CHForSERPEvent,
 		CHForSELEvent,
 		CHForSEAEvent,
 		CHForDEEvent,
 		CHForLCEvent,
-		CHForUnCEvent,
-		CHForUpCEvent,
+		CHForUCEvent,
 		CHForCWEvent,
 		cnt,
 	); err != nil {
@@ -214,13 +210,14 @@ func (dim *Dimension) ClickWindow(
 	dim.RLock()
 	defer dim.RUnlock()
 
-	dim.CHForCWEvent <- NewClickWindowEvent(
+	e := NewClickWindowEvent(
 		winID,
 		slot,
 		btn,
 		act,
 		mode,
 	)
+	dim.CHForCWEvent <- e
 
 	return nil
 }
@@ -232,12 +229,8 @@ func (dim *Dimension) UpdatePos(
 	dim.RLock()
 	defer dim.RUnlock()
 
-	world := dim.world
-
-	eid := dim.eid
-
-	if err := world.UpdatePosForPlayer(
-		eid,
+	if err := dim.world.UpdatePosForPlayer(
+		dim.eid,
 		x, y, z,
 		ground,
 	); err != nil {
@@ -269,28 +262,6 @@ func (dim *Dimension) UpdateLook(
 	return nil
 }
 
-func (dim *Dimension) UpdateChunk(
-	prevCx, prevCz int32,
-	currCx, currCz int32,
-) error {
-	dim.RLock()
-	defer dim.RUnlock()
-
-	world := dim.world
-
-	eid := dim.eid
-
-	if err := world.UpdateChunkForPlayer(
-		eid,
-		prevCx, prevCz,
-		currCx, currCz,
-	); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (dim *Dimension) Close() (
 	ChanForAddPlayerEvent,
 	ChanForUpdateLatencyEvent,
@@ -302,7 +273,6 @@ func (dim *Dimension) Close() (
 	ChanForDespawnEntityEvent,
 	ChanForLoadChunkEvent,
 	ChanForUnloadChunkEvent,
-	ChanForUpdateChunkEvent,
 	ChanForClickWindowEvent,
 ) {
 	dim.Lock()
@@ -324,8 +294,7 @@ func (dim *Dimension) Close() (
 		CHForSEAEvent,
 		CHForDEEvent,
 		CHForLCEvent,
-		CHForUnCEvent,
-		CHForUpCEvent :=
+		CHForUCEvent :=
 		world.ClosePlayer(eid)
 
 	return CHForAPEvent,
@@ -337,7 +306,6 @@ func (dim *Dimension) Close() (
 		CHForSEAEvent,
 		CHForDEEvent,
 		CHForLCEvent,
-		CHForUnCEvent,
-		CHForUpCEvent,
+		CHForUCEvent,
 		dim.CHForCWEvent
 }

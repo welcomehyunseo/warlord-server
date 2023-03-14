@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/welcomehyunseo/warlord-server/server/data"
+	"github.com/welcomehyunseo/warlord-server/server/metadata"
+	"github.com/welcomehyunseo/warlord-server/server/packet"
 	"io"
 	"math/rand"
 	"net"
@@ -31,9 +34,9 @@ func readVarInt(
 		l += 1
 		b := buf[0]
 
-		v |= int32(b&SegmentBits) << position
+		v |= int32(b&data.SegmentBits) << position
 
-		if (b & ContinueBit) == 0 {
+		if (b & data.ContinueBit) == 0 {
 			break
 		}
 
@@ -58,13 +61,13 @@ func writeVarInt(
 	arr := make([]byte, 0)
 
 	for {
-		if (v0 & ^uint32(SegmentBits)) == 0 {
+		if (v0 & ^uint32(data.SegmentBits)) == 0 {
 			v1 := uint8(v0)
 			arr = append(arr, v1)
 			break
 		}
 
-		v1 := uint8(v0&uint32(SegmentBits)) | ContinueBit
+		v1 := uint8(v0&uint32(data.SegmentBits)) | data.ContinueBit
 		arr = append(arr, v1)
 
 		v0 >>= 7
@@ -114,7 +117,7 @@ func write(
 		return nil, err
 	}
 
-	arr2 := concat(arr1, arr)
+	arr2 := data.Concat(arr1, arr)
 
 	return arr2, nil
 }
@@ -124,48 +127,48 @@ func distribute(
 	pid int32,
 	arr []byte,
 ) (
-	InPacket,
+	packet.InPacket,
 	error,
 ) {
 	//fmt.Println("pid:", pid)
 
-	var inPacket InPacket
+	var inPacket packet.InPacket
 
 	switch state {
-	case PlayState:
+	case packet.PlayState:
 		switch pid {
-		case InPacketIDToConfirmTeleport:
-			inPacket = NewInPacketToConfirmTeleport()
+		case packet.InPacketIDToConfirmTeleport:
+			inPacket = packet.NewInPacketToConfirmTeleport()
 			break
-		case InPacketIDToEnterChatText:
-			inPacket = NewInPacketToEnterChatText()
+		case packet.InPacketIDToEnterChatText:
+			inPacket = packet.NewInPacketToEnterChatText()
 			break
-		case InPacketIDToChangeSettings:
-			inPacket = NewInPacketToChangeSettings()
+		case packet.InPacketIDToChangeSettings:
+			inPacket = packet.NewInPacketToChangeSettings()
 			break
-		case InPacketIDToConfirmTransactionOfWindow:
-			inPacket = NewInPacketToConfirmTransactionOfWindow()
+		case packet.InPacketIDToConfirmTransactionOfWindow:
+			inPacket = packet.NewInPacketToConfirmTransactionOfWindow()
 			break
-		case InPacketIDToClickWindow:
-			inPacket = NewInPacketToClickWindow()
+		case packet.InPacketIDToClickWindow:
+			inPacket = packet.NewInPacketToClickWindow()
 			break
-		case InPacketIDToInteractWithEntity:
-			inPacket = NewInPacketToInteractWithEntity()
+		case packet.InPacketIDToInteractWithEntity:
+			inPacket = packet.NewInPacketToInteractWithEntity()
 			break
-		case InPacketIDToConfirmKeepAlive:
-			inPacket = NewInPacketToConfirmKeepAlive()
+		case packet.InPacketIDToConfirmKeepAlive:
+			inPacket = packet.NewInPacketToConfirmKeepAlive()
 			break
-		case InPacketIDToChangePosition:
-			inPacket = NewInPacketToChangePosition()
+		case packet.InPacketIDToChangePosition:
+			inPacket = packet.NewInPacketToChangePosition()
 			break
-		case InPacketIDToChangeLook:
-			inPacket = NewInPacketToChangeLook()
+		case packet.InPacketIDToChangeLook:
+			inPacket = packet.NewInPacketToChangeLook()
 			break
-		case InPacketIDToChangePositionAndLook:
-			inPacket = NewInPacketToChangePositionAndLook()
+		case packet.InPacketIDToChangePositionAndLook:
+			inPacket = packet.NewInPacketToChangePositionAndLook()
 			break
-		case InPacketIDToDoActions:
-			data := NewDataWithBytes(arr)
+		case packet.InPacketIDToDoActions:
+			data := data.NewDataWithBytes(arr)
 			_, err := data.ReadVarInt() // TODO: what is exactly?
 			if err != nil {
 				return nil, err
@@ -176,43 +179,43 @@ func distribute(
 			}
 			switch actionID {
 			case 0:
-				inPacket = NewInPacketToStartSneaking()
+				inPacket = packet.NewInPacketToStartSneaking()
 				break
 			case 1:
-				inPacket = NewInPacketToStopSneaking()
+				inPacket = packet.NewInPacketToStopSneaking()
 				break
 			case 3:
-				inPacket = NewInPacketToStartSprinting()
+				inPacket = packet.NewInPacketToStartSprinting()
 				break
 			case 4:
-				inPacket = NewInPacketToStopSprinting()
+				inPacket = packet.NewInPacketToStopSprinting()
 				break
 			}
 
 			return inPacket, nil
 		}
 		break
-	case StatusState:
+	case packet.StatusState:
 		switch pid {
-		case InPacketIDToRequest:
-			inPacket = NewInPacketToRequest()
+		case packet.InPacketIDToRequest:
+			inPacket = packet.NewInPacketToRequest()
 			break
-		case InPacketIDToPing:
-			inPacket = NewInPacketToPing()
-			break
-		}
-		break
-	case LoginState:
-		switch pid {
-		case InPacketIDToStartLogin:
-			inPacket = NewInPacketToStartLogin()
+		case packet.InPacketIDToPing:
+			inPacket = packet.NewInPacketToPing()
 			break
 		}
 		break
-	case HandshakingState:
+	case packet.LoginState:
 		switch pid {
-		case InPacketIDToHandshake:
-			inPacket = NewInPacketToHandshake()
+		case packet.InPacketIDToStartLogin:
+			inPacket = packet.NewInPacketToStartLogin()
+			break
+		}
+		break
+	case packet.HandshakingState:
+		switch pid {
+		case packet.InPacketIDToHandshake:
+			inPacket = packet.NewInPacketToHandshake()
 			break
 		}
 		break
@@ -252,7 +255,7 @@ func NewClient(
 func (cnt *Client) read(
 	state int32,
 ) (
-	InPacket,
+	packet.InPacket,
 	error,
 ) {
 
@@ -282,7 +285,7 @@ func (cnt *Client) read(
 func (cnt *Client) readWithComp(
 	state int32,
 ) (
-	InPacket,
+	packet.InPacket,
 	error,
 ) {
 	conn := cnt.conn
@@ -346,7 +349,7 @@ func (cnt *Client) readWithComp(
 }
 
 func (cnt *Client) write(
-	packet OutPacket,
+	packet packet.OutPacket,
 ) error {
 	cnt.Lock()
 	defer cnt.Unlock()
@@ -375,7 +378,7 @@ func (cnt *Client) write(
 		return err
 	}
 
-	arr3 := concat(arr2, arr1)
+	arr3 := data.Concat(arr2, arr1)
 	if _, err := conn.Write(
 		arr3,
 	); err != nil {
@@ -386,7 +389,7 @@ func (cnt *Client) write(
 }
 
 func (cnt *Client) writeWithComp(
-	packet OutPacket,
+	packet packet.OutPacket,
 ) error {
 	cnt.Lock()
 	defer cnt.Unlock()
@@ -422,8 +425,8 @@ func (cnt *Client) writeWithComp(
 			return err
 		}
 
-		arr4 := concat(arr3, arr2)
-		arr5 := concat(arr4, arr1)
+		arr4 := data.Concat(arr3, arr2)
+		arr5 := data.Concat(arr4, arr1)
 
 		if _, err := conn.Write(
 			arr5,
@@ -458,8 +461,8 @@ func (cnt *Client) writeWithComp(
 		return err
 	}
 
-	arr7 := concat(arr6, arr4)
-	arr8 := concat(arr7, arr2)
+	arr7 := data.Concat(arr6, arr4)
+	arr8 := data.Concat(arr7, arr2)
 
 	if _, err := conn.Write(
 		arr8,
@@ -483,7 +486,7 @@ func (cnt *Client) HandleNonLoginState(
 		lg.Debug("it is finished to handle non login state in Client")
 	}()
 
-	state := HandshakingState
+	state := packet.HandshakingState
 
 	for {
 		inPacket, err := cnt.read(state)
@@ -496,28 +499,29 @@ func (cnt *Client) HandleNonLoginState(
 			NewLgElement("InPacket", inPacket),
 		)
 
-		var outPacket OutPacket
+		var outPacket packet.OutPacket
 
 		switch inPacket.(type) {
-		case *InPacketToHandshake:
-			handshakePacket := inPacket.(*InPacketToHandshake)
-			state = handshakePacket.next
+		case *packet.InPacketToHandshake:
+			handshakePacket := inPacket.(*packet.InPacketToHandshake)
+			state = handshakePacket.GetNestState()
 			break
-		case *InPacketToRequest:
-			responsePacket := NewOutPacketToResponse(
+		case *packet.InPacketToRequest:
+			responsePacket := packet.NewOutPacketToResponse(
 				max, online, text, favicon,
 			)
 			outPacket = responsePacket
 			break
-		case *InPacketToPing:
-			pingPacket := inPacket.(*InPacketToPing)
-			payload := pingPacket.payload
-			pongPacket := NewOutPacketToPong(payload)
+		case *packet.InPacketToPing:
+			pingPacket := inPacket.(*packet.InPacketToPing)
+			pongPacket := packet.NewOutPacketToPong(
+				pingPacket.GetPayload(),
+			)
 			outPacket = pongPacket
 			break
 		}
 
-		if state == LoginState {
+		if state == packet.LoginState {
 			return false, nil
 		}
 
@@ -533,7 +537,7 @@ func (cnt *Client) HandleNonLoginState(
 			NewLgElement("OutPacket", outPacket),
 		)
 
-		if _, ok := outPacket.(*OutPacketToPong); ok == true {
+		if _, ok := outPacket.(*packet.OutPacketToPong); ok == true {
 			return true, nil
 		}
 	}
@@ -551,28 +555,28 @@ func (cnt *Client) HandleLoginState(
 		lg.Debug("it is finished to handle login state in Client")
 	}()
 
-	state := LoginState
+	state := packet.LoginState
 	inPacket, err := cnt.read(state)
 	if err != nil {
 		return uuid.Nil, "", err
 	}
 
-	startLoginPacket, ok := inPacket.(*InPacketToStartLogin)
+	startLoginPacket, ok := inPacket.(*packet.InPacketToStartLogin)
 	if ok == false {
 		return uuid.Nil, "", errors.New("it is invalid inbound packet to handle login state")
 	}
-	username := startLoginPacket.username
+	username := startLoginPacket.GetUsername()
 	uid, err := UsernameToUID(username)
 	if err != nil {
 		return uuid.Nil, "", err
 	}
 
-	enableCompPacket := NewOutPacketToEnableComp(CompThold)
+	enableCompPacket := packet.NewOutPacketToEnableComp(CompThold)
 	if err := cnt.write(enableCompPacket); err != nil {
 		return uuid.Nil, "", err
 	}
 
-	completeLoginPacket := NewOutPacketToCompleteLogin(
+	completeLoginPacket := packet.NewOutPacketToCompleteLogin(
 		uid,
 		username,
 	)
@@ -604,8 +608,8 @@ func (cnt *Client) JoinGame(
 		lg.Debug("it is finished to join game in Client")
 	}()
 
-	state := PlayState
-	JGPacket := NewOutPacketToJoinGame(
+	state := packet.PlayState
+	JGPacket := packet.NewOutPacketToJoinGame(
 		eid,
 		0,
 		0,
@@ -633,7 +637,7 @@ func (cnt *Client) JoinGame(
 		return err
 	}
 
-	SAPacket := NewOutPacketToSetAbilities(
+	SAPacket := packet.NewOutPacketToSetAbilities(
 		false,
 		false,
 		false,
@@ -667,7 +671,7 @@ func (cnt *Client) LoopToPlaying(
 		lg.Debug("it is finished to loop for play state in Client")
 	}()
 
-	state := PlayState
+	state := packet.PlayState
 	inPacket, err := cnt.readWithComp(state)
 	if err != nil {
 		return err
@@ -680,32 +684,31 @@ func (cnt *Client) LoopToPlaying(
 
 	//eid := playerConnection.GetEID()
 
-	var outPackets []OutPacket
+	var outPackets []packet.OutPacket
 
 	switch inPacket.(type) {
-	case *InPacketToClickWindow:
-		pk := inPacket.(*InPacketToClickWindow)
-		dim.ClickWindow(
+	case *packet.InPacketToClickWindow:
+		pk := inPacket.(*packet.InPacketToClickWindow)
+		if err := dim.ClickWindow(
 			pk.GetWindowID(),
-			pk.GetSlotEnum(),
+			pk.GetSlotNumber(),
 			pk.GetButtonEnum(),
 			pk.GetActionNumber(),
 			pk.GetModeEnum(),
+		); err != nil {
+			return err
+		}
+		break
+	case *packet.InPacketToConfirmKeepAlive: // 0x0B
+		pk := inPacket.(*packet.InPacketToConfirmKeepAlive)
+		CHForCKAEvent <- NewConfirmKeepAliveEvent(
+			pk.GetPayload(),
 		)
 		break
-	case *InPacketToConfirmKeepAlive: // 0x0B
-		CKAPacket := inPacket.(*InPacketToConfirmKeepAlive)
-		payload := CKAPacket.GetPayload()
-		CKAEvent := NewConfirmKeepAliveEvent(
-			payload,
-		)
-		CHForCKAEvent <- CKAEvent
-		break
-	case *InPacketToEnterChatText:
-		ECMPacket := inPacket.(*InPacketToEnterChatText)
-		text := ECMPacket.GetText()
+	case *packet.InPacketToEnterChatText:
+		pk := inPacket.(*packet.InPacketToEnterChatText)
 		if err := dim.EnterChatText(
-			text,
+			pk.GetText(),
 			cnt,
 		); err != nil {
 			if err := cnt.SendErrorMessage(
@@ -715,39 +718,37 @@ func (cnt *Client) LoopToPlaying(
 			}
 		}
 		break
-	case *InPacketToChangePosition:
-		CPPacket := inPacket.(*InPacketToChangePosition)
-		x, y, z := CPPacket.GetPosition()
-		ground := CPPacket.IsGround()
+	case *packet.InPacketToChangePosition:
+		pk := inPacket.(*packet.InPacketToChangePosition)
+		x, y, z := pk.GetPosition()
 		if err := dim.UpdatePos(
 			x, y, z,
-			ground,
+			pk.IsGround(),
 		); err != nil {
 			return err
 		}
 		break
-	case *InPacketToChangeLook:
-		CLPacket := inPacket.(*InPacketToChangeLook)
-		yaw, pitch := CLPacket.GetLook()
-		ground := CLPacket.ground
+	case *packet.InPacketToChangeLook:
+		pk := inPacket.(*packet.InPacketToChangeLook)
+		yaw, pitch := pk.GetLook()
 		if err := dim.UpdateLook(
 			yaw, pitch,
-			ground,
+			pk.IsGround(),
 		); err != nil {
 			return err
 		}
 		break
-	case *InPacketToChangePositionAndLook:
-		CPALPacket := inPacket.(*InPacketToChangePositionAndLook)
-		x, y, z := CPALPacket.GetPosition()
-		ground := CPALPacket.IsGround()
+	case *packet.InPacketToChangePositionAndLook:
+		pk := inPacket.(*packet.InPacketToChangePositionAndLook)
+		x, y, z := pk.GetPosition()
+		ground := pk.IsGround()
 		if err := dim.UpdatePos(
 			x, y, z,
 			ground,
 		); err != nil {
 			return err
 		}
-		yaw, pitch := CPALPacket.GetLook()
+		yaw, pitch := pk.GetLook()
 		if err := dim.UpdateLook(
 			yaw, pitch,
 			ground,
@@ -808,7 +809,7 @@ func (cnt *Client) HandleCommonEvents(
 	CHForSEAEvent ChanForSetEntityActionsEvent,
 	CHForDEEvent ChanForDespawnEntityEvent,
 	CHForLCEvent ChanForLoadChunkEvent,
-	CHForUnCEvent ChanForUnloadChunkEvent,
+	CHForUCEvent ChanForUnloadChunkEvent,
 	CHForError ChanForError,
 	ctx context.Context,
 	wg *sync.WaitGroup,
@@ -835,38 +836,38 @@ func (cnt *Client) HandleCommonEvents(
 	stop := false
 	for {
 		select {
-		case event := <-CHForAPEvent:
+		case e := <-CHForAPEvent:
 			if err := cnt.AddPlayer(
-				event.GetUID(),
-				event.GetUsername(),
+				e.GetUID(),
+				e.GetUsername(),
 			); err != nil {
-				event.Fail()
+				e.Fail()
 				panic(err)
 			}
-			event.Done()
+			e.Done()
 			break
-		case event := <-CHForULEvent:
+		case e := <-CHForULEvent:
 			if err := cnt.UpdateLatency(
-				event.GetUID(),
-				event.GetMilliseconds(),
+				e.GetUID(),
+				e.GetMilliseconds(),
 			); err != nil {
 				panic(err)
 			}
 			break
-		case event := <-CHForRPEvent:
+		case e := <-CHForRPEvent:
 			if err := cnt.RemovePlayer(
-				event.GetUID(),
+				e.GetUID(),
 			); err != nil {
-				event.Fail()
+				e.Fail()
 				panic(err)
 			}
-			event.Done()
+			e.Done()
 			break
-		case event := <-CHForSPEvent:
-			eid := event.GetEID()
-			uid := event.GetUID()
-			x, y, z := event.GetPosition()
-			yaw, pitch := event.GetLook()
+		case e := <-CHForSPEvent:
+			eid := e.GetEID()
+			uid := e.GetUID()
+			x, y, z := e.GetPosition()
+			yaw, pitch := e.GetLook()
 			if err := cnt.SpawnPlayer(
 				eid, uid,
 				x, y, z,
@@ -876,11 +877,11 @@ func (cnt *Client) HandleCommonEvents(
 			}
 
 			break
-		case event := <-CHForSERPEvent:
-			eid := event.GetEID()
-			dx, dy, dz := event.GetDifferences()
-			ground := event.IsGround()
-			if err := cnt.SetEntityRelativePos(
+		case e := <-CHForSERPEvent:
+			eid := e.GetEID()
+			dx, dy, dz := e.GetDifferences()
+			ground := e.IsGround()
+			if err := cnt.SetEntityRelativeMove(
 				eid,
 				dx, dy, dz,
 				ground,
@@ -889,10 +890,10 @@ func (cnt *Client) HandleCommonEvents(
 			}
 
 			break
-		case event := <-CHForSELEvent:
-			eid := event.GetEID()
-			yaw, pitch := event.GetLook()
-			ground := event.IsGround()
+		case e := <-CHForSELEvent:
+			eid := e.GetEID()
+			yaw, pitch := e.GetLook()
+			ground := e.IsGround()
 			if err := cnt.SetEntityLook(
 				eid,
 				yaw, pitch,
@@ -901,18 +902,18 @@ func (cnt *Client) HandleCommonEvents(
 				panic(err)
 			}
 			break
-		case event := <-CHForDEEvent:
-			eid := event.GetEID()
+		case e := <-CHForDEEvent:
+			eid := e.GetEID()
 			if err := cnt.DespawnEntity(
 				eid,
 			); err != nil {
 				panic(err)
 			}
 			break
-		case event := <-CHForLCEvent:
-			ow, init := event.IsOverworld(), event.IsInit()
-			cx, cz := event.GetChunkPosition()
-			chunk := event.GetChunk()
+		case e := <-CHForLCEvent:
+			ow, init := e.IsOverworld(), e.IsInit()
+			cx, cz := e.GetChunkPosition()
+			chunk := e.GetChunk()
 			if err := cnt.LoadChunk(
 				ow, init,
 				cx, cz,
@@ -921,60 +922,10 @@ func (cnt *Client) HandleCommonEvents(
 				panic(err)
 			}
 			break
-		case event := <-CHForUnCEvent:
-			cx, cz := event.GetChunkPosition()
+		case e := <-CHForUCEvent:
+			cx, cz := e.GetChunkPosition()
 			if err := cnt.UnloadChunk(
 				cx, cz,
-			); err != nil {
-				panic(err)
-			}
-			break
-		case <-ctx.Done():
-			stop = true
-			break
-		}
-
-		if stop == true {
-			break
-		}
-	}
-}
-
-func (cnt *Client) HandleUpdateChunkEvent(
-	CHForEvent ChanForUpdateChunkEvent,
-	dim *Dimension,
-	CHForError ChanForError,
-	ctx context.Context,
-	wg *sync.WaitGroup,
-) {
-	wg.Add(1)
-	defer wg.Done()
-
-	lg := NewLogger(
-		"update-chunk-event-handler",
-		NewLgElement("Client", cnt),
-	)
-	defer lg.Close()
-
-	lg.Debug("it is started to handle events")
-	defer lg.Debug("it is finished to handle events")
-
-	defer func() {
-		if err := recover(); err != nil {
-			lg.Error(err)
-			CHForError <- err
-		}
-	}()
-
-	stop := false
-	for {
-		select {
-		case event := <-CHForEvent:
-			prevCx, prevCz := event.GetPrevChunkPosition()
-			currCx, currCz := event.GetCurrChunkPosition()
-			if err := dim.UpdateChunk(
-				prevCx, prevCz,
-				currCx, currCz,
 			); err != nil {
 				panic(err)
 			}
@@ -1017,7 +968,7 @@ func (cnt *Client) HandleConfirmKeepAliveEvent(
 	}()
 
 	start := time.Time{}
-	var payload0 int64
+	var payload int64
 
 	stop := false
 	for {
@@ -1027,9 +978,9 @@ func (cnt *Client) HandleConfirmKeepAliveEvent(
 				break
 			}
 
-			payload0 = rand.Int63()
+			payload = rand.Int63()
 			if err := cnt.CheckKeepAlive(
-				payload0,
+				payload,
 			); err != nil {
 				panic(err)
 			}
@@ -1037,9 +988,8 @@ func (cnt *Client) HandleConfirmKeepAliveEvent(
 			start = time.Now()
 
 			break
-		case event := <-CHForCKAEvent:
-			payload1 := event.GetPayload()
-			if payload1 != payload0 {
+		case e := <-CHForCKAEvent:
+			if e.GetPayload() != payload {
 				err := errors.New("payload for keep-alive must be same as given")
 				panic(err)
 			}
@@ -1078,7 +1028,7 @@ func (cnt *Client) Close(
 func (cnt *Client) CloseWindow(
 	winID int8,
 ) error {
-	CWPacket := NewOutPacketToCloseWindow(
+	CWPacket := packet.NewOutPacketToCloseWindow(
 		winID,
 	)
 	if err := cnt.writeWithComp(
@@ -1093,13 +1043,13 @@ func (cnt *Client) CloseWindow(
 func (cnt *Client) SendErrorMessage(
 	err any,
 ) error {
-	msg := &Chat{
+	msg := &data.Chat{
 		Text: fmt.Sprintf(
 			"[error] %s", err,
 		),
 		Color: "dark_red",
 	}
-	SCMPacket := NewOutPacketToSendChatMessage(
+	SCMPacket := packet.NewOutPacketToSendChatMessage(
 		msg,
 	)
 	if err := cnt.writeWithComp(
@@ -1116,13 +1066,13 @@ func (cnt *Client) Teleport(
 	yaw, pitch float32,
 ) error {
 	payload := rand.Int31()
-	TPacket := NewOutPacketToTeleport(
+	p := packet.NewOutPacketToTeleport(
 		x, y, z,
 		yaw, pitch,
 		payload,
 	)
 	if err := cnt.writeWithComp(
-		TPacket,
+		p,
 	); err != nil {
 		return err
 	}
@@ -1150,7 +1100,7 @@ func (cnt *Client) Respawn(
 	x, y, z float64,
 	yaw, pitch float32,
 ) error {
-	RPacket0 := NewOutPacketToRespawn(
+	RPacket0 := packet.NewOutPacketToRespawn(
 		-1,
 		2,
 		0,
@@ -1163,7 +1113,7 @@ func (cnt *Client) Respawn(
 	}
 
 	payload0 := rand.Int31()
-	TPacket0 := NewOutPacketToTeleport(
+	TPacket0 := packet.NewOutPacketToTeleport(
 		0, 0, 0,
 		0, 0,
 		payload0,
@@ -1176,7 +1126,7 @@ func (cnt *Client) Respawn(
 
 	// TODO: check payload
 
-	RPacket1 := NewOutPacketToRespawn(
+	RPacket1 := packet.NewOutPacketToRespawn(
 		0,
 		2,
 		0,
@@ -1189,7 +1139,7 @@ func (cnt *Client) Respawn(
 	}
 
 	payload1 := rand.Int31()
-	TPacket1 := NewOutPacketToTeleport(
+	TPacket1 := packet.NewOutPacketToTeleport(
 		x, y, z,
 		yaw, pitch,
 		payload1,
@@ -1218,11 +1168,11 @@ func (cnt *Client) AddPlayer(
 
 	gamemode := int32(0)
 	ping := int32(1000)
-	displayName := &Chat{
+	displayName := &data.Chat{
 		Text: username,
 		Bold: true,
 	}
-	APPacket := NewOutPacketToAddPlayer(
+	APPacket := packet.NewOutPacketToAddPlayer(
 		uid,
 		username,
 		textureStr,
@@ -1242,7 +1192,7 @@ func (cnt *Client) UpdateLatency(
 	uid uuid.UUID,
 	ms int32,
 ) error {
-	PLPacket := NewOutPacketToUpdateLatency(
+	PLPacket := packet.NewOutPacketToUpdateLatency(
 		uid,
 		ms,
 	)
@@ -1256,7 +1206,7 @@ func (cnt *Client) UpdateLatency(
 func (cnt *Client) RemovePlayer(
 	uid uuid.UUID,
 ) error {
-	packet := NewOutPacketToRemovePlayer(
+	packet := packet.NewOutPacketToRemovePlayer(
 		uid,
 	)
 	if err := cnt.writeWithComp(packet); err != nil {
@@ -1271,14 +1221,16 @@ func (cnt *Client) SpawnPlayer(
 	x, y, z float64,
 	yaw, pitch float32,
 ) error {
-	metadata := NewEntityMetadata()
-	packet := NewOutPacketToSpawnPlayer(
+	md := metadata.NewPlayerMetadata()
+	pk := packet.NewOutPacketToSpawnPlayer(
 		eid, uid,
 		x, y, z,
 		yaw, pitch,
-		metadata,
+		md,
 	)
-	if err := cnt.writeWithComp(packet); err != nil {
+	if err := cnt.writeWithComp(
+		pk,
+	); err != nil {
 		return err
 	}
 
@@ -1291,7 +1243,7 @@ func (cnt *Client) SetEntityLook(
 	ground bool,
 ) error {
 
-	packet0 := NewOutPacketToSetEntityLook(
+	packet0 := packet.NewOutPacketToSetEntityLook(
 		eid,
 		yaw, pitch,
 		ground,
@@ -1300,7 +1252,7 @@ func (cnt *Client) SetEntityLook(
 		return err
 	}
 
-	packet1 := NewOutPacketToSetEntityHeadLook(
+	packet1 := packet.NewOutPacketToSetEntityHeadLook(
 		eid,
 		yaw,
 	)
@@ -1311,41 +1263,38 @@ func (cnt *Client) SetEntityLook(
 	return nil
 }
 
-func (cnt *Client) SetEntityRelativePos(
+func (cnt *Client) SetEntityRelativeMove(
 	eid int32,
-	deltaX, deltaY, deltaZ int16,
+	dx, dy, dz int16,
 	ground bool,
 ) error {
 
-	packet1 := NewOutPacketToSetEntityRelativeMove(
+	pk := packet.NewOutPacketToSetEntityRelativeMove(
 		eid,
-		deltaX, deltaY, deltaZ,
+		dx, dy, dz,
 		ground,
 	)
-	if err := cnt.writeWithComp(packet1); err != nil {
+	if err := cnt.writeWithComp(
+		pk,
+	); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (cnt *Client) SetEntityActions(
+func (cnt *Client) SetPlayerMetadata(
 	eid int32,
-	sneaking, sprinting bool,
+	md *metadata.PlayerMetadata,
 ) error {
 
-	md := NewEntityMetadata()
-	if err := md.SetActions(
-		sneaking,
-		sprinting,
-	); err != nil {
-		return err
-	}
-	SEMPacket := NewOutPacketToSetEntityMetadata(
+	pk := packet.NewOutPacketToSetPlayerMetadata(
 		eid,
 		md,
 	)
-	if err := cnt.writeWithComp(SEMPacket); err != nil {
+	if err := cnt.writeWithComp(
+		pk,
+	); err != nil {
 		return err
 	}
 
@@ -1356,7 +1305,7 @@ func (cnt *Client) DespawnEntity(
 	eid int32,
 ) error {
 
-	packet := NewOutPacketToDespawnEntity(
+	packet := packet.NewOutPacketToDespawnEntity(
 		eid,
 	)
 	if err := cnt.writeWithComp(packet); err != nil {
@@ -1373,7 +1322,7 @@ func (cnt *Client) LoadChunk(
 ) error {
 
 	bitmask, data := chunk.GenerateData(init, overworld)
-	packet := NewOutPacketToSendChunkData(
+	packet := packet.NewOutPacketToSendChunkData(
 		cx, cz,
 		init,
 		bitmask, data,
@@ -1389,7 +1338,7 @@ func (cnt *Client) UnloadChunk(
 	cx, cz int32,
 ) error {
 
-	packet := NewOutPacketToUnloadChunk(
+	packet := packet.NewOutPacketToUnloadChunk(
 		cx, cz,
 	)
 	if err := cnt.writeWithComp(packet); err != nil {
@@ -1403,7 +1352,7 @@ func (cnt *Client) CheckKeepAlive(
 	payload int64,
 ) error {
 
-	packet := NewOutPacketToCheckKeepAlive(payload)
+	packet := packet.NewOutPacketToCheckKeepAlive(payload)
 	if err := cnt.writeWithComp(packet); err != nil {
 		return err
 	}

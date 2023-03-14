@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/welcomehyunseo/warlord-server/server/item"
 	"sync"
 )
 
@@ -187,7 +188,7 @@ type ItemEntity struct {
 
 	*sync.RWMutex
 
-	item Item
+	it item.Item
 }
 
 func NewItemEntity(
@@ -195,7 +196,7 @@ func NewItemEntity(
 	uid uuid.UUID,
 	x, y, z float64,
 	yaw, pitch float32,
-	item Item,
+	it item.Item,
 ) *ItemEntity {
 	return &ItemEntity{
 		newEntity(
@@ -206,12 +207,12 @@ func NewItemEntity(
 		),
 		new(sync.RWMutex),
 
-		item,
+		it,
 	}
 }
 
-func (e *ItemEntity) GetItem() Item {
-	return e.item
+func (e *ItemEntity) GetItem() item.Item {
+	return e.it
 }
 
 type Living interface {
@@ -255,11 +256,16 @@ type Player struct {
 	*living
 
 	*sync.RWMutex
+
+	username string
+
+	slots [45]item.Item
+	hldIt item.Item
 }
 
 func NewPlayer(
 	eid int32,
-	uid uuid.UUID,
+	uid uuid.UUID, username string,
 	x, y, z float64,
 	yaw, pitch float32,
 ) *Player {
@@ -272,7 +278,112 @@ func NewPlayer(
 		),
 
 		new(sync.RWMutex),
+
+		username,
+
+		[45]item.Item{},
+		nil,
 	}
+}
+
+func (e *Player) clickLeftInInventoryWindow(
+	slot int16,
+) error {
+	hldIt := e.hldIt
+	if hldIt == nil {
+		it := e.slots[slot]
+
+		if it != nil {
+			e.slots[slot] = nil
+			e.hldIt = it
+		}
+	} else {
+		it := e.slots[slot]
+
+		if it == nil {
+			e.slots[slot] = hldIt
+			e.hldIt = nil
+		} else {
+			e.slots[slot] = hldIt
+			e.hldIt = it
+		}
+	}
+
+	return nil
+}
+
+func (e *Player) clickRightInInventoryWindow(
+	slot int16,
+) error {
+	return nil
+}
+
+func (e *Player) pressShiftAndClickLeftInInventoryWindow(
+	slot int16,
+) error {
+	return nil
+}
+
+func (e *Player) pressShiftAndClickRightInInventoryWindow(
+	slot int16,
+) error {
+	return nil
+}
+
+func (e *Player) ClickInventoryWindow(
+	slot int16,
+	btn int8,
+	mode int32,
+) error {
+	e.Lock()
+	defer e.Unlock()
+
+	switch mode {
+	case 0:
+		switch btn {
+		case 0:
+			if err := e.clickLeftInInventoryWindow(
+				slot,
+			); err != nil {
+				return err
+			}
+			break
+		case 1:
+			if err := e.clickRightInInventoryWindow(
+				slot,
+			); err != nil {
+				return err
+			}
+			break
+		}
+		break
+	case 1:
+		switch btn {
+		case 0:
+			if err := e.pressShiftAndClickLeftInInventoryWindow(
+				slot,
+			); err != nil {
+				return err
+			}
+			break
+		case 1:
+			if err := e.pressShiftAndClickRightInInventoryWindow(
+				slot,
+			); err != nil {
+				return err
+			}
+			break
+		}
+		break
+	}
+
+	fmt.Println("slots:", e.slots)
+	fmt.Println("hldIt:", e.hldIt)
+	return nil
+}
+
+func (e *Player) GetUsername() string {
+	return e.username
 }
 
 func (e *Player) String() string {

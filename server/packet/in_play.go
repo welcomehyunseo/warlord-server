@@ -1,13 +1,9 @@
-package server
+package packet
 
-import "fmt"
-
-const InPacketIDToHandshake = 0x00
-
-const InPacketIDToRequest = 0x00
-const InPacketIDToPing = 0x01
-
-const InPacketIDToStartLogin = 0x00
+import (
+	"fmt"
+	"github.com/welcomehyunseo/warlord-server/server/data"
+)
 
 const InPacketIDToConfirmTeleport = 0x00
 const InPacketIDToEnterChatText = 0x02
@@ -31,185 +27,42 @@ const InPacketIDToStopJumpWithHorse = 0x15
 const InPacketIDToOpenHorseInventory = 0x15
 const InPacketIDToStartFlyingWithElytra = 0x15
 
-type InPacketToHandshake struct {
+type InPacketToConfirmTeleport struct {
 	*packet
-	ver  int32
-	addr string
-	port uint16
-	next int32
+	payload int32
 }
 
-func NewInPacketToHandshake() *InPacketToHandshake {
-	return &InPacketToHandshake{
+func NewInPacketToConfirmTeleport() *InPacketToConfirmTeleport {
+	return &InPacketToConfirmTeleport{
 		packet: newPacket(
 			Inbound,
-			HandshakingState,
-			InPacketIDToHandshake,
+			PlayState,
+			InPacketIDToConfirmTeleport,
 		),
 	}
 }
 
-func (p *InPacketToHandshake) Unpack(
+func (p *InPacketToConfirmTeleport) Unpack(
 	arr []byte,
 ) error {
-	data := NewDataWithBytes(arr)
+	data := data.NewDataWithBytes(arr)
 
 	var err error
-	p.ver, err = data.ReadVarInt()
-	if err != nil {
-		return err
-	}
-	p.addr, err = data.ReadString()
-	if err != nil {
-		return err
-	}
-	p.port, err = data.ReadUint16()
-	if err != nil {
-		return err
-	}
-	p.next, err = data.ReadVarInt()
+	p.payload, err = data.ReadVarInt()
 	if err != nil {
 		return err
 	}
 	return err
 }
 
-func (p *InPacketToHandshake) GetVersion() int32 {
-	return p.ver
-}
-
-func (p *InPacketToHandshake) GetAddress() string {
-	return p.addr
-}
-
-func (p *InPacketToHandshake) GetPort() uint16 {
-	return p.port
-}
-
-func (p *InPacketToHandshake) GetNestState() int32 {
-	return p.next
-}
-
-func (p *InPacketToHandshake) String() string {
-	return fmt.Sprintf(
-		"{ "+
-			"packet: %+v, "+
-			"ver: %d, "+
-			"addr: %s, "+
-			"port: %d, "+
-			"next: %d "+
-			"} ",
-		p.packet,
-		p.ver,
-		p.addr,
-		p.port,
-		p.next,
-	)
-}
-
-type InPacketToRequest struct {
-	*packet
-}
-
-func NewInPacketToRequest() *InPacketToRequest {
-	return &InPacketToRequest{
-		packet: newPacket(
-			Inbound,
-			StatusState,
-			InPacketIDToRequest,
-		),
-	}
-}
-
-func (p *InPacketToRequest) Unpack(
-	arr []byte,
-) error {
-
-	return nil
-}
-
-func (p *InPacketToRequest) String() string {
-	return fmt.Sprintf(
-		"{ packet: %+v }",
-		p.packet,
-	)
-}
-
-type InPacketToPing struct {
-	*packet
-	payload int64
-}
-
-func NewInPacketToPing() *InPacketToPing {
-	return &InPacketToPing{
-		packet: newPacket(
-			Inbound,
-			StatusState,
-			InPacketIDToPing,
-		),
-	}
-}
-
-func (p *InPacketToPing) Unpack(
-	arr []byte,
-) error {
-	data := NewDataWithBytes(arr)
-
-	var err error
-	p.payload, err = data.ReadInt64()
-	if err != nil {
-		return err
-	}
-	return err
-}
-
-func (p *InPacketToPing) GetPayload() int64 {
+func (p *InPacketToConfirmTeleport) GetPayload() int32 {
 	return p.payload
 }
 
-func (p *InPacketToPing) String() string {
+func (p *InPacketToConfirmTeleport) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, payload: %d }",
 		p.packet, p.payload,
-	)
-}
-
-type InPacketToStartLogin struct {
-	*packet
-	username string
-}
-
-func NewInPacketToStartLogin() *InPacketToStartLogin {
-	return &InPacketToStartLogin{
-		packet: newPacket(
-			Inbound,
-			LoginState,
-			InPacketIDToStartLogin,
-		),
-	}
-}
-
-func (p *InPacketToStartLogin) Unpack(
-	arr []byte,
-) error {
-	data := NewDataWithBytes(arr)
-
-	var err error
-	p.username, err = data.ReadString()
-	if err != nil {
-		return nil
-	}
-	return err
-}
-
-func (p *InPacketToStartLogin) GetUsername() string {
-	return p.username
-}
-
-func (p *InPacketToStartLogin) String() string {
-	return fmt.Sprintf(
-		"{ packet: %+v, username: %s }",
-		p.packet, p.username,
 	)
 }
 
@@ -231,9 +84,9 @@ func NewInPacketToEnterChatText() *InPacketToEnterChatText {
 func (p *InPacketToEnterChatText) Unpack(
 	arr []byte,
 ) error {
-	data := NewDataWithBytes(arr)
+	dt := data.NewDataWithBytes(arr)
 
-	text, err := data.ReadString()
+	text, err := dt.ReadString()
 	if err != nil {
 		return err
 	}
@@ -250,45 +103,6 @@ func (p *InPacketToEnterChatText) String() string {
 	return fmt.Sprintf(
 		"{ packet: %+v, text: %s }",
 		p.packet, p.text,
-	)
-}
-
-type InPacketToConfirmTeleport struct {
-	*packet
-	payload int32
-}
-
-func NewInPacketToConfirmTeleport() *InPacketToConfirmTeleport {
-	return &InPacketToConfirmTeleport{
-		packet: newPacket(
-			Inbound,
-			PlayState,
-			InPacketIDToConfirmTeleport,
-		),
-	}
-}
-
-func (p *InPacketToConfirmTeleport) Unpack(
-	arr []byte,
-) error {
-	data := NewDataWithBytes(arr)
-
-	var err error
-	p.payload, err = data.ReadVarInt()
-	if err != nil {
-		return err
-	}
-	return err
-}
-
-func (p *InPacketToConfirmTeleport) GetPayload() int32 {
-	return p.payload
-}
-
-func (p *InPacketToConfirmTeleport) String() string {
-	return fmt.Sprintf(
-		"{ packet: %+v, payload: %d }",
-		p.packet, p.payload,
 	)
 }
 
@@ -312,21 +126,21 @@ func NewInPacketToClickButton() *InPacketToClickButton {
 func (p *InPacketToClickButton) Unpack(
 	arr []byte,
 ) error {
-	data := NewDataWithBytes(arr)
+	dt := data.NewDataWithBytes(arr)
 
-	var err error
-	action, err := data.ReadVarInt()
+	action, err := dt.ReadVarInt()
 	if err != nil {
 		return err
 	}
 	if action == 0 {
 		p.respawn = true
-		p.stats = false
+		//p.stats = false
 	} else {
-		p.respawn = false
+		//p.respawn = false
 		p.stats = true
 	}
-	return err
+
+	return nil
 }
 
 func (p *InPacketToClickButton) IsRespawnAfterDeath() bool {
@@ -373,29 +187,37 @@ func NewInPacketToChangeSettings() *InPacketToChangeSettings {
 func (p *InPacketToChangeSettings) Unpack(
 	arr []byte,
 ) error {
-	data := NewDataWithBytes(arr)
+	dt := data.NewDataWithBytes(arr)
 
-	var err error
-	p.local, err = data.ReadString()
+	local, err := dt.ReadString()
 	if err != nil {
 		return err
 	}
-	p.rndDist, err = data.ReadInt8()
+	p.local = local
+
+	rndDist, err := dt.ReadInt8()
 	if err != nil {
 		return err
 	}
-	p.chatMode, err = data.ReadVarInt()
+	p.rndDist = rndDist
+
+	chatMode, err := dt.ReadVarInt()
 	if err != nil {
 		return err
 	}
-	p.chatColors, err = data.ReadBool()
+	p.chatMode = chatMode
+
+	chatColors, err := dt.ReadBool()
 	if err != nil {
 		return err
 	}
-	bitmask, err := data.ReadUint8()
+	p.chatColors = chatColors
+
+	bitmask, err := dt.ReadUint8()
 	if err != nil {
 		return err
 	}
+
 	if bitmask&uint8(1) == uint8(1) {
 		p.cape = true
 	} else {
@@ -431,10 +253,13 @@ func (p *InPacketToChangeSettings) Unpack(
 	} else {
 		p.hat = false
 	}
-	p.mh, err = data.ReadVarInt()
+
+	mh, err := dt.ReadVarInt()
 	if err != nil {
 		return err
 	}
+	p.mh = mh
+
 	return err
 }
 
@@ -543,23 +368,24 @@ func NewInPacketToConfirmTransactionOfWindow() *InPacketToConfirmTransactionOfWi
 func (p *InPacketToConfirmTransactionOfWindow) Unpack(
 	arr []byte,
 ) error {
-	data := NewDataWithBytes(arr)
+	dt := data.NewDataWithBytes(arr)
 
-	winID, err := data.ReadInt8()
+	winID, err := dt.ReadInt8()
 	if err != nil {
 		return err
 	}
-	actNum, err := data.ReadInt16()
-	if err != nil {
-		return err
-	}
-	accept, err := data.ReadBool()
-	if err != nil {
-		return err
-	}
-
 	p.winID = winID
+
+	actNum, err := dt.ReadInt16()
+	if err != nil {
+		return err
+	}
 	p.actNum = actNum
+
+	accept, err := dt.ReadBool()
+	if err != nil {
+		return err
+	}
 	p.accept = accept
 
 	return nil
@@ -600,7 +426,7 @@ type InPacketToClickWindow struct {
 	btn   int8
 	act   int16
 	mode  int32
-	//item    Item
+	//it    Item
 }
 
 func NewInPacketToClickWindow() *InPacketToClickWindow {
@@ -616,45 +442,45 @@ func NewInPacketToClickWindow() *InPacketToClickWindow {
 func (p *InPacketToClickWindow) Unpack(
 	arr []byte,
 ) error {
-	data := NewDataWithBytes(arr)
+	dt := data.NewDataWithBytes(arr)
 
-	winID, err := data.ReadInt8()
+	winID, err := dt.ReadInt8()
 	if err != nil {
 		return err
 	}
 	p.winID = winID
 
-	slot, err := data.ReadInt16()
+	slot, err := dt.ReadInt16()
 	if err != nil {
 		return err
 	}
 	p.slot = slot
 
-	btn, err := data.ReadInt8()
+	btn, err := dt.ReadInt8()
 	if err != nil {
 		return err
 	}
 	p.btn = btn
 
-	act, err := data.ReadInt16()
+	act, err := dt.ReadInt16()
 	if err != nil {
 		return err
 	}
 	p.act = act
 
-	mode, err := data.ReadVarInt()
+	mode, err := dt.ReadVarInt()
 	if err != nil {
 		return err
 	}
 	p.mode = mode
-	//
-	//item, err := ReadItem(
-	//	data,
+
+	//it, err := ReadItem(
+	//	dt,
 	//)
 	//if err != nil {
 	//	return err
 	//}
-	//p.item = item
+	//p.it = it
 
 	return nil
 }
@@ -663,7 +489,7 @@ func (p *InPacketToClickWindow) GetWindowID() int8 {
 	return p.winID
 }
 
-func (p *InPacketToClickWindow) GetSlotEnum() int16 {
+func (p *InPacketToClickWindow) GetSlotNumber() int16 {
 	return p.slot
 }
 
@@ -679,9 +505,8 @@ func (p *InPacketToClickWindow) GetModeEnum() int32 {
 	return p.mode
 }
 
-//
 //func (p *InPacketToClickWindow) GetItem() Item {
-//	return p.item
+//	return p.it
 //}
 
 func (p *InPacketToClickWindow) String() string {
@@ -693,7 +518,7 @@ func (p *InPacketToClickWindow) String() string {
 			"btn: %d, "+
 			"act: %d "+
 			"mode: %d "+
-			//"item: %s "+
+			//"it: %s "+
 			"}",
 		p.packet,
 		p.winID,
@@ -701,7 +526,7 @@ func (p *InPacketToClickWindow) String() string {
 		p.btn,
 		p.act,
 		p.mode,
-		//p.item,
+		//p.it,
 	)
 }
 
@@ -726,37 +551,39 @@ func NewInPacketToInteractWithEntity() *InPacketToInteractWithEntity {
 func (p *InPacketToInteractWithEntity) Unpack(
 	arr []byte,
 ) error {
-	data := NewDataWithBytes(arr)
+	dt := data.NewDataWithBytes(arr)
 
-	eid, err := data.ReadVarInt()
+	eid, err := dt.ReadVarInt()
 	if err != nil {
 		return err
 	}
 	p.eid = eid
-	num, err := data.ReadVarInt()
+
+	num, err := dt.ReadVarInt()
 	if err != nil {
 		return err
 	}
 	p.num = num
+
 	if num == 2 {
-		tx, err := data.ReadFloat32()
+		tx, err := dt.ReadFloat32()
 		if err != nil {
 			return err
 		}
 		p.tx = tx
-		ty, err := data.ReadFloat32()
+		ty, err := dt.ReadFloat32()
 		if err != nil {
 			return err
 		}
 		p.ty = ty
-		tz, err := data.ReadFloat32()
+		tz, err := dt.ReadFloat32()
 		if err != nil {
 			return err
 		}
 		p.tz = tz
 	}
 	if num == 0 || num == 2 {
-		hand, err := data.ReadVarInt()
+		hand, err := dt.ReadVarInt()
 		if err != nil {
 			return err
 		}
@@ -803,10 +630,10 @@ func NewInPacketToConfirmKeepAlive() *InPacketToConfirmKeepAlive {
 func (p *InPacketToConfirmKeepAlive) Unpack(
 	arr []byte,
 ) error {
-	data := NewDataWithBytes(arr)
+	dt := data.NewDataWithBytes(arr)
 
 	var err error
-	p.payload, err = data.ReadInt64()
+	p.payload, err = dt.ReadInt64()
 	if err != nil {
 		return err
 	}
@@ -843,22 +670,22 @@ func NewInPacketToChangePosition() *InPacketToChangePosition {
 func (p *InPacketToChangePosition) Unpack(
 	arr []byte,
 ) error {
-	data := NewDataWithBytes(arr)
+	dt := data.NewDataWithBytes(arr)
 
 	var err error
-	p.x, err = data.ReadFloat64()
+	p.x, err = dt.ReadFloat64()
 	if err != nil {
 		return err
 	}
-	p.y, err = data.ReadFloat64()
+	p.y, err = dt.ReadFloat64()
 	if err != nil {
 		return err
 	}
-	p.z, err = data.ReadFloat64()
+	p.z, err = dt.ReadFloat64()
 	if err != nil {
 		return err
 	}
-	p.ground, err = data.ReadBool()
+	p.ground, err = dt.ReadBool()
 	if err != nil {
 		return err
 	}
@@ -914,30 +741,30 @@ func NewInPacketToChangePositionAndLook() *InPacketToChangePositionAndLook {
 func (p *InPacketToChangePositionAndLook) Unpack(
 	arr []byte,
 ) error {
-	data := NewDataWithBytes(arr)
+	dt := data.NewDataWithBytes(arr)
 
 	var err error
-	p.x, err = data.ReadFloat64()
+	p.x, err = dt.ReadFloat64()
 	if err != nil {
 		return err
 	}
-	p.y, err = data.ReadFloat64()
+	p.y, err = dt.ReadFloat64()
 	if err != nil {
 		return err
 	}
-	p.z, err = data.ReadFloat64()
+	p.z, err = dt.ReadFloat64()
 	if err != nil {
 		return err
 	}
-	p.yaw, err = data.ReadFloat32()
+	p.yaw, err = dt.ReadFloat32()
 	if err != nil {
 		return err
 	}
-	p.pitch, err = data.ReadFloat32()
+	p.pitch, err = dt.ReadFloat32()
 	if err != nil {
 		return err
 	}
-	p.ground, err = data.ReadBool()
+	p.ground, err = dt.ReadBool()
 	if err != nil {
 		return err
 	}
@@ -1014,18 +841,18 @@ func NewInPacketToChangeLook() *InPacketToChangeLook {
 func (p *InPacketToChangeLook) Unpack(
 	arr []byte,
 ) error {
-	data := NewDataWithBytes(arr)
+	dt := data.NewDataWithBytes(arr)
 
 	var err error
-	p.yaw, err = data.ReadFloat32()
+	p.yaw, err = dt.ReadFloat32()
 	if err != nil {
 		return err
 	}
-	p.pitch, err = data.ReadFloat32()
+	p.pitch, err = dt.ReadFloat32()
 	if err != nil {
 		return err
 	}
-	p.ground, err = data.ReadBool()
+	p.ground, err = dt.ReadBool()
 	if err != nil {
 		return err
 	}

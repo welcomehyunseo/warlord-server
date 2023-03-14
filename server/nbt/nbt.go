@@ -1,39 +1,39 @@
-package server
+package nbt
 
 import (
 	"errors"
-	"fmt"
+	"github.com/welcomehyunseo/warlord-server/server/data"
 	"reflect"
 )
 
 const (
-	NbtIDOfEnd       = uint8(0)
-	NbtIDOfByte      = uint8(1)
-	NbtIDOfShort     = uint8(2)
-	NbtIDOfInt       = uint8(3)
-	NbtIDOfLong      = uint8(4)
-	NbtIDOfFloat     = uint8(5)
-	NbtIDOfDouble    = uint8(6)
-	NbtIDOfByteArray = uint8(7)
-	NbtIDOfString    = uint8(8)
-	NbtIDOfList      = uint8(9)
-	NbtIDOfCompound  = uint8(10)
-	NbtIDOfIntArray  = uint8(11)
-	NbtIDOfLongArray = uint8(12)
+	typeIDOfEnd       = uint8(0)
+	typeIDOfByte      = uint8(1)
+	typeIDOfShort     = uint8(2)
+	typeIDOfInt       = uint8(3)
+	typeIDOfLong      = uint8(4)
+	typeIDOfFloat     = uint8(5)
+	typeIDOfDouble    = uint8(6)
+	typeIDOfByteArray = uint8(7)
+	typeIDOfString    = uint8(8)
+	typeIDOfList      = uint8(9)
+	typeIDOfCompound  = uint8(10)
+	typeIDOfIntArray  = uint8(11)
+	typeIDOfLongArray = uint8(12)
 )
 
 func readNbtString(
-	data *Data,
+	dt *data.Data,
 ) (
 	string,
 	error,
 ) {
-	l, err := data.ReadUint16()
+	l, err := dt.ReadUint16()
 	if err != nil {
 		return "", err
 	}
 
-	arr, err := data.ReadBytes(
+	arr, err := dt.ReadBytes(
 		int(l),
 	)
 	if err != nil {
@@ -46,23 +46,23 @@ func readNbtString(
 }
 
 func writeNbtString(
-	data *Data,
+	dt *data.Data,
 	v string,
 ) error {
 	arr := []byte(v)
 	l := len(arr)
-	if l < MinValueOfUint16 ||
-		MaxValueOfUint16 < l {
+	if l < data.MinValueOfUint16 ||
+		data.MaxValueOfUint16 < l {
 		return errors.New("it is invalid length l of header name string to write string of nbt")
 	}
 
-	if err := data.WriteUint16(
+	if err := dt.WriteUint16(
 		uint16(l),
 	); err != nil {
 		return err
 	}
 
-	if err := data.WriteBytes(
+	if err := dt.WriteBytes(
 		arr,
 	); err != nil {
 		return err
@@ -73,13 +73,13 @@ func writeNbtString(
 
 func readNbtHeader(
 	id uint8,
-	data *Data,
+	dt *data.Data,
 ) (
 	*nbtHeader,
 	error,
 ) {
 	name, err := readNbtString(
-		data,
+		dt,
 	)
 	if err != nil {
 		return nil, err
@@ -109,16 +109,16 @@ func newNbtHeader(
 }
 
 func (hd *nbtHeader) write(
-	data *Data,
+	dt *data.Data,
 ) error {
-	if err := data.WriteUint8(
+	if err := dt.WriteUint8(
 		hd.id,
 	); err != nil {
 		return err
 	}
 
 	if err := writeNbtString(
-		data,
+		dt,
 		hd.name,
 	); err != nil {
 		return err
@@ -129,33 +129,31 @@ func (hd *nbtHeader) write(
 
 func readStringNbt(
 	id uint8,
-	data *Data,
+	dt *data.Data,
 ) (
 	*stringNbt,
 	error,
 ) {
-	if id != NbtIDOfString {
-		return nil, errors.New("id must be NbtIDOfString to read stringNbt")
+	if id != typeIDOfString {
+		return nil, errors.New("id must be typeIDOfString to read stringNbt")
 	}
 
 	hd, err := readNbtHeader(
-		id,
-		data,
+		id, dt,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	v, err := readNbtString(
-		data,
+		dt,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	strNbt := &stringNbt{
-		hd,
-		v,
+		hd, v,
 	}
 
 	return strNbt, nil
@@ -173,7 +171,7 @@ func newStringNbt(
 ) *stringNbt {
 	return &stringNbt{
 		newNbtHeader(
-			NbtIDOfString,
+			typeIDOfString,
 			name,
 		),
 		v,
@@ -181,16 +179,16 @@ func newStringNbt(
 }
 
 func (t *stringNbt) write(
-	data *Data,
+	dt *data.Data,
 ) error {
 	if err := t.hd.write(
-		data,
+		dt,
 	); err != nil {
 		return err
 	}
 
 	if err := writeNbtString(
-		data,
+		dt,
 		t.v,
 	); err != nil {
 		return err
@@ -201,18 +199,17 @@ func (t *stringNbt) write(
 
 func readCompoundNbt(
 	id uint8,
-	data *Data,
+	dt *data.Data,
 ) (
 	*compoundNbt,
 	error,
 ) {
-	if id != NbtIDOfCompound {
-		return nil, errors.New("id must be NbtIDOfCompound to read CompoundNbt")
+	if id != typeIDOfCompound {
+		return nil, errors.New("id must be typeIDOfCompound to read CompoundNbt")
 	}
 
 	hd, err := readNbtHeader(
-		id,
-		data,
+		id, dt,
 	)
 	if err != nil {
 		return nil, err
@@ -224,7 +221,7 @@ func readCompoundNbt(
 	var finish bool
 
 	for {
-		id, err := data.ReadUint8()
+		id, err := dt.ReadUint8()
 		if err != nil {
 			return nil, err
 		}
@@ -232,13 +229,12 @@ func readCompoundNbt(
 		switch id {
 		default:
 			return nil, errors.New("it is unregistered id inside to read CompoundNbt")
-		case NbtIDOfEnd:
+		case typeIDOfEnd:
 			finish = true
 			break
-		case NbtIDOfString:
+		case typeIDOfString:
 			t, err := readStringNbt(
-				id,
-				data,
+				id, dt,
 			)
 			if err != nil {
 				return nil, err
@@ -246,10 +242,9 @@ func readCompoundNbt(
 
 			strNbtsByNm[t.hd.name] = t
 			break
-		case NbtIDOfCompound:
+		case typeIDOfCompound:
 			t, err := readCompoundNbt(
-				id,
-				data,
+				id, dt,
 			)
 			if err != nil {
 				return nil, err
@@ -286,7 +281,7 @@ func newCompoundNbt(
 ) *compoundNbt {
 	return &compoundNbt{
 		newNbtHeader(
-			NbtIDOfCompound,
+			typeIDOfCompound,
 			name,
 		),
 
@@ -316,17 +311,17 @@ func (t *compoundNbt) addCompNbt(
 }
 
 func (t *compoundNbt) write(
-	data *Data,
+	dt *data.Data,
 ) error {
 	if err := t.hd.write(
-		data,
+		dt,
 	); err != nil {
 		return err
 	}
 
 	for _, t := range t.strNbtsByNm {
 		if err := t.write(
-			data,
+			dt,
 		); err != nil {
 			return err
 		}
@@ -334,14 +329,14 @@ func (t *compoundNbt) write(
 
 	for _, t := range t.compNbtsByNm {
 		if err := t.write(
-			data,
+			dt,
 		); err != nil {
 			return err
 		}
 	}
 
-	if err := data.WriteUint8(
-		NbtIDOfEnd,
+	if err := dt.WriteUint8(
+		typeIDOfEnd,
 	); err != nil {
 		return err
 	}
@@ -400,7 +395,7 @@ func marshalCompoundNbt(
 }
 
 func MarshalNbt(
-	data *Data,
+	data *data.Data,
 	v interface{},
 ) error {
 	compNbt := newCompoundNbt("")
@@ -465,8 +460,7 @@ func unmarshalCompoundNbt(
 			}
 
 			if err := unmarshalCompoundNbt(
-				nbt,
-				val,
+				nbt, val,
 			); err != nil {
 				return err
 			}
@@ -480,17 +474,16 @@ func unmarshalCompoundNbt(
 }
 
 func UnmarshalNbt(
-	data *Data,
+	dt *data.Data,
 	v interface{},
 ) error {
-	id, err := data.ReadUint8()
+	id, err := dt.ReadUint8()
 	if err != nil {
 		return err
 	}
 
 	compNbt, err := readCompoundNbt(
-		id,
-		data,
+		id, dt,
 	)
 	if err != nil {
 		return err
@@ -504,26 +497,4 @@ func UnmarshalNbt(
 	}
 
 	return nil
-}
-
-type DisplayOfItemNbt struct {
-	Name string `nbt:"Name"`
-}
-
-func (t *DisplayOfItemNbt) String() string {
-	return fmt.Sprintf(
-		"{ Name: %s }",
-		t.Name,
-	)
-}
-
-type ItemNbt struct {
-	Display *DisplayOfItemNbt `nbt:"display"`
-}
-
-func (t *ItemNbt) String() string {
-	return fmt.Sprintf(
-		"{ Display: %s }",
-		t.Display,
-	)
 }

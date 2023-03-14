@@ -1,12 +1,13 @@
-package server
+package nbt
 
 import (
 	"fmt"
+	"github.com/welcomehyunseo/warlord-server/server/data"
 	"testing"
 )
 
 func TestMarshalNbtByItemNbt(t *testing.T) {
-	data := NewData()
+	data := data.NewData()
 	itemNbt := &ItemNbt{
 		Display: &DisplayOfItemNbt{
 			Name: "SomeItemName",
@@ -32,7 +33,7 @@ func TestMarshalNbtByItemNbt(t *testing.T) {
 
 func TestUnmarshalNbtByItemNbt(t *testing.T) {
 	arr := []byte{10, 0, 0, 10, 0, 7, 100, 105, 115, 112, 108, 97, 121, 8, 0, 4, 78, 97, 109, 101, 0, 12, 83, 111, 109, 101, 73, 116, 101, 109, 78, 97, 109, 101, 0, 0}
-	data := NewDataWithBytes(arr)
+	data := data.NewDataWithBytes(arr)
 	itemNbt := &ItemNbt{}
 
 	if err := UnmarshalNbt(
