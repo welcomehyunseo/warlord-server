@@ -27,7 +27,7 @@ func main() {
 
 	rndDist := int32(5)
 	spawnX, spawnY, spawnZ :=
-		float64(0), float64(70), float64(0)
+		float64(0), float64(65), float64(0)
 	spawnYaw, spawnPitch :=
 		float32(0), float32(0)
 	waitingRoom := server.NewWaitingRoom(

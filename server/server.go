@@ -2,10 +2,11 @@ package server
 
 import (
 	"context"
-	"github.com/google/uuid"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const Network = "tcp"   // network type of server
@@ -109,7 +110,11 @@ func (s *Server) initClient(
 		ChanForSpawnPlayerEvent,
 		MaxNumForChannel,
 	)
-	CHForSERPEvent := make(
+	ChForSISEvent := make(
+		ChanForSpawnItemStandEvent,
+		MaxNumForChannel,
+	)
+	CHForSERMEvent := make(
 		ChanForSetEntityRelativeMoveEvent,
 		MaxNumForChannel,
 	)
@@ -148,7 +153,8 @@ func (s *Server) initClient(
 		CHForULEvent,
 		CHForRPEvent,
 		CHForSPEvent,
-		CHForSERPEvent,
+		ChForSISEvent,
+		CHForSERMEvent,
 		CHForSELEvent,
 		CHForSEAEvent,
 		CHForDEEvent,
@@ -166,7 +172,8 @@ func (s *Server) initClient(
 		CHForULEvent,
 		CHForRPEvent,
 		CHForSPEvent,
-		CHForSERPEvent,
+		ChForSISEvent,
+		CHForSERMEvent,
 		CHForSELEvent,
 		CHForSEAEvent,
 		CHForDEEvent,
@@ -220,6 +227,7 @@ func (s *Server) closeClient(
 		CHForULEvent,
 		CHForRPEvent,
 		CHForSPEvent,
+		ChForSISEvent,
 		CHForDEEvent,
 		CHForSERPEvent,
 		CHForSELEvent,
@@ -232,6 +240,7 @@ func (s *Server) closeClient(
 	close(CHForULEvent)
 	close(CHForRPEvent)
 	close(CHForSPEvent)
+	close(ChForSISEvent)
 	close(CHForDEEvent)
 	close(CHForSERPEvent)
 	close(CHForSELEvent)
@@ -286,7 +295,7 @@ func (s *Server) handleClient(
 	if err != nil {
 		panic(err)
 	}
-	if stop == true {
+	if stop {
 		return
 	}
 
@@ -328,21 +337,6 @@ func (s *Server) handleClient(
 		wg,
 	)
 
-	//item := item2.NewStickItem(
-	//	10,
-	//	&nbt.ItemNbt{
-	//		Display: &nbt.DisplayOfItemNbt{
-	//			Name: "text",
-	//		},
-	//	},
-	//)
-	//SSIWPacket := packet.NewOutPacketToSetSlotInWindow(
-	//	0,
-	//	38,
-	//	item,
-	//)
-	//cnt.writeWithComp(SSIWPacket)
-
 	for {
 		select {
 		case <-time.After(LoopDelayForPlayState):
@@ -353,8 +347,6 @@ func (s *Server) handleClient(
 			); err != nil {
 				panic(err)
 			}
-
-			break
 		case err := <-CHForError:
 			panic(err)
 		}

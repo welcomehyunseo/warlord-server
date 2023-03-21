@@ -2,7 +2,9 @@ package server
 
 import (
 	"fmt"
+
 	"github.com/google/uuid"
+	"github.com/welcomehyunseo/warlord-server/server/item"
 )
 
 type ChanForConfirmKeepAliveEvent chan *ConfirmKeepAliveEvent
@@ -12,6 +14,7 @@ type ChanForUpdateLatencyEvent chan *UpdateLatencyEvent
 type ChanForRemovePlayerEvent chan *RemovePlayerEvent
 
 type ChanForSpawnPlayerEvent chan *SpawnPlayerEvent
+type ChanForSpawnItemStandEvent chan *SpawnItemStandEvent
 type ChanForSetEntityRelativeMoveEvent chan *SetEntityRelativeMoveEvent
 type ChanForSetEntityLookEvent chan *SetEntityLookEvent
 type ChanForSetEntityActionsEvent chan *SetEntityActionsEvent
@@ -22,6 +25,7 @@ type ChanForUnloadChunkEvent chan *UnloadChunkEvent
 type ChanForUpdateChunkEvent chan *UpdateChunkEvent
 
 type ChanForClickWindowEvent chan *ClickWindowEvent
+type ChanForGiveItemEvent chan *GiveItemEvent
 
 type waitable struct {
 	ctx chan bool
@@ -272,6 +276,74 @@ func (e *SpawnPlayerEvent) String() string {
 		e.x, e.y, e.z,
 		e.yaw, e.pitch,
 	)
+}
+
+type SpawnItemStandEvent struct {
+	eid        int32
+	uid        uuid.UUID
+	x, y, z    float64
+	yaw, pitch float32
+	it         item.Item
+}
+
+func NewSpawnItemStandEvent(
+	eid int32,
+	uid uuid.UUID,
+	x, y, z float64,
+	yaw, pitch float32,
+	it item.Item,
+) *SpawnItemStandEvent {
+	return &SpawnItemStandEvent{
+		eid,
+		uid,
+		x, y, z,
+		yaw, pitch,
+		it,
+	}
+}
+
+func (e *SpawnItemStandEvent) GetEID() int32 {
+	return e.eid
+}
+
+func (e *SpawnItemStandEvent) GetUID() uuid.UUID {
+	return e.uid
+}
+
+func (e *SpawnItemStandEvent) GetPosition() (
+	float64, float64, float64,
+) {
+	return e.x, e.y, e.z
+}
+
+func (e *SpawnItemStandEvent) GetX() float64 {
+	return e.x
+}
+
+func (e *SpawnItemStandEvent) GetY() float64 {
+	return e.y
+}
+
+func (e *SpawnItemStandEvent) GetZ() float64 {
+	return e.z
+}
+
+func (e *SpawnItemStandEvent) GetLook() (
+	float32, float32,
+) {
+	return e.yaw, e.pitch
+}
+
+func (e *SpawnItemStandEvent) GetYaw() float32 {
+	return e.yaw
+}
+
+func (e *SpawnItemStandEvent) GetPitch() float32 {
+	return e.pitch
+}
+
+func (e *SpawnItemStandEvent) GetItem() item.Item {
+	return e.it
 }
 
 type DespawnEntityEvent struct {
@@ -635,4 +707,8 @@ func (e *ClickWindowEvent) String() string {
 		e.mode,
 		//p.it,
 	)
+}
+
+type GiveItemEvent struct {
+	it item.Item
 }

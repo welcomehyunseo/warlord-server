@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/welcomehyunseo/warlord-server/server/data"
-	"github.com/welcomehyunseo/warlord-server/server/metadata"
-	"github.com/welcomehyunseo/warlord-server/server/packet"
 	"io"
 	"math/rand"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/welcomehyunseo/warlord-server/server/data"
+	"github.com/welcomehyunseo/warlord-server/server/item"
+	"github.com/welcomehyunseo/warlord-server/server/metadata"
+	"github.com/welcomehyunseo/warlord-server/server/packet"
 )
 
 func readVarInt(
@@ -727,6 +729,7 @@ func (cnt *Client) LoopToPlaying(
 		); err != nil {
 			return err
 		}
+		//fmt.Println(pk)
 		break
 	case *packet.InPacketToChangeLook:
 		pk := inPacket.(*packet.InPacketToChangeLook)
@@ -804,7 +807,8 @@ func (cnt *Client) HandleCommonEvents(
 	CHForULEvent ChanForUpdateLatencyEvent,
 	CHForRPEvent ChanForRemovePlayerEvent,
 	CHForSPEvent ChanForSpawnPlayerEvent,
-	CHForSERPEvent ChanForSetEntityRelativeMoveEvent,
+	CHForSISEvent ChanForSpawnItemStandEvent,
+	CHForSERMEvent ChanForSetEntityRelativeMoveEvent,
 	CHForSELEvent ChanForSetEntityLookEvent,
 	CHForSEAEvent ChanForSetEntityActionsEvent,
 	CHForDEEvent ChanForDespawnEntityEvent,
@@ -845,7 +849,6 @@ func (cnt *Client) HandleCommonEvents(
 				panic(err)
 			}
 			e.Done()
-			break
 		case e := <-CHForULEvent:
 			if err := cnt.UpdateLatency(
 				e.GetUID(),
@@ -853,7 +856,6 @@ func (cnt *Client) HandleCommonEvents(
 			); err != nil {
 				panic(err)
 			}
-			break
 		case e := <-CHForRPEvent:
 			if err := cnt.RemovePlayer(
 				e.GetUID(),
@@ -862,7 +864,6 @@ func (cnt *Client) HandleCommonEvents(
 				panic(err)
 			}
 			e.Done()
-			break
 		case e := <-CHForSPEvent:
 			eid := e.GetEID()
 			uid := e.GetUID()
@@ -875,21 +876,25 @@ func (cnt *Client) HandleCommonEvents(
 			); err != nil {
 				panic(err)
 			}
-
-			break
-		case e := <-CHForSERPEvent:
-			eid := e.GetEID()
-			dx, dy, dz := e.GetDifferences()
-			ground := e.IsGround()
-			if err := cnt.SetEntityRelativeMove(
-				eid,
-				dx, dy, dz,
-				ground,
+		case e := <-CHForSISEvent:
+			if err := cnt.SpawnItemStand(
+				e.GetEID(),
+				e.GetUID(),
+				e.GetX(), e.GetY(), e.GetZ(),
+				e.GetYaw(), e.GetPitch(),
+				e.GetItem(),
 			); err != nil {
 				panic(err)
 			}
-
-			break
+		case e := <-CHForSERMEvent:
+			dx, dy, dz := e.GetDifferences()
+			if err := cnt.SetEntityRelativeMove(
+				e.GetEID(),
+				dx, dy, dz,
+				e.IsGround(),
+			); err != nil {
+				panic(err)
+			}
 		case e := <-CHForSELEvent:
 			eid := e.GetEID()
 			yaw, pitch := e.GetLook()
@@ -901,7 +906,6 @@ func (cnt *Client) HandleCommonEvents(
 			); err != nil {
 				panic(err)
 			}
-			break
 		case e := <-CHForDEEvent:
 			eid := e.GetEID()
 			if err := cnt.DespawnEntity(
@@ -909,7 +913,6 @@ func (cnt *Client) HandleCommonEvents(
 			); err != nil {
 				panic(err)
 			}
-			break
 		case e := <-CHForLCEvent:
 			ow, init := e.IsOverworld(), e.IsInit()
 			cx, cz := e.GetChunkPosition()
@@ -921,7 +924,6 @@ func (cnt *Client) HandleCommonEvents(
 			); err != nil {
 				panic(err)
 			}
-			break
 		case e := <-CHForUCEvent:
 			cx, cz := e.GetChunkPosition()
 			if err := cnt.UnloadChunk(
@@ -929,13 +931,11 @@ func (cnt *Client) HandleCommonEvents(
 			); err != nil {
 				panic(err)
 			}
-			break
 		case <-ctx.Done():
 			stop = true
-			break
 		}
 
-		if stop == true {
+		if stop {
 			break
 		}
 	}
@@ -1230,6 +1230,47 @@ func (cnt *Client) SpawnPlayer(
 	)
 	if err := cnt.writeWithComp(
 		pk,
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cnt *Client) SpawnItemStand(
+	eid int32,
+	uid uuid.UUID,
+	x, y, z float64,
+	yaw, pitch float32,
+	it item.Item,
+) error {
+	md := metadata.NewArmorStandMetadata()
+	md.SetActions(
+		false,
+		false,
+		true,
+	)
+	md.SetRightArmRotation(0, 0, 270)
+	pk0 := packet.NewOutPacketToSpawnArmorStand(
+		eid,
+		uid,
+		x-0.3, y-1.27, z-0.3,
+		yaw, pitch,
+		md,
+	)
+	if err := cnt.writeWithComp(
+		pk0,
+	); err != nil {
+		return err
+	}
+
+	pk1 := packet.NewOutPacketToSetEntityEquipment(
+		eid,
+		0,
+		it,
+	)
+	if err := cnt.writeWithComp(
+		pk1,
 	); err != nil {
 		return err
 	}

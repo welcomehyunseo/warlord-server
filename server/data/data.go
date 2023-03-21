@@ -21,47 +21,49 @@ const (
 	SegmentBits = uint8(0x7F)
 	ContinueBit = uint8(0x80)
 
-	MinBytesNumOfBool     = 1
-	MinBytesNumOfInt8     = 1
-	MinBytesNumOfUint8    = 1
-	MinBytesNumOfInt16    = 2
-	MinBytesNumOfUint16   = 2
-	MinBytesNumOfInt32    = 4
-	MinBytesNumOfInt64    = 8
-	MinBytesNumOfFloat32  = 4
-	MinBytesNumOfFloat64  = 8
-	MinBytesNumOfString   = 0
-	MinBytesNumOfChat     = 0
-	MinBytesNumOfVarInt   = 4
-	MinBytesNumOfVarLong  = 8
-	MinBytesNumOfPosition = 8
-	MinBytesNumOfAngle    = 1
-	MinBytesNumOfUUID     = 16
+	MinimumBytesNumOfBool     = 1
+	MinimumBytesNumOfInt8     = 1
+	MinimumBytesNumOfUint8    = 1
+	MinimumBytesNumOfInt16    = 2
+	MinimumBytesNumOfUint16   = 2
+	MinimumBytesNumOfInt32    = 4
+	MinimumBytesNumOfInt64    = 8
+	MinimumBytesNumOfFloat32  = 4
+	MinimumBytesNumOfFloat64  = 8
+	MinimumBytesNumOfString   = 0
+	MinimumBytesNumOfChat     = 0
+	MinimumBytesNumOfVarInt   = 4
+	MinimumBytesNumOfVarLong  = 8
+	MinimumBytesNumOfPosition = 8
+	MinimumBytesNumOfAngle    = 1
+	MinimumBytesNumOfUUID     = 16
 
-	MaxBytesNumOfBool     = 1
-	MaxBytesNumOfInt8     = 1
-	MaxBytesNumOfUint8    = 1
-	MaxBytesNumOfInt16    = 2
-	MaxBytesNumOfUint16   = 2
-	MaxBytesNumOfInt32    = 4
-	MaxBytesNumOfInt64    = 8
-	MaxBytesNumOfFloat32  = 4
-	MaxBytesNumOfFloat64  = 8
-	MaxBytesNumOfString   = 32767 * 4
-	MaxBytesNumOfChat     = 262144 * 4
-	MaxBytesNumOfVarInt   = 4
-	MaxBytesNumOfVarLong  = 8
-	MaxBytesNumOfPosition = 8
-	MaxBytesNumOfAngle    = 1
-	MaxBytesNumOfUUID     = 16
+	MaximumBytesNumOfBool     = 1
+	MaximumBytesNumOfInt8     = 1
+	MaximumBytesNumOfUint8    = 1
+	MaximumBytesNumOfInt16    = 2
+	MaximumBytesNumOfUint16   = 2
+	MaximumBytesNumOfInt32    = 4
+	MaximumBytesNumOfInt64    = 8
+	MaximumBytesNumOfFloat32  = 4
+	MaximumBytesNumOfFloat64  = 8
+	MaximumBytesNumOfString   = 32767 * 4
+	MaximumBytesNumOfChat     = 262144 * 4
+	MaximumBytesNumOfVarInt   = 4
+	MaximumBytesNumOfVarLong  = 8
+	MaximumBytesNumOfPosition = 8
+	MaximumBytesNumOfAngle    = 1
+	MaximumBytesNumOfUUID     = 16
 
-	MinNumOf26BitInt = -33554432
-	MaxNumOf26BitInt = 33554431
-	MinNumOf12BitInt = -2048
-	MaxNumOf12BitInt = 2047
+	MinimumValueOfInt12  = -2048
+	MinimumValueOfInt16  = -32768
+	MinimumValueOfUint16 = 0
+	MinimumValueOfInt26  = -33554432
 
-	MinValueOfUint16 = 0
-	MaxValueOfUint16 = 65535
+	MaximumValueOfInt12  = 2047
+	MaximumValueOfInt16  = 32767
+	MaximumValueOfUint16 = 65535
+	MaximumValueOfInt26  = 33554431
 )
 
 type Chat struct {
@@ -285,7 +287,7 @@ func (d *Data) ReadInt16() (
 	int16,
 	error,
 ) {
-	arr0, arr1, err := Split(d.arr, MaxBytesNumOfInt16)
+	arr0, arr1, err := Split(d.arr, MaximumBytesNumOfInt16)
 	if err != nil {
 		return 0, err
 	}
@@ -297,7 +299,7 @@ func (d *Data) ReadInt16() (
 func (d *Data) WriteInt16(
 	v int16,
 ) error {
-	arr := make([]uint8, MaxBytesNumOfInt16)
+	arr := make([]uint8, MaximumBytesNumOfInt16)
 	binary.BigEndian.PutUint16(arr, uint16(v))
 	d.arr = Concat(d.arr, arr)
 
@@ -308,7 +310,7 @@ func (d *Data) ReadUint16() (
 	uint16,
 	error,
 ) {
-	arr0, arr1, err := Split(d.arr, MaxBytesNumOfUint16)
+	arr0, arr1, err := Split(d.arr, MaximumBytesNumOfUint16)
 	if err != nil {
 		return 0, err
 	}
@@ -320,7 +322,7 @@ func (d *Data) ReadUint16() (
 func (d *Data) WriteUint16(
 	v uint16,
 ) error {
-	arr := make([]uint8, MaxBytesNumOfUint16)
+	arr := make([]uint8, MaximumBytesNumOfUint16)
 	binary.BigEndian.PutUint16(arr, v)
 	d.arr = Concat(d.arr, arr)
 
@@ -331,7 +333,7 @@ func (d *Data) ReadInt32() (
 	int32,
 	error,
 ) {
-	arr0, arr1, err := Split(d.arr, MaxBytesNumOfInt32)
+	arr0, arr1, err := Split(d.arr, MaximumBytesNumOfInt32)
 	if err != nil {
 		return 0, err
 	}
@@ -343,7 +345,7 @@ func (d *Data) ReadInt32() (
 func (d *Data) WriteInt32(
 	v int32,
 ) error {
-	arr := make([]uint8, MaxBytesNumOfInt32)
+	arr := make([]uint8, MaximumBytesNumOfInt32)
 	binary.BigEndian.PutUint32(arr, uint32(v))
 	d.arr = Concat(d.arr, arr)
 
@@ -354,7 +356,7 @@ func (d *Data) ReadInt64() (
 	int64,
 	error,
 ) {
-	arr0, arr1, err := Split(d.arr, MaxBytesNumOfInt64)
+	arr0, arr1, err := Split(d.arr, MaximumBytesNumOfInt64)
 	if err != nil {
 		return 0, err
 	}
@@ -366,7 +368,7 @@ func (d *Data) ReadInt64() (
 func (d *Data) WriteInt64(
 	v int64,
 ) error {
-	arr := make([]uint8, MaxBytesNumOfInt64)
+	arr := make([]uint8, MaximumBytesNumOfInt64)
 	binary.BigEndian.PutUint64(arr, uint64(v))
 	d.arr = Concat(d.arr, arr)
 
@@ -377,7 +379,7 @@ func (d *Data) ReadFloat32() (
 	float32,
 	error,
 ) {
-	arr0, arr1, err := Split(d.arr, MaxBytesNumOfFloat32)
+	arr0, arr1, err := Split(d.arr, MaximumBytesNumOfFloat32)
 	if err != nil {
 		return 0, err
 	}
@@ -391,7 +393,7 @@ func (d *Data) WriteFloat32(
 	v float32,
 ) error {
 	bits := math.Float32bits(v)
-	arr := make([]uint8, MaxBytesNumOfFloat32)
+	arr := make([]uint8, MaximumBytesNumOfFloat32)
 	binary.BigEndian.PutUint32(arr, bits)
 	d.arr = Concat(d.arr, arr)
 
@@ -402,7 +404,7 @@ func (d *Data) ReadFloat64() (
 	float64,
 	error,
 ) {
-	arr0, arr1, err := Split(d.arr, MaxBytesNumOfFloat64)
+	arr0, arr1, err := Split(d.arr, MaximumBytesNumOfFloat64)
 	if err != nil {
 		return 0, err
 	}
@@ -416,7 +418,7 @@ func (d *Data) WriteFloat64(
 	v float64,
 ) error {
 	bits := math.Float64bits(v)
-	arr := make([]uint8, MaxBytesNumOfFloat64)
+	arr := make([]uint8, MaximumBytesNumOfFloat64)
 	binary.BigEndian.PutUint64(arr, bits)
 	d.arr = Concat(d.arr, arr)
 	return nil
@@ -430,10 +432,10 @@ func (d *Data) ReadString() (
 	if err != nil {
 		return "", err
 	}
-	if l < MinBytesNumOfString {
+	if l < MinimumBytesNumOfString {
 		return "", LessThanMinBytesError
 	}
-	if MaxBytesNumOfString < l {
+	if MaximumBytesNumOfString < l {
 		return "", OverThanMaxBytesError
 	}
 
@@ -452,10 +454,10 @@ func (d *Data) WriteString(
 	arr := []byte(v)
 
 	length := len(arr)
-	if length < MinBytesNumOfString {
+	if length < MinimumBytesNumOfString {
 		return LessThanMinBytesError
 	}
-	if MaxBytesNumOfString < length {
+	if MaximumBytesNumOfString < length {
 		return OverThanMaxBytesError
 	}
 
@@ -476,10 +478,10 @@ func (d *Data) WriteChat(
 	}
 
 	length := len(arr)
-	if length < MinBytesNumOfChat {
+	if length < MinimumBytesNumOfChat {
 		return LessThanMinBytesError
 	}
-	if MaxBytesNumOfChat < length {
+	if MaximumBytesNumOfChat < length {
 		return OverThanMaxBytesError
 	}
 
@@ -619,15 +621,15 @@ func (d *Data) ReadPosition() (
 func (d *Data) WritePosition(
 	x, y, z int,
 ) error {
-	if x < MinNumOf26BitInt || MaxNumOf26BitInt < x ||
-		z < MinNumOf26BitInt || MaxNumOf26BitInt < z {
+	if x < MinimumValueOfInt26 || MaximumValueOfInt26 < x ||
+		z < MinimumValueOfInt26 || MaximumValueOfInt26 < z {
 		return Not26BitIntValueRangeError
 	}
-	if y < MinNumOf12BitInt || MaxNumOf12BitInt < y {
+	if y < MinimumValueOfInt12 || MaximumValueOfInt12 < y {
 		return Not12BitIntValueRangeError
 	}
 
-	arr := make([]uint8, MaxBytesNumOfPosition)
+	arr := make([]uint8, MaximumBytesNumOfPosition)
 	v := uint64(x&0x3FFFFFF)<<38 | uint64((z&0x3FFFFFF)<<12) | uint64(y&0xFFF)
 	for i := 7; i >= 0; i-- {
 		arr[i] = uint8(v)
@@ -669,7 +671,7 @@ func (d *Data) ReadUUID() (
 	uuid.UUID,
 	error,
 ) {
-	arr0, arr1, err := Split(d.arr, MaxBytesNumOfUUID)
+	arr0, arr1, err := Split(d.arr, MaximumBytesNumOfUUID)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -685,8 +687,8 @@ func (d *Data) ReadUUID() (
 func (d *Data) WriteUUID(
 	v uuid.UUID,
 ) error {
-	arr := make([]byte, MaxBytesNumOfUUID)
-	for i := 0; i < MaxBytesNumOfUUID; i++ {
+	arr := make([]byte, MaximumBytesNumOfUUID)
+	for i := 0; i < MaximumBytesNumOfUUID; i++ {
 		arr[i] = v[i]
 	}
 	d.arr = Concat(d.arr, arr)

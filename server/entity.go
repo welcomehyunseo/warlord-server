@@ -2,9 +2,10 @@ package server
 
 import (
 	"fmt"
+	"sync"
+
 	"github.com/google/uuid"
 	"github.com/welcomehyunseo/warlord-server/server/item"
-	"sync"
 )
 
 type Entity interface {
@@ -104,7 +105,7 @@ func (e *entity) GetZ() float64 {
 	return e.z
 }
 
-func (e *entity) GetXYZ() (
+func (e *entity) GetPosition() (
 	float64, float64, float64,
 ) {
 	e.RLock()
@@ -127,7 +128,7 @@ func (e *entity) GetPitch() float32 {
 	return e.pitch
 }
 
-func (e *entity) GetYawPitch() (
+func (e *entity) GetLook() (
 	float32, float32,
 ) {
 	e.RLock()
@@ -396,4 +397,61 @@ func (e *Player) String() string {
 			"}",
 		e.living,
 	)
+}
+
+type ArmorStand struct {
+	*living
+
+	*sync.RWMutex
+}
+
+func NewArmorStand(
+	eid int32,
+	uid uuid.UUID,
+	x, y, z float64,
+	yaw, pitch float32,
+) *ArmorStand {
+	return &ArmorStand{
+		newLiving(
+			eid,
+			uid,
+			x, y, z,
+			yaw, pitch,
+		),
+
+		new(sync.RWMutex),
+	}
+}
+
+type ItemStand struct {
+	*ArmorStand
+
+	*sync.RWMutex
+
+	it item.Item
+}
+
+func NewItemStand(
+	eid int32,
+	uid uuid.UUID,
+	x, y, z float64,
+	yaw, pitch float32,
+	it item.Item,
+) *ItemStand {
+	return &ItemStand{
+		NewArmorStand(
+			eid,
+			uid,
+			x, y, z,
+			yaw, pitch,
+		),
+
+		new(sync.RWMutex),
+
+		it,
+	}
+}
+
+func (e *ItemStand) GetItem() item.Item {
+	return e.it
 }

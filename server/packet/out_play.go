@@ -2,12 +2,17 @@ package packet
 
 import (
 	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/welcomehyunseo/warlord-server/server/data"
 	"github.com/welcomehyunseo/warlord-server/server/item"
 	"github.com/welcomehyunseo/warlord-server/server/metadata"
 )
 
+const OutPacketIDToSPawnObject = 0x00
+
+// const OutPacketIDToSpawnMobileEntity = 0x03
+const OutPacketIDToSpawnArmorStand = 0x03
 const OutPacketIDToSpawnPlayer = 0x05
 const OutPacketIDToSendChatMessage = 0x0F
 const OutPacketIDToAcceptTransactionOfWindow = 0x11
@@ -29,9 +34,244 @@ const OutPacketIDToTeleport = 0x2F
 const OutPacketIDToDespawnEntity = 0x32
 const OutPacketIDToRespawn = 0x35
 const OutPacketIDToSetEntityHeadLook = 0x36
+const OutPacketIDToSetItemEntityMetadata = 0x3C
 const OutPacketIDToSetPlayerMetadata = 0x3C
+const OutPacketIDToSetArmorStandMetadata = 0x3C
 const OutPacketIDToSetEntityVelocity = 0x3E
+const OutPacketIDToSetEntityEquipment = 0x3F
 const OutPacketIDToSetSpawnPosition = 0x46
+
+type OutPacketToSpawnObject struct {
+	*packet
+	eid        int32
+	uid        uuid.UUID
+	n          int8
+	x, y, z    float64
+	pitch, yaw float32
+	data       int32
+	vx, vy, vz int16
+}
+
+func NewOutPacketToSpawnObject(
+	eid int32,
+	uid uuid.UUID,
+	n int8,
+	x, y, z float64,
+	pitch, yaw float32,
+	data int32,
+	vx, vy, vz int16,
+) *OutPacketToSpawnObject {
+	return &OutPacketToSpawnObject{
+		newPacket(
+			Outbound,
+			PlayState,
+			OutPacketIDToSPawnObject,
+		),
+		eid,
+		uid,
+		n,
+		x, y, z,
+		pitch, yaw,
+		data,
+		vx, vy, vz,
+	}
+}
+
+func (p *OutPacketToSpawnObject) Pack() (
+	[]byte,
+	error,
+) {
+	dt := data.NewData()
+	if err := dt.WriteVarInt(
+		p.eid,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteUUID(
+		p.uid,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteInt8(
+		p.n,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteFloat64(
+		p.x,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteFloat64(
+		p.y,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteFloat64(
+		p.z,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteAngle(
+		p.pitch,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteAngle(
+		p.yaw,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteInt32(
+		p.data,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteInt16(
+		p.vx,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteInt16(
+		p.vy,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteInt16(
+		p.vz,
+	); err != nil {
+		return nil, err
+	}
+
+	return dt.GetBytes(), nil
+}
+
+type OutPacketToSpawnArmorStand struct {
+	*packet
+	eid        int32
+	uid        uuid.UUID
+	x, y, z    float64
+	yaw, pitch float32
+	md         *metadata.ArmorStandMetadata
+}
+
+func NewOutPacketToSpawnArmorStand(
+	eid int32,
+	uid uuid.UUID,
+	x, y, z float64,
+	yaw, pitch float32,
+	md *metadata.ArmorStandMetadata,
+) *OutPacketToSpawnArmorStand {
+	return &OutPacketToSpawnArmorStand{
+		newPacket(
+			Outbound,
+			PlayState,
+			OutPacketIDToSpawnArmorStand,
+		),
+		eid,
+		uid,
+		x, y, z,
+		yaw, pitch,
+		md,
+	}
+}
+
+func (p *OutPacketToSpawnArmorStand) Pack() (
+	[]byte,
+	error,
+) {
+	dt := data.NewData()
+	if err := dt.WriteVarInt(
+		p.eid,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteUUID(
+		p.uid,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteVarInt(
+		30,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteFloat64(
+		p.x,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteFloat64(
+		p.y,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteFloat64(
+		p.z,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteAngle(
+		p.yaw,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteAngle(
+		p.pitch,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteAngle(
+		0,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteInt16(
+		0,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteInt16(
+		0,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := dt.WriteInt16(
+		0,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := p.md.Write(
+		dt,
+	); err != nil {
+		return nil, err
+	}
+
+	return dt.GetBytes(), nil
+}
 
 type OutPacketToSpawnPlayer struct {
 	*packet
@@ -1517,6 +1757,48 @@ func (p *OutPacketToSetEntityHeadLook) String() string {
 	)
 }
 
+type OutPacketToSetItemEntityMetadata struct {
+	*packet
+	eid int32
+	md  *metadata.ItemEntityMetadata
+}
+
+func NewOutPacketToSetItemEntityMetadata(
+	eid int32,
+	md *metadata.ItemEntityMetadata,
+) *OutPacketToSetItemEntityMetadata {
+	return &OutPacketToSetItemEntityMetadata{
+		newPacket(
+			Outbound,
+			PlayState,
+			OutPacketIDToSetItemEntityMetadata,
+		),
+		eid,
+		md,
+	}
+}
+
+func (p *OutPacketToSetItemEntityMetadata) Pack() (
+	[]byte,
+	error,
+) {
+	dt := data.NewData()
+
+	if err := dt.WriteVarInt(
+		p.eid,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := p.md.Write(
+		dt,
+	); err != nil {
+		return nil, err
+	}
+
+	return dt.GetBytes(), nil
+}
+
 type OutPacketToSetPlayerMetadata struct {
 	*packet
 	eid int32
@@ -1572,6 +1854,48 @@ func (p *OutPacketToSetPlayerMetadata) String() string {
 		"{ packet: %+v, eid: %d, md: {...} }",
 		p.packet, p.eid,
 	)
+}
+
+type OutPacketToSetArmorStandMetadata struct {
+	*packet
+	eid int32
+	md  *metadata.ArmorStandMetadata
+}
+
+func NewOutPacketToSetArmorStandMetadata(
+	eid int32,
+	md *metadata.ArmorStandMetadata,
+) *OutPacketToSetArmorStandMetadata {
+	return &OutPacketToSetArmorStandMetadata{
+		newPacket(
+			Outbound,
+			PlayState,
+			OutPacketIDToSetArmorStandMetadata,
+		),
+		eid,
+		md,
+	}
+}
+
+func (p *OutPacketToSetArmorStandMetadata) Pack() (
+	[]byte,
+	error,
+) {
+	dt := data.NewData()
+
+	if err := dt.WriteVarInt(
+		p.eid,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := p.md.Write(
+		dt,
+	); err != nil {
+		return nil, err
+	}
+
+	return dt.GetBytes(), nil
 }
 
 type OutPacketToSetEntityVelocity struct {
@@ -1636,6 +1960,54 @@ func (p *OutPacketToSetEntityVelocity) GetY() int16 {
 
 func (p *OutPacketToSetEntityVelocity) GetZ() int16 {
 	return p.z
+}
+
+type OutPacketToSetEntityEquipment struct {
+	*packet
+	eid  int32
+	n    int32
+	item item.Item
+}
+
+func NewOutPacketToSetEntityEquipment(
+	eid int32,
+	n int32,
+	item item.Item,
+) *OutPacketToSetEntityEquipment {
+	return &OutPacketToSetEntityEquipment{
+		newPacket(
+			Outbound,
+			PlayState,
+			OutPacketIDToSetEntityEquipment,
+		),
+		eid,
+		n,
+		item,
+	}
+}
+
+func (p *OutPacketToSetEntityEquipment) Pack() (
+	[]byte,
+	error,
+) {
+	dt := data.NewData()
+	if err := dt.WriteVarInt(
+		p.eid,
+	); err != nil {
+		return nil, err
+	}
+	if err := dt.WriteVarInt(
+		p.n,
+	); err != nil {
+		return nil, err
+	}
+	if err := p.item.Write(
+		dt,
+	); err != nil {
+		return nil, err
+	}
+
+	return dt.GetBytes(), nil
 }
 
 type OutPacketToSetSpawnPosition struct {

@@ -3,11 +3,13 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"go/types"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/welcomehyunseo/warlord-server/server/item"
 )
 
 func init() {
@@ -68,10 +70,15 @@ func toChunkPos(
 }
 
 type Overworld interface {
+	InitItemStand(
+		it item.Item,
+	) error
+
 	InitPlayer(
 		eid int32,
 		uid uuid.UUID, username string,
 		CHForSPEvent ChanForSpawnPlayerEvent,
+		CHForSISEvent ChanForSpawnItemStandEvent,
 		CHForSERPEvent ChanForSetEntityRelativeMoveEvent,
 		CHForSELEvent ChanForSetEntityLookEvent,
 		CHForSEAEvent ChanForSetEntityActionsEvent,
@@ -99,6 +106,7 @@ type Overworld interface {
 		cnt *Client,
 	) (
 		ChanForSpawnPlayerEvent,
+		ChanForSpawnItemStandEvent,
 		ChanForSetEntityRelativeMoveEvent,
 		ChanForSetEntityLookEvent,
 		ChanForSetEntityActionsEvent,
@@ -112,6 +120,7 @@ type Overworld interface {
 		eid int32,
 	) (
 		ChanForSpawnPlayerEvent,
+		ChanForSpawnItemStandEvent,
 		ChanForSetEntityRelativeMoveEvent,
 		ChanForSetEntityLookEvent,
 		ChanForSetEntityActionsEvent,
@@ -135,30 +144,21 @@ type overworld struct {
 
 	mForPConns *sync.RWMutex
 	PtoP       map[int32]map[int32]types.Nil // connections between players
-	//PtoIE map[int32]map[int32]types.Nil // connections between player and item entity
-	//PtoME   map[int32]map[int32]types.Nil // connections between player and mobile entity
+	PtoIS      map[int32]map[int32]types.Nil // connections between player and item stand
 
-	//mForIEConns *sync.RWMutex
-	//IEtoP  map[int32]map[int32]types.Nil // connections between item entity and player
-	//IEtoIE map[int32]map[int32]types.Nil // connections between item entities
-	//IEtoME   map[int32]map[int32]types.Nil // connections between item entity and mobile entity
-
-	//mForMEConns *sync.RWMutex
-	//MEtoP   map[int32]map[int32]types.Nil // connections between mobile entity and player
-	//MEtoIE   map[int32]map[int32]types.Nil // connections between mobile entity and item entity
-	//MEtoME   map[int32]map[int32]types.Nil // connections between mobile entities
+	mForISConns *sync.RWMutex
+	IStoP       map[int32]map[int32]types.Nil // connections between item stand and player
+	IStoIS      map[int32]map[int32]types.Nil // connections between item stand and item stand
 
 	mForPsByCPS *sync.RWMutex
 	PsByCPS     map[string]map[int32]types.Nil // player eids by chunk pos string
 
-	//mForIEsByCPS *sync.RWMutex
-	//IEsByCPS map[string]map[int32]types.Nil // item entity eids by chunk pos string
-
-	//mForMEsByCPS *sync.RWMutex
-	// mobile entity eids by chunk pos string
+	mForISsByCPS *sync.RWMutex
+	ISsByCPS     map[string]map[int32]types.Nil
 
 	Ps              map[int32]*Player                           // players by eid
 	CHsForSPEvent   map[int32]ChanForSpawnPlayerEvent           // event channel by eid for client
+	CHsForSISEvent  map[int32]ChanForSpawnItemStandEvent        // event channel by eid for client
 	CHsForSELEvent  map[int32]ChanForSetEntityLookEvent         // event channel by eid for client
 	CHsForSERMEvent map[int32]ChanForSetEntityRelativeMoveEvent // event channel by eid for client
 	CHsForSEAEvent  map[int32]ChanForSetEntityActionsEvent      // event channel by eid for client
@@ -166,9 +166,7 @@ type overworld struct {
 	CHsForLCEvent   map[int32]ChanForLoadChunkEvent             // event channel by eid for client
 	CHsForUCEvent   map[int32]ChanForUnloadChunkEvent           // event channel by eid for client
 
-	//IEs map[int32]*ItemEntity // item entities by eid
-
-	//MEs // mobile entities by eid
+	ISs map[int32]*ItemStand // item stands by eid
 
 	WGs      map[int32]*sync.WaitGroup    // by eid for handler
 	cancelFs map[int32]context.CancelFunc // by eid for handler
@@ -190,12 +188,21 @@ func newOverworld(
 
 		new(sync.RWMutex),
 		make(map[int32]map[int32]types.Nil),
+		make(map[int32]map[int32]types.Nil),
+
+		new(sync.RWMutex),
+		make(map[int32]map[int32]types.Nil),
+		make(map[int32]map[int32]types.Nil),
+
+		new(sync.RWMutex),
+		make(map[string]map[int32]types.Nil),
 
 		new(sync.RWMutex),
 		make(map[string]map[int32]types.Nil),
 
 		make(map[int32]*Player),
 		make(map[int32]ChanForSpawnPlayerEvent),
+		make(map[int32]ChanForSpawnItemStandEvent),
 		make(map[int32]ChanForSetEntityLookEvent),
 		make(map[int32]ChanForSetEntityRelativeMoveEvent),
 		make(map[int32]ChanForSetEntityActionsEvent),
@@ -203,9 +210,149 @@ func newOverworld(
 		make(map[int32]ChanForLoadChunkEvent),
 		make(map[int32]ChanForUnloadChunkEvent),
 
+		make(map[int32]*ItemStand),
+
 		make(map[int32]*sync.WaitGroup),
 		make(map[int32]context.CancelFunc),
 	}
+}
+
+func (w *overworld) InitItemStand(
+	it item.Item,
+) error {
+	dist := w.rndDist
+	x, y, z :=
+		w.spawnX, w.spawnY, w.spawnZ
+	yaw, pitch :=
+		w.spawnYaw, w.spawnPitch
+
+	eid := GetEIDCounter().count()
+	uid, err := uuid.NewRandom()
+	if err != nil {
+		return err
+	}
+
+	e0 := NewItemStand(
+		eid,
+		uid,
+		x, y, z,
+		yaw, pitch,
+		it,
+	)
+	w.ISs[eid] = e0
+
+	SISEvent := NewSpawnItemStandEvent(
+		eid,
+		uid,
+		x, y, z,
+		yaw, pitch,
+		it,
+	)
+
+	w.IStoP[eid] = make(map[int32]types.Nil)
+	w.IStoIS[eid] = make(map[int32]types.Nil)
+
+	cx, cz := toChunkPos(
+		x, z,
+	)
+	maxCx, maxCz, minCx, minCz :=
+		findRect(
+			cx, cz, dist,
+		)
+	for cz := maxCz; cz >= minCz; cz-- {
+		for cx := maxCx; cx >= minCx; cx-- {
+			CPS := toChunkPosStr(cx, cz)
+
+			if err := func() error {
+				w.mForPsByCPS.RLock()
+				defer w.mForPsByCPS.RUnlock()
+
+				a, has := w.PsByCPS[CPS]
+				if has == false {
+					return nil
+				}
+				for eid1, _ := range a {
+					w.CHsForSISEvent[eid1] <- SISEvent
+
+					func() {
+						w.mForISConns.Lock()
+						defer w.mForISConns.Unlock()
+
+						w.IStoP[eid][eid1] = types.Nil{}
+					}()
+
+					func() {
+						w.mForPConns.Lock()
+						defer w.mForPConns.Unlock()
+
+						w.PtoIS[eid1][eid] = types.Nil{}
+					}()
+
+				}
+
+				return nil
+			}(); err != nil {
+				return err
+			}
+
+			if err := func() error {
+				w.mForISsByCPS.RLock()
+				defer w.mForISsByCPS.RUnlock()
+
+				a, has := w.ISsByCPS[CPS]
+				if has == false {
+					return nil
+				}
+				for eid1, _ := range a {
+
+					func() {
+						w.mForISConns.Lock()
+						defer w.mForISConns.Unlock()
+
+						w.IStoIS[eid][eid1] = types.Nil{}
+						w.IStoIS[eid1][eid] = types.Nil{}
+					}()
+
+				}
+
+				return nil
+			}(); err != nil {
+				return err
+			}
+
+		}
+	}
+
+	func() {
+		w.mForISsByCPS.Lock()
+		defer w.mForISsByCPS.Unlock()
+
+		CPS := toChunkPosStr(cx, cz)
+		a := w.ISsByCPS
+		eids, has := a[CPS]
+		if has == false {
+			b := make(map[int32]types.Nil)
+			a[CPS] = b
+			eids = b
+		}
+		eids[eid] = types.Nil{}
+	}()
+
+	// wg := new(sync.WaitGroup)
+	// ctx := context.Background()
+	// ctx, cancel := context.WithCancel(ctx)
+
+	// go w.handlePlayerLoop(
+	// 	p0,
+	// 	CHForCWEvent,
+	// 	ctx,
+	// 	wg,
+	// )
+
+	// w.WGs[eid] = wg
+	// w.cancelFs[eid] = cancel
+
+	return nil
 }
 
 func (w *overworld) handlePlayerLoop(
@@ -231,6 +378,8 @@ func (w *overworld) handlePlayerLoop(
 				); err != nil {
 					// TODO: send error message to client
 				}
+			} else {
+
 			}
 
 			//fmt.Println(e)
@@ -250,6 +399,7 @@ func (w *overworld) InitPlayer(
 	eid int32,
 	uid uuid.UUID, username string,
 	CHForSPEvent ChanForSpawnPlayerEvent,
+	CHForSISEvent ChanForSpawnItemStandEvent,
 	CHForSERPEvent ChanForSetEntityRelativeMoveEvent,
 	CHForSELEvent ChanForSetEntityLookEvent,
 	CHForSEAEvent ChanForSetEntityActionsEvent,
@@ -271,12 +421,22 @@ func (w *overworld) InitPlayer(
 		return err
 	}
 
-	p0 := NewPlayer(
+	e0 := NewPlayer(
 		eid,
 		uid, username,
 		x, y, z,
 		yaw, pitch,
 	)
+	w.Ps[eid] = e0
+	w.CHsForSPEvent[eid] = CHForSPEvent
+	w.CHsForSISEvent[eid] = CHForSISEvent
+	w.CHsForSERMEvent[eid] = CHForSERPEvent
+	w.CHsForSELEvent[eid] = CHForSELEvent
+	w.CHsForSEAEvent[eid] = CHForSEAEvent
+	w.CHsForDEEvent[eid] = CHForDEEvent
+	w.CHsForLCEvent[eid] = CHForLCEvent
+	w.CHsForUCEvent[eid] = CHForUCEvent
+
 	SPEvent := NewSpawnPlayerEvent(
 		eid,
 		uid,
@@ -285,6 +445,7 @@ func (w *overworld) InitPlayer(
 	)
 
 	w.PtoP[eid] = make(map[int32]types.Nil)
+	w.PtoIS[eid] = make(map[int32]types.Nil)
 
 	cx, cz := toChunkPos(
 		x, z,
@@ -328,12 +489,14 @@ func (w *overworld) InitPlayer(
 					return nil
 				}
 				for eid1, _ := range a {
-					p1 := w.Ps[eid1]
+					e1 := w.Ps[eid1]
+					x, y, z := e1.GetPosition()
+					yaw, pitch := e1.GetLook()
 					if err := cnt.SpawnPlayer(
-						p1.GetEID(),
-						p1.GetUID(),
-						p1.GetX(), p1.GetY(), p1.GetZ(),
-						p1.GetYaw(), p1.GetPitch(),
+						e1.GetEID(),
+						e1.GetUID(),
+						x, y, z,
+						yaw, pitch,
 					); err != nil {
 						return err
 					}
@@ -347,12 +510,57 @@ func (w *overworld) InitPlayer(
 						w.PtoP[eid][eid1] = types.Nil{}
 						w.PtoP[eid1][eid] = types.Nil{}
 					}()
+
 				}
 
 				return nil
 			}(); err != nil {
 				return err
 			}
+
+			if err := func() error {
+				w.mForISsByCPS.RLock()
+				defer w.mForISsByCPS.RUnlock()
+
+				a, has := w.ISsByCPS[CPS]
+				if has == false {
+					return nil
+				}
+				for eid1, _ := range a {
+					e1 := w.ISs[eid1]
+					x, y, z := e1.GetPosition()
+					yaw, pitch := e1.GetLook()
+					if err := cnt.SpawnItemStand(
+						e1.GetEID(),
+						e1.GetUID(),
+						x, y, z,
+						yaw, pitch,
+						e1.GetItem(),
+					); err != nil {
+						return err
+					}
+
+					func() {
+						w.mForPConns.Lock()
+						defer w.mForPConns.Unlock()
+
+						w.PtoIS[eid][eid1] = types.Nil{}
+					}()
+
+					func() {
+						w.mForISConns.Lock()
+						defer w.mForISConns.Unlock()
+
+						w.IStoP[eid1][eid] = types.Nil{}
+					}()
+
+				}
+
+				return nil
+			}(); err != nil {
+				return err
+			}
+
 		}
 	}
 
@@ -361,30 +569,22 @@ func (w *overworld) InitPlayer(
 		defer w.mForPsByCPS.Unlock()
 
 		CPS := toChunkPosStr(cx, cz)
-		eids, has := w.PsByCPS[CPS]
+		a := w.PsByCPS
+		eids, has := a[CPS]
 		if has == false {
-			a := make(map[int32]types.Nil)
-			w.PsByCPS[CPS] = a
-			eids = a
+			b := make(map[int32]types.Nil)
+			a[CPS] = b
+			eids = b
 		}
 		eids[eid] = types.Nil{}
 	}()
-
-	w.Ps[eid] = p0
-	w.CHsForSPEvent[eid] = CHForSPEvent
-	w.CHsForSERMEvent[eid] = CHForSERPEvent
-	w.CHsForSELEvent[eid] = CHForSELEvent
-	w.CHsForSEAEvent[eid] = CHForSEAEvent
-	w.CHsForDEEvent[eid] = CHForDEEvent
-	w.CHsForLCEvent[eid] = CHForLCEvent
-	w.CHsForUCEvent[eid] = CHForUCEvent
 
 	wg := new(sync.WaitGroup)
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 
 	go w.handlePlayerLoop(
-		p0,
+		e0,
 		CHForCWEvent,
 		ctx,
 		wg,
@@ -401,14 +601,13 @@ func (w *overworld) UpdatePosForPlayer(
 	x, y, z float64,
 	ground bool,
 ) error {
-	p0 := w.Ps[eid]
+	e0 := w.Ps[eid]
 	prevX, prevY, prevZ :=
-		p0.GetXYZ()
-	p0.UpdatePos(
+		e0.GetPosition()
+	e0.UpdatePos(
 		x, y, z,
 		ground,
 	)
-
 	dx, dy, dz :=
 		int16(((x*32)-(prevX*32))*128),
 		int16(((y*32)-(prevY*32))*128),
@@ -444,15 +643,16 @@ func (w *overworld) UpdatePosForPlayer(
 
 	dist := w.rndDist
 	CHForSPEvent := w.CHsForSPEvent[eid]
+	CHForSISEvent := w.CHsForSISEvent[eid]
 	CHForDEEvent := w.CHsForDEEvent[eid]
 	CHForLCEvent := w.CHsForLCEvent[eid]
 	CHForUCEvent := w.CHsForUCEvent[eid]
 
 	SPEvent :=
 		NewSpawnPlayerEvent(
-			eid, p0.GetUID(),
-			p0.GetX(), p0.GetY(), p0.GetZ(),
-			p0.GetYaw(), p0.GetPitch(),
+			eid, e0.GetUID(),
+			e0.GetX(), e0.GetY(), e0.GetZ(),
+			e0.GetYaw(), e0.GetPitch(),
 		)
 	DEEvent :=
 		NewDespawnEntityEvent(
@@ -514,11 +714,11 @@ func (w *overworld) UpdatePosForPlayer(
 					return nil
 				}
 				for eid1, _ := range a {
-					p1 := w.Ps[eid1]
+					e1 := w.Ps[eid1]
 					SPEvent1 := NewSpawnPlayerEvent(
-						p1.GetEID(), p1.GetUID(),
-						p1.GetX(), p1.GetY(), p1.GetZ(),
-						p1.GetYaw(), p1.GetPitch(),
+						e1.GetEID(), e1.GetUID(),
+						e1.GetX(), e1.GetY(), e1.GetZ(),
+						e1.GetYaw(), e1.GetPitch(),
 					)
 					CHForSPEvent <- SPEvent1
 
@@ -537,6 +737,49 @@ func (w *overworld) UpdatePosForPlayer(
 			}(); err != nil {
 				return err
 			}
+
+			if err := func() error {
+				w.mForISsByCPS.RLock()
+				defer w.mForISsByCPS.RUnlock()
+
+				a, has := w.ISsByCPS[CPS]
+				if has == false {
+					return nil
+				}
+				for eid1, _ := range a {
+					e1 := w.ISs[eid1]
+					x, y, z := e1.GetPosition()
+					yaw, pitch := e1.GetLook()
+					SISEvent1 := NewSpawnItemStandEvent(
+						e1.GetEID(),
+						e1.GetUID(),
+						x, y, z,
+						yaw, pitch,
+						e1.GetItem(),
+					)
+					CHForSISEvent <- SISEvent1
+
+					func() {
+						w.mForPConns.Lock()
+						defer w.mForPConns.Unlock()
+
+						w.PtoIS[eid][eid1] = types.Nil{}
+					}()
+
+					func() {
+						w.mForISConns.Lock()
+						defer w.mForISConns.Unlock()
+
+						w.IStoP[eid1][eid] = types.Nil{}
+					}()
+
+				}
+
+				return nil
+			}(); err != nil {
+				return err
+			}
+
 		}
 	}
 
@@ -585,23 +828,61 @@ func (w *overworld) UpdatePosForPlayer(
 				return err
 			}
 
+			if err := func() error {
+				w.mForISsByCPS.RLock()
+				defer w.mForISsByCPS.RUnlock()
+
+				a, has := w.ISsByCPS[CPS]
+				if has == false {
+					return nil
+				}
+				for eid1, _ := range a {
+					DEEvent1 :=
+						NewDespawnEntityEvent(
+							eid1,
+						)
+					CHForDEEvent <- DEEvent1
+
+					func() {
+						w.mForPConns.Lock()
+						defer w.mForPConns.Unlock()
+
+						delete(w.PtoIS[eid], eid1)
+					}()
+
+					func() {
+						w.mForISConns.Lock()
+						defer w.mForISConns.Unlock()
+
+						delete(w.IStoP[eid1], eid)
+					}()
+
+				}
+
+				return nil
+			}(); err != nil {
+				return err
+			}
+
 		}
 	}
 
 	func() {
+		a := w.PsByCPS
+
 		prevCPS := toChunkPosStr(
 			prevCx, prevCz,
 		)
-		delete(w.PsByCPS[prevCPS], eid)
+		delete(a[prevCPS], eid)
 
 		currCPS := toChunkPosStr(
 			currCx, currCz,
 		)
-		eids, has := w.PsByCPS[currCPS]
+		eids, has := a[currCPS]
 		if has == false {
-			c := make(map[int32]types.Nil)
-			w.PsByCPS[currCPS] = c
-			eids = c
+			b := make(map[int32]types.Nil)
+			a[currCPS] = b
+			eids = b
 		}
 		eids[eid] = types.Nil{}
 	}()
@@ -642,6 +923,7 @@ func (w *overworld) closePlayer(
 	eid int32,
 ) (
 	ChanForSpawnPlayerEvent,
+	ChanForSpawnItemStandEvent,
 	ChanForSetEntityRelativeMoveEvent,
 	ChanForSetEntityLookEvent,
 	ChanForSetEntityActionsEvent,
@@ -651,6 +933,7 @@ func (w *overworld) closePlayer(
 ) {
 	p0 := w.Ps[eid]
 	CHForSPEvent := w.CHsForSPEvent[eid]
+	CHForSISEvent := w.CHsForSISEvent[eid]
 	CHForSERPEvent := w.CHsForSERMEvent[eid]
 	CHForSELEvent := w.CHsForSELEvent[eid]
 	CHForSEAEvent := w.CHsForSEAEvent[eid]
@@ -668,6 +951,8 @@ func (w *overworld) closePlayer(
 	func() {
 		w.mForPConns.Lock()
 		defer w.mForPConns.Unlock()
+		w.mForISConns.Lock()
+		defer w.mForISConns.Unlock()
 
 		for eid1, _ := range w.PtoP[eid] {
 			w.CHsForDEEvent[eid1] <- DEEvent
@@ -675,6 +960,11 @@ func (w *overworld) closePlayer(
 			delete(w.PtoP[eid1], eid)
 		}
 		delete(w.PtoP, eid)
+
+		for eid1, _ := range w.PtoIS[eid] {
+			delete(w.IStoP[eid1], eid)
+		}
+		delete(w.PtoIS, eid)
 	}()
 
 	cx, cz := toChunkPos(
@@ -692,6 +982,7 @@ func (w *overworld) closePlayer(
 
 	delete(w.Ps, eid)
 	delete(w.CHsForSPEvent, eid)
+	delete(w.CHsForSISEvent, eid)
 	delete(w.CHsForSERMEvent, eid)
 	delete(w.CHsForSELEvent, eid)
 	delete(w.CHsForSEAEvent, eid)
@@ -703,6 +994,7 @@ func (w *overworld) closePlayer(
 	delete(w.cancelFs, eid)
 
 	return CHForSPEvent,
+		CHForSISEvent,
 		CHForSERPEvent,
 		CHForSELEvent,
 		CHForSEAEvent,
@@ -716,6 +1008,7 @@ func (w *overworld) FinishPlayer(
 	cnt *Client,
 ) (
 	ChanForSpawnPlayerEvent,
+	ChanForSpawnItemStandEvent,
 	ChanForSetEntityRelativeMoveEvent,
 	ChanForSetEntityLookEvent,
 	ChanForSetEntityActionsEvent,
@@ -727,6 +1020,8 @@ func (w *overworld) FinishPlayer(
 	if err := func() error {
 		w.mForPConns.RLock()
 		defer w.mForPConns.RUnlock()
+		w.mForISConns.RLock()
+		defer w.mForISConns.RUnlock()
 
 		for eid1, _ := range w.PtoP[eid] {
 			if err := cnt.DespawnEntity(
@@ -736,12 +1031,21 @@ func (w *overworld) FinishPlayer(
 			}
 		}
 
+		for eid1, _ := range w.PtoIS[eid] {
+			if err := cnt.DespawnEntity(
+				eid1,
+			); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	}(); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 
 	CHForSPEvent,
+		CHForSISEvent,
 		CHForSERPEvent,
 		CHForSELEvent,
 		CHForSEAEvent,
@@ -751,6 +1055,7 @@ func (w *overworld) FinishPlayer(
 		w.closePlayer(eid)
 
 	return CHForSPEvent,
+		CHForSISEvent,
 		CHForSERPEvent,
 		CHForSELEvent,
 		CHForSEAEvent,
@@ -764,6 +1069,7 @@ func (w *overworld) ClosePlayer(
 	eid int32,
 ) (
 	ChanForSpawnPlayerEvent,
+	ChanForSpawnItemStandEvent,
 	ChanForSetEntityRelativeMoveEvent,
 	ChanForSetEntityLookEvent,
 	ChanForSetEntityActionsEvent,

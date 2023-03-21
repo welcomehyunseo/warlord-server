@@ -2,8 +2,9 @@ package nbt
 
 import (
 	"errors"
-	"github.com/welcomehyunseo/warlord-server/server/data"
 	"reflect"
+
+	"github.com/welcomehyunseo/warlord-server/server/data"
 )
 
 const (
@@ -51,8 +52,8 @@ func writeNbtString(
 ) error {
 	arr := []byte(v)
 	l := len(arr)
-	if l < data.MinValueOfUint16 ||
-		data.MaxValueOfUint16 < l {
+	if l < data.MinimumValueOfUint16 ||
+		data.MaximumValueOfUint16 < l {
 		return errors.New("it is invalid length l of header name string to write string of nbt")
 	}
 
@@ -353,6 +354,9 @@ func marshalCompoundNbt(
 	}
 
 	el := v.Elem()
+	if el.Kind() == reflect.Invalid {
+		return nil
+	}
 	if el.Kind() != reflect.Struct {
 		return errors.New("value of pointer must be Struct to marshal CompoundNbt")
 	}
